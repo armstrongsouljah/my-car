@@ -62,12 +62,15 @@ function Dashboard() {
         ))}
       </div>
 
-      <Link
-        href="/cars/new"
-        className="fixed bottom-20 right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-gray-900 text-2xl text-white shadow-lg"
-      >
-        +
-      </Link>
+      <div className="pointer-events-none fixed inset-x-0 bottom-20 z-30 mx-auto flex w-full max-w-lg justify-end px-4">
+        <Link
+          href="/cars/new"
+          aria-label="Add a car"
+          className="pointer-events-auto flex h-14 w-14 items-center justify-center rounded-full bg-gray-900 text-2xl text-white shadow-lg active:scale-95"
+        >
+          +
+        </Link>
+      </div>
 
       <BottomNav />
     </main>
