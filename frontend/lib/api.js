@@ -1,4 +1,11 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+const API_ORIGIN = API_URL.replace(/\/api\/v\d+\/?$/, "");
+
+// Media files (car photos, inspection reports) come back as relative paths.
+export function mediaUrl(path) {
+  if (!path) return null;
+  return path.startsWith("http") ? path : `${API_ORIGIN}${path}`;
+}
 
 // ── Token storage ─────────────────────────────────────────────────────────────
 export function getTokens() {

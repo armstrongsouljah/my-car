@@ -84,6 +84,27 @@ EXPENSE_CATEGORIES = [
 ]
 
 # ---------------------------------------------------------------------------
+# Mileage update reminder frequencies (account-level setting)
+# ---------------------------------------------------------------------------
+MILEAGE_REMINDER_OFF = "off"
+MILEAGE_REMINDER_DAILY = "daily"
+MILEAGE_REMINDER_WEEKLY = "weekly"
+MILEAGE_REMINDER_MONTHLY = "monthly"
+
+MILEAGE_REMINDER_FREQUENCIES = [
+    (MILEAGE_REMINDER_OFF, "Off"),
+    (MILEAGE_REMINDER_DAILY, "Daily"),
+    (MILEAGE_REMINDER_WEEKLY, "Weekly"),
+    (MILEAGE_REMINDER_MONTHLY, "Monthly"),
+]
+
+MILEAGE_REMINDER_INTERVAL_DAYS = {
+    MILEAGE_REMINDER_DAILY: 1,
+    MILEAGE_REMINDER_WEEKLY: 7,
+    MILEAGE_REMINDER_MONTHLY: 30,
+}
+
+# ---------------------------------------------------------------------------
 # Fuel types
 # ---------------------------------------------------------------------------
 FUEL_TYPE_PETROL = "petrol"

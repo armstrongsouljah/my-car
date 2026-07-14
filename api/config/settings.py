@@ -219,4 +219,8 @@ CELERY_BEAT_SCHEDULE = {
         "task": "tasks.send_due_reminders_task",
         "schedule": 60 * 60 * 24,  # once a day
     },
+    "send-mileage-reminders": {
+        "task": "tasks.send_mileage_reminders_task",
+        "schedule": 60 * 60 * 24,  # once a day; per-user cadence applied inside
+    },
 }

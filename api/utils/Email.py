@@ -65,6 +65,36 @@ def send_welcome_email(email: str, first_name: str = ""):
     msg.send()
 
 
+def send_mileage_reminder_email(email: str, first_name: str, cars: list):
+    """
+    Nudges the owner to update the odometer readings on their cars.
+    `cars` is a list of dicts: {"label", "current_odometer_km", "updated_ago"}.
+    """
+    from django.conf import settings
+
+    name = _display_name(email, first_name)
+    app_url = getattr(settings, "FRONTEND_URL", "http://localhost:3000")
+
+    subject = "Time to update your mileage"
+    context = {"name": name, "cars": cars, "app_url": app_url}
+
+    lines = "\n".join(
+        f"- {c['label']}: {c['current_odometer_km']} km ({c['updated_ago']})" for c in cars
+    )
+    text_body = (
+        f"Hi {name},\n\n"
+        f"A quick nudge to update the current mileage on your cars so your "
+        f"service reminders stay accurate:\n\n"
+        f"{lines}\n\n"
+        f"Open {app_url} and update each car's odometer reading."
+    )
+    html_body = render_to_string("emails/mileage_reminder.html", context)
+
+    msg = EmailMultiAlternatives(subject=subject, body=text_body, to=[email])
+    msg.attach_alternative(html_body, "text/html")
+    msg.send()
+
+
 def send_reminder_email(email: str, first_name: str, car_label: str, reminders: list):
     """
     Sends a service/inspection reminder digest for a single car.

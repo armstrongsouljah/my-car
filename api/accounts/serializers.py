@@ -175,7 +175,7 @@ class UserProfileSerializer(BaseModelSerializer):
         model = User
         fields = (
             "id", "email", "first_name", "last_name", "full_name",
-            "phone", "role", "is_email_verified", "date_joined",
+            "phone", "role", "mileage_reminder_frequency", "is_email_verified", "date_joined",
         )
         read_only_fields = ("id", "email", "role", "is_email_verified", "date_joined", "full_name")
 
@@ -187,7 +187,7 @@ class UserProfileSerializer(BaseModelSerializer):
 class UpdateProfileSerializer(EditModelSerializer):
     class Meta:
         model = User
-        fields = ("first_name", "last_name", "phone")
+        fields = ("first_name", "last_name", "phone", "mileage_reminder_frequency")
 
 
 class UserListSerializer(ListModelSerializer):

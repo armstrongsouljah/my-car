@@ -1,10 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { api } from "@/lib/api";
+import { api, mediaUrl } from "@/lib/api";
 import AuthGuard from "@/components/AuthGuard";
 import BottomNav from "@/components/BottomNav";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import StatusChip from "@/components/StatusChip";
 
 const SERVICE_TYPES = [
@@ -188,6 +190,8 @@ function CarDetail() {
   const [inspections, setInspections] = useState([]);
   const [tab, setTab] = useState("overview"); // overview | service | inspections
   const [showForm, setShowForm] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState(false);
+  const [removing, setRemoving] = useState(false);
   const [error, setError] = useState("");
 
   const load = useCallback(() => {
@@ -199,9 +203,15 @@ function CarDetail() {
   useEffect(() => { load(); }, [load]);
 
   async function deleteCar() {
-    if (!confirm("Remove this car and all its records?")) return;
-    await api(`/cars/${id}/`, { method: "DELETE" });
-    router.replace("/dashboard");
+    setRemoving(true);
+    try {
+      await api(`/cars/${id}/`, { method: "DELETE" });
+      router.replace("/dashboard");
+    } catch (err) {
+      setError(err.message);
+      setRemoving(false);
+      setConfirmRemove(false);
+    }
   }
 
   if (error) return <main className="p-6"><p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p></main>;
@@ -211,11 +221,21 @@ function CarDetail() {
     <main className="px-4 pb-24 pt-6">
       <button onClick={() => router.push("/dashboard")} className="mb-4 text-sm text-gray-500">‹ Garage</button>
 
-      <header className="mb-4">
-        <h1 className="text-2xl font-bold">{car.make} {car.model} {car.year ? `(${car.year})` : ""}</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          {car.registration_number || "No plate"} · {Number(car.current_odometer_km).toLocaleString()} km
-        </p>
+      {car.photo_url && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={mediaUrl(car.photo_url)} alt={`${car.make} ${car.model}`} className="mb-4 h-48 w-full rounded-2xl border border-gray-200 object-cover" />
+      )}
+
+      <header className="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">{car.make} {car.model} {car.year ? `(${car.year})` : ""}</h1>
+          <p className="mt-1 text-sm text-gray-500">
+            {car.registration_number || "No plate"} · {Number(car.current_odometer_km).toLocaleString()} km
+          </p>
+        </div>
+        <Link href={`/cars/${id}/edit`} className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold">
+          Edit
+        </Link>
       </header>
 
       <div className="mb-4 space-y-2">
@@ -251,11 +271,23 @@ function CarDetail() {
             <div><p className="text-gray-400">Odometer</p><p className="font-medium">{Number(car.current_odometer_km).toLocaleString()} km</p></div>
           </div>
           {car.notes && <div className="card text-sm text-gray-600">{car.notes}</div>}
-          <button onClick={deleteCar} className="w-full rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[15px] font-semibold text-red-600">
+          <button onClick={() => setConfirmRemove(true)} className="w-full rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[15px] font-semibold text-red-600">
             Remove car
           </button>
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmRemove}
+        destructive
+        loading={removing}
+        title="Remove this car?"
+        message={`${car.make} ${car.model} and all its service history, inspections and expenses will be permanently removed. This can't be undone.`}
+        confirmLabel="Remove car"
+        cancelLabel="Keep car"
+        onConfirm={deleteCar}
+        onCancel={() => setConfirmRemove(false)}
+      />
 
       {tab === "service" && (
         <div className="space-y-3">

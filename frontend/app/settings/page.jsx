@@ -5,6 +5,14 @@ import { useRouter } from "next/navigation";
 import { api, getTokens, clearSession, setUser } from "@/lib/api";
 import AuthGuard from "@/components/AuthGuard";
 import BottomNav from "@/components/BottomNav";
+import ConfirmDialog from "@/components/ConfirmDialog";
+
+const REMINDER_FREQUENCIES = [
+  ["off", "Off"],
+  ["daily", "Daily"],
+  ["weekly", "Weekly"],
+  ["monthly", "Monthly"],
+];
 
 function Section({ title, children }) {
   return (
@@ -18,7 +26,11 @@ function Section({ title, children }) {
 function Settings() {
   const router = useRouter();
   const [profile, setProfile] = useState(null);
-  const [profileForm, setProfileForm] = useState({ first_name: "", last_name: "", phone: "" });
+  const [profileForm, setProfileForm] = useState({
+    first_name: "", last_name: "", phone: "", mileage_reminder_frequency: "off",
+  });
+  const [confirmDeactivate, setConfirmDeactivate] = useState(false);
+  const [deactivating, setDeactivating] = useState(false);
   const [passwordForm, setPasswordForm] = useState({ current_password: "", new_password: "", confirm_new_password: "" });
   const [deactivatePassword, setDeactivatePassword] = useState("");
   const [message, setMessage] = useState("");
@@ -28,7 +40,12 @@ function Settings() {
     api("/auth/profile/")
       .then((data) => {
         setProfile(data);
-        setProfileForm({ first_name: data.first_name || "", last_name: data.last_name || "", phone: data.phone || "" });
+        setProfileForm({
+          first_name: data.first_name || "",
+          last_name: data.last_name || "",
+          phone: data.phone || "",
+          mileage_reminder_frequency: data.mileage_reminder_frequency || "off",
+        });
       })
       .catch((err) => setError(err.message));
   }, []);
@@ -73,9 +90,8 @@ function Settings() {
     router.replace("/");
   }
 
-  async function deactivate(event) {
-    event.preventDefault();
-    if (!confirm("Deactivate your account? You will be signed out and unable to log back in.")) return;
+  async function deactivate() {
+    setDeactivating(true);
     try {
       const tokens = getTokens();
       await api("/auth/account/deactivate/", {
@@ -86,6 +102,8 @@ function Settings() {
       router.replace("/");
     } catch (err) {
       setError(err.message);
+      setDeactivating(false);
+      setConfirmDeactivate(false);
     }
   }
 
@@ -115,6 +133,21 @@ function Settings() {
             <label className="label">Phone</label>
             <input className="input" value={profileForm.phone}
               onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })} />
+          </div>
+          <div>
+            <label className="label">Mileage update reminder</label>
+            <select
+              className="input"
+              value={profileForm.mileage_reminder_frequency}
+              onChange={(e) => setProfileForm({ ...profileForm, mileage_reminder_frequency: e.target.value })}
+            >
+              {REMINDER_FREQUENCIES.map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+            <p className="mt-1 text-[12px] text-gray-400">
+              We&apos;ll email you a nudge to update your cars&apos; odometer readings so service reminders stay accurate.
+            </p>
           </div>
           <button className="btn-primary">Save changes</button>
         </form>
@@ -149,17 +182,32 @@ function Settings() {
         <p className="text-sm text-gray-500">
           Deactivating your account signs you out everywhere and disables logins. Your data is kept and support can reactivate you.
         </p>
-        <form onSubmit={deactivate} className="space-y-3">
+        <div className="space-y-3">
           <div>
             <label className="label">Confirm with your password</label>
             <input className="input" type="password" value={deactivatePassword}
               onChange={(e) => setDeactivatePassword(e.target.value)} />
           </div>
-          <button className="w-full rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[15px] font-semibold text-red-600">
+          <button
+            onClick={() => setConfirmDeactivate(true)}
+            className="w-full rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[15px] font-semibold text-red-600"
+          >
             Deactivate account
           </button>
-        </form>
+        </div>
       </Section>
+
+      <ConfirmDialog
+        open={confirmDeactivate}
+        destructive
+        loading={deactivating}
+        title="Deactivate your account?"
+        message="You'll be signed out everywhere and won't be able to log back in. Your data is kept and support can reactivate you."
+        confirmLabel="Deactivate"
+        cancelLabel="Keep my account"
+        onConfirm={deactivate}
+        onCancel={() => setConfirmDeactivate(false)}
+      />
 
       <BottomNav />
     </main>

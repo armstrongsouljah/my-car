@@ -6,6 +6,10 @@ from django.db import models
 from utils import Constants
 
 
+def car_photo_path(instance, filename):
+    return f"car_photos/{instance.owner_id}/{filename}"
+
+
 class Car(models.Model):
     """
     A vehicle owned and tracked by a car owner. Owners can register as many
@@ -25,7 +29,10 @@ class Car(models.Model):
     color = models.CharField(max_length=50, blank=True)
     fuel_type = models.CharField(max_length=20, choices=Constants.FUEL_TYPES, default=Constants.FUEL_TYPE_PETROL)
 
+    photo = models.ImageField(upload_to=car_photo_path, null=True, blank=True)
+
     current_odometer_km = models.PositiveIntegerField(default=0)
+    odometer_updated_at = models.DateTimeField(null=True, blank=True)
     notes = models.TextField(blank=True)
 
     is_active = models.BooleanField(default=True)
@@ -52,6 +59,9 @@ class Car(models.Model):
 
     def record_odometer(self, odometer_km):
         """Moves the odometer forward; readings never go backwards."""
+        from django.utils import timezone
+
         if odometer_km and odometer_km > self.current_odometer_km:
             self.current_odometer_km = odometer_km
-            self.save(update_fields=["current_odometer_km", "updated_at"])
+            self.odometer_updated_at = timezone.now()
+            self.save(update_fields=["current_odometer_km", "odometer_updated_at", "updated_at"])
