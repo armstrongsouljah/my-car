@@ -1,0 +1,49 @@
+from rest_framework import serializers
+
+from utils.Serializers import CreateModelSerializer, EditModelSerializer, ListModelSerializer
+
+from inspections.models import Inspection
+
+
+class InspectionCreateSerializer(CreateModelSerializer):
+    class Meta:
+        model = Inspection
+        fields = (
+            "car", "inspection_date", "odometer_km", "status", "inspector_name",
+            "notes", "report", "next_inspection_date",
+        )
+
+
+class InspectionEditSerializer(EditModelSerializer):
+    class Meta:
+        model = Inspection
+        fields = (
+            "inspection_date", "odometer_km", "status", "inspector_name",
+            "notes", "report", "next_inspection_date",
+        )
+
+
+class InspectionListSerializer(ListModelSerializer):
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    report_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Inspection
+        fields = (
+            "id", "car", "inspection_date", "odometer_km", "status", "status_display",
+            "inspector_name", "report_url", "next_inspection_date", "created_at",
+        )
+
+    def get_report_url(self, instance):
+        if not instance.report:
+            return None
+        return instance.report.url
+
+    @staticmethod
+    def select_related_fields():
+        return ["car"]
+
+
+class InspectionDetailSerializer(InspectionListSerializer):
+    class Meta(InspectionListSerializer.Meta):
+        fields = InspectionListSerializer.Meta.fields + ("notes", "updated_at")

@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+celerybeat-schedule*
+
+# Django
+api/media/
+api/staticfiles/
+db.sqlite3
+
+# Node
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+
+# Env
+.env
+.env.local
+*.local
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/

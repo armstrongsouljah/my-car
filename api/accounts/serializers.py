@@ -1,0 +1,329 @@
+from django.conf import settings
+from django.contrib.auth import authenticate
+from django.contrib.auth.password_validation import validate_password
+from google.auth.transport import requests as google_requests
+from google.oauth2 import id_token
+from rest_framework import serializers, status
+
+from utils.Exception import CustomValidation
+from utils.Serializers import CreateModelSerializer, EditModelSerializer, BaseModelSerializer, ListModelSerializer
+
+from accounts.models import User, EmailVerificationOTP
+
+
+# ---------------------------------------------------------------------------
+# Registration
+# ---------------------------------------------------------------------------
+
+class RegisterSerializer(CreateModelSerializer):
+    password = serializers.CharField(write_only=True, min_length=8)
+
+    class Meta:
+        model = User
+        fields = ("email", "first_name", "last_name", "phone", "password")
+        extra_kwargs = {
+            "first_name": {"required": False, "default": ""},
+            "last_name": {"required": False, "default": ""},
+            "phone": {"required": False, "default": ""},
+        }
+
+    def validate_email(self, value):
+        if User.objects.filter(email=value.lower()).exists():
+            raise CustomValidation(
+                "An account with this email already exists.",
+                field="email",
+                status_code=status.HTTP_409_CONFLICT,
+            )
+        return value.lower()
+
+    def validate(self, attrs):
+        validate_password(attrs["password"])
+        return attrs
+
+    def create(self, validated_data):
+        return User.objects.create_user(**validated_data)
+
+
+# ---------------------------------------------------------------------------
+# OTP — Verify Email
+# ---------------------------------------------------------------------------
+
+class VerifyEmailSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    otp = serializers.CharField(max_length=6, min_length=6)
+
+    def validate(self, attrs):
+        email = attrs["email"].lower()
+        raw_otp = attrs["otp"]
+
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            raise CustomValidation(
+                "No account found with this email.",
+                field="email",
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
+
+        if user.is_email_verified:
+            raise CustomValidation(
+                "This account is already verified.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        otp_instance = (
+            EmailVerificationOTP.objects
+            .filter(user=user, is_used=False)
+            .order_by("-created_at")
+            .first()
+        )
+
+        if not otp_instance:
+            raise CustomValidation(
+                "No active OTP found. Please request a new one.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if otp_instance.is_expired():
+            raise CustomValidation(
+                "OTP has expired. Please request a new one.",
+                field="otp",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not otp_instance.verify(raw_otp):
+            raise CustomValidation(
+                "Invalid OTP.",
+                field="otp",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        attrs["user"] = user
+        attrs["otp_instance"] = otp_instance
+        return attrs
+
+
+# ---------------------------------------------------------------------------
+# OTP — Resend
+# ---------------------------------------------------------------------------
+
+class ResendOTPSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+    def validate(self, attrs):
+        email = attrs["email"].lower()
+
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            raise CustomValidation(
+                "No account found with this email.",
+                field="email",
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
+
+        if user.is_email_verified:
+            raise CustomValidation(
+                "This account is already verified.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        attrs["user"] = user
+        return attrs
+
+
+# ---------------------------------------------------------------------------
+# Login
+# ---------------------------------------------------------------------------
+
+class LoginSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    password = serializers.CharField(write_only=True)
+
+    def validate(self, attrs):
+        user = authenticate(username=attrs["email"].lower(), password=attrs["password"])
+        if not user:
+            raise CustomValidation(
+                "Invalid email or password.",
+                field="non_field_errors",
+                status_code=status.HTTP_401_UNAUTHORIZED,
+            )
+        if not user.is_active:
+            raise CustomValidation(
+                "This account has been deactivated.",
+                field="non_field_errors",
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+        if not user.is_email_verified:
+            raise CustomValidation(
+                "Please verify your email before logging in. Check your inbox for the OTP.",
+                field="non_field_errors",
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+        attrs["user"] = user
+        return attrs
+
+
+# ---------------------------------------------------------------------------
+# Profile (read + update)
+# ---------------------------------------------------------------------------
+
+class UserProfileSerializer(BaseModelSerializer):
+    full_name = serializers.CharField(read_only=True)
+
+    class Meta:
+        model = User
+        fields = (
+            "id", "email", "first_name", "last_name", "full_name",
+            "phone", "role", "is_email_verified", "date_joined",
+        )
+        read_only_fields = ("id", "email", "role", "is_email_verified", "date_joined", "full_name")
+
+    @staticmethod
+    def select_related_fields():
+        return []
+
+
+class UpdateProfileSerializer(EditModelSerializer):
+    class Meta:
+        model = User
+        fields = ("first_name", "last_name", "phone")
+
+
+class UserListSerializer(ListModelSerializer):
+    """Admin-only account listing (both owners and admins)."""
+    full_name = serializers.CharField(read_only=True)
+
+    class Meta:
+        model = User
+        fields = (
+            "id", "email", "first_name", "last_name", "full_name",
+            "phone", "role", "is_active", "is_email_verified", "date_joined",
+        )
+
+
+# ---------------------------------------------------------------------------
+# Password change
+# ---------------------------------------------------------------------------
+
+class ChangePasswordSerializer(serializers.Serializer):
+    current_password = serializers.CharField(write_only=True)
+    new_password = serializers.CharField(write_only=True, min_length=8)
+    confirm_new_password = serializers.CharField(write_only=True)
+
+    def validate(self, attrs):
+        user = self.context["request"].user
+        if not user.check_password(attrs["current_password"]):
+            raise CustomValidation(
+                "Current password is incorrect.",
+                field="current_password",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+        if attrs["new_password"] != attrs["confirm_new_password"]:
+            raise CustomValidation(
+                "New passwords do not match.",
+                field="confirm_new_password",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+        validate_password(attrs["new_password"], user)
+        return attrs
+
+    def save(self, **kwargs):
+        user = self.context["request"].user
+        user.set_password(self.validated_data["new_password"])
+        user.save(update_fields=["password", "updated_at"])
+        return user
+
+
+# ---------------------------------------------------------------------------
+# Google OAuth — frontend sends the Google ID token; we verify it here
+# ---------------------------------------------------------------------------
+
+class GoogleAuthSerializer(serializers.Serializer):
+    """
+    Accepts a Google ID token (obtained client-side via Google Sign-In / One Tap).
+    Verifies it with Google, then finds-or-creates the local user.
+    Google users are already verified — no OTP needed.
+    """
+    id_token = serializers.CharField(write_only=True)
+
+    def validate(self, attrs):
+        token = attrs["id_token"]
+        client_id = settings.GOOGLE_OAUTH_CLIENT_ID
+
+        if not client_id:
+            raise CustomValidation(
+                "Google OAuth is not configured on this server.",
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        try:
+            payload = id_token.verify_oauth2_token(
+                token,
+                google_requests.Request(),
+                client_id,
+            )
+        except ValueError:
+            raise CustomValidation(
+                "Invalid or expired Google token.",
+                field="id_token",
+                status_code=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        email = payload.get("email", "").lower()
+        if not email:
+            raise CustomValidation(
+                "Google account has no associated email address.",
+                field="id_token",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user, created = User.objects.get_or_create(
+            email=email,
+            defaults={
+                "first_name": payload.get("given_name", ""),
+                "last_name": payload.get("family_name", ""),
+                "is_email_verified": True,
+            },
+        )
+
+        if not created and not user.is_active:
+            raise CustomValidation(
+                "This account has been deactivated.",
+                field="non_field_errors",
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+
+        if not created and not user.is_email_verified:
+            user.is_email_verified = True
+            user.save(update_fields=["is_email_verified"])
+
+        attrs["user"] = user
+        return attrs
+
+
+# ---------------------------------------------------------------------------
+# Deactivate Account
+# ---------------------------------------------------------------------------
+
+class DeactivateAccountSerializer(serializers.Serializer):
+    password = serializers.CharField(write_only=True, required=False, allow_blank=True)
+
+    def validate(self, attrs):
+        user = self.context["request"].user
+
+        # Google-only accounts have no usable password — let them deactivate freely.
+        if user.has_usable_password():
+            if not attrs.get("password"):
+                raise CustomValidation(
+                    "Password is required to deactivate your account.",
+                    field="password",
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
+            if not user.check_password(attrs["password"]):
+                raise CustomValidation(
+                    "Password is incorrect.",
+                    field="password",
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
+        return attrs
