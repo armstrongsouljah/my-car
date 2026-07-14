@@ -18,6 +18,7 @@ urlpatterns = [
     path(f"{API_PREFIX}cars/", include("cars.urls")),
     path(f"{API_PREFIX}services/", include("services.urls")),
     path(f"{API_PREFIX}inspections/", include("inspections.urls")),
+    path(f"{API_PREFIX}reminders/", include("reminders.urls")),
     path(f"{API_PREFIX}expenses/", include("expenses.urls")),
 ]
 

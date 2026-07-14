@@ -47,6 +47,29 @@ REMINDER_DUE_SOON_KM = 500
 REMINDER_DUE_SOON_DAYS = 30
 
 # ---------------------------------------------------------------------------
+# User-created reminders (catalog-driven or custom)
+# ---------------------------------------------------------------------------
+REMINDER_CATEGORY_MAINTENANCE = "maintenance"
+REMINDER_CATEGORY_DOCUMENTATION = "documentation"
+REMINDER_CATEGORY_OTHER = "other"
+
+REMINDER_CATEGORIES = [
+    (REMINDER_CATEGORY_MAINTENANCE, "Maintenance"),
+    (REMINDER_CATEGORY_DOCUMENTATION, "Documents"),
+    (REMINDER_CATEGORY_OTHER, "Other"),
+]
+
+REMINDER_TRACKING_METHOD_DATE_AND_MILEAGE = "date_and_mileage"
+REMINDER_TRACKING_METHOD_DATE = "date"
+REMINDER_TRACKING_METHOD_MILEAGE = "mileage"
+
+REMINDER_TRACKING_METHODS = [
+    (REMINDER_TRACKING_METHOD_DATE_AND_MILEAGE, "By date & mileage"),
+    (REMINDER_TRACKING_METHOD_DATE, "By date"),
+    (REMINDER_TRACKING_METHOD_MILEAGE, "By mileage"),
+]
+
+# ---------------------------------------------------------------------------
 # Inspection statuses
 # ---------------------------------------------------------------------------
 INSPECTION_STATUS_PASSED = "passed"
