@@ -1,7 +1,9 @@
 # ── Stage 1: dependency builder ───────────────────────────────────────────────
 FROM python:3.12-slim AS builder
 
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
+# Install uv from PyPI (avoids pulling ghcr.io/astral-sh/uv, which can be
+# unreachable behind some networks/proxies).
+RUN pip install --no-cache-dir uv
 
 WORKDIR /app
 
@@ -19,7 +21,7 @@ FROM python:3.12-slim AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH="/venv/bin:$PATH" \
-    PORT=8000
+    PORT=8001
 
 WORKDIR /app
 

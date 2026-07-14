@@ -10,9 +10,9 @@ if [ -z "$1" ]; then
     echo "Seeding super admin..."
     python manage.py seed_admin
 
-    echo "Starting Gunicorn on port ${PORT:-8000}..."
+    echo "Starting Gunicorn on port ${PORT:-8001}..."
     exec gunicorn config.wsgi:application \
-        --bind "0.0.0.0:${PORT:-8000}" \
+        --bind "0.0.0.0:${PORT:-8001}" \
         --workers 1 \
         --threads 8 \
         --timeout 0
