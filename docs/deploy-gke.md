@@ -13,7 +13,7 @@ k8s/
   22-beat.yaml             Celery beat Deployment (singleton)
   23-frontend.yaml         Deployment + Service (Next.js, :3000)
   40-migrate-job.yaml      One-off: migrate + seed_admin
-  50-ingress.yaml          GKE native ingress (gce controller)
+  50-gateway.yaml          Gateway + HTTPRoutes (GKE Gateway API)
 scripts/
   deploy-gke.sh            Provision GCP + build images + deploy
   deploy-gke.env.example   Config/secrets template (copy to deploy-gke.env)
@@ -46,36 +46,25 @@ The script is idempotent-ish — re-running skips resources that already exist a
 4. Provisions **Cloud SQL for PostgreSQL** (db-f1-micro, private IP) and **Memorystore for Redis** (Basic tier, AUTH enabled, private IP).
 5. Builds both images via **Cloud Build** (`gcloud builds submit`) — no local Docker needed. `NEXT_PUBLIC_API_URL` is baked into the frontend image at build time.
 6. Generates the `mycar-env` Secret from your env vars (Postgres over `sslmode=require`, Redis with AUTH).
-7. Runs the **migrate Job** and waits for it, then rolls out api / worker / beat / frontend and the ingress.
-8. Prints the ingress external IP.
+7. Runs the **migrate Job** and waits for it, then rolls out api / worker / beat / frontend and the Gateway.
+8. Prints the Gateway's external IP.
 
 ## After it runs
 
-Point DNS at the ingress IP the script prints:
+Point DNS at the Gateway IP the script prints:
 
 ```
-app.example.com  ->  <ingress IP>     # frontend
-api.example.com  ->  <ingress IP>     # Django API + /admin
+app.example.com  ->  <gateway IP>     # frontend
+api.example.com  ->  <gateway IP>     # Django API + /admin
 ```
 
-Then add TLS: create a `ManagedCertificate` per host and reference it via the `networking.gke.io/managed-certificates` annotation on `k8s/50-ingress.yaml`, e.g.:
-
-```yaml
-apiVersion: networking.gke.io/v1
-kind: ManagedCertificate
-metadata:
-  name: mycar-cert
-  namespace: mycar
-spec:
-  domains:
-    - app.example.com
-    - api.example.com
-```
+Then add TLS: create a Google-managed `Certificate` and attach it to an `https` listener on the Gateway in `k8s/50-gateway.yaml` (see [GKE Gateway TLS docs](https://cloud.google.com/kubernetes-engine/docs/how-to/managed-certs-gateway)), once DNS points at the Gateway's external IP.
 
 Verify:
 
 ```bash
-kubectl -n mycar get pods,ingress
+kubectl -n mycar get pods
+kubectl -n mycar get gateway,httproute
 kubectl -n mycar logs deploy/api
 kubectl -n mycar logs deploy/worker    # confirm tasks flowing
 ```
@@ -127,6 +116,7 @@ Then set repository secrets (Settings → Secrets and variables → Actions → 
 
 ## Design notes / gotchas
 
+- **Gateway API, not legacy Ingress.** Newer GKE clusters (including Autopilot) route external traffic through the Gateway API controllers (`gke-l7-global-external-managed` etc.) rather than the classic `networking.k8s.io/v1 Ingress` + `gce` IngressClass. A plain `Ingress` object is silently never reconciled on these clusters (no events, no address, ever) — `k8s/50-gateway.yaml` uses `Gateway` + `HTTPRoute` instead.
 - **Migrations run once, in a Job.** The api container is started with an explicit `gunicorn` command, which makes `entrypoint.sh` skip its built-in migrate/seed — so the 2 api replicas don't race. `40-migrate-job.yaml` owns `migrate` + `seed_admin`. The CI workflow re-runs this Job on every deploy.
 - **beat stays at `replicas: 1`** with a `Recreate` strategy — multiple schedulers double-fire periodic tasks.
 - **Media files:** `docker-compose` shares a `media_data` volume across api/worker. On GKE this isn't automatic. Either mount a `PersistentVolumeClaim` (Filestore-backed) on api + worker, or (recommended) switch Django to Google Cloud Storage with `django-storages`. Until then, uploaded media won't be shared between pods.

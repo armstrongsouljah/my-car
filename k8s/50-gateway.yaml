@@ -1,0 +1,73 @@
+# Uses GKE's Gateway API controller (external Global L7 load balancer). Modern
+# GKE clusters route through Gateway API rather than the legacy "gce" Ingress
+# controller — a plain networking.k8s.io/v1 Ingress is never reconciled here.
+# Replace the hostnames with your DNS records, then add TLS: attach a
+# Google-managed certificate to the "https" listener (see
+# https://cloud.google.com/kubernetes-engine/docs/how-to/managed-certs-gateway)
+# once DNS points at the Gateway's external IP.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: mycar
+  namespace: mycar
+spec:
+  gatewayClassName: gke-l7-global-external-managed
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+      allowedRoutes:
+        namespaces: { from: Same }
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: frontend
+  namespace: mycar
+spec:
+  parentRefs:
+    - name: mycar
+  hostnames:
+    - app.example.com
+  rules:
+    - backendRefs:
+        - name: frontend
+          port: 80
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: api
+  namespace: mycar
+spec:
+  parentRefs:
+    - name: mycar
+  hostnames:
+    - api.example.com
+  rules:
+    - backendRefs:
+        - name: api
+          port: 80
+---
+# Django's ALLOWED_HOSTS rejects the default GCLB health check (Host header =
+# backend IP) with a 400, which the LB then reads as unhealthy. Point the
+# check at a Host that's always in ALLOWED_HOSTS ("api", from k8s/10-secret.
+# example.yaml) and a path that returns 200 without auth.
+apiVersion: networking.gke.io/v1
+kind: HealthCheckPolicy
+metadata:
+  name: api
+  namespace: mycar
+spec:
+  targetRef:
+    group: ""
+    kind: Service
+    name: api
+  default:
+    config:
+      type: HTTP
+      httpHealthCheck:
+        # /admin/ itself 302s to this when unauthenticated — GCP health checks
+        # don't follow redirects, so point straight at the 200.
+        requestPath: /admin/login/
+        host: api

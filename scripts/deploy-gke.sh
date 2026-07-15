@@ -123,12 +123,12 @@ kubectl -n mycar wait --for=condition=complete job/migrate --timeout=300s
 for f in k8s/20-api.yaml k8s/21-worker.yaml k8s/22-beat.yaml k8s/23-frontend.yaml; do
   render "$f" | kubectl apply -f -
 done
-kubectl apply -f k8s/50-ingress.yaml
+kubectl apply -f k8s/50-gateway.yaml
 
 # ── 10. Wait for rollout + report ──────────────────────────────────────────────
 kubectl -n mycar rollout status deploy/api
 kubectl -n mycar rollout status deploy/frontend
 echo
-echo "Ingress external IP (can take a few minutes to provision on first apply):"
-kubectl -n mycar get ingress mycar -o jsonpath='{.status.loadBalancer.ingress[0].ip}'; echo
+echo "Gateway external IP (can take a few minutes to provision on first apply):"
+kubectl -n mycar get gateway mycar -o jsonpath='{.status.addresses[0].value}'; echo
 echo "Point ${APP_HOST} and ${API_HOST} DNS at that IP, then add a Google-managed TLS cert."

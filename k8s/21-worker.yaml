@@ -15,7 +15,9 @@ spec:
       containers:
         - name: worker
           image: ${REGISTRY}/mycar-api:${IMAGE_TAG}
-          command: ["celery", "-A", "config", "worker", "--loglevel=info"]
+          # Prefork concurrency defaults to host CPU count, which forks far more
+          # workers than the memory limit below can hold — pin it explicitly.
+          command: ["celery", "-A", "config", "worker", "--loglevel=info", "--concurrency=2"]
           envFrom:
             - secretRef: { name: mycar-env }
           resources:
