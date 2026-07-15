@@ -30,7 +30,7 @@ class ExpenseListSerializer(ListModelSerializer):
         model = Expense
         fields = (
             "id", "car", "category", "category_display", "amount",
-            "expense_date", "vendor", "odometer_km", "litres", "created_at",
+            "expense_date", "vendor", "description", "odometer_km", "litres", "created_at",
         )
 
     @staticmethod
@@ -40,4 +40,4 @@ class ExpenseListSerializer(ListModelSerializer):
 
 class ExpenseDetailSerializer(ExpenseListSerializer):
     class Meta(ExpenseListSerializer.Meta):
-        fields = ExpenseListSerializer.Meta.fields + ("description", "updated_at")
+        fields = ExpenseListSerializer.Meta.fields + ("updated_at",)
