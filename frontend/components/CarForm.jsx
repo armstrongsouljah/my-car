@@ -1,16 +1,35 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { api, mediaUrl } from "@/lib/api";
+import { api } from "@/lib/api";
 
 const OTHER = "__other__";
 const FUEL_TYPES = ["petrol", "diesel", "hybrid", "electric"];
 
+const CLOUDINARY_CLOUD_NAME = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+const CLOUDINARY_UPLOAD_PRESET = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
+
+// Uploads straight from the browser to Cloudinary (unsigned preset) — the
+// API never sees the file, only the resulting secure_url.
+async function uploadToCloudinary(file) {
+  const body = new FormData();
+  body.append("file", file);
+  body.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+
+  const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, {
+    method: "POST",
+    body,
+  });
+  if (!res.ok) throw new Error("Photo upload failed. Please try again.");
+  const data = await res.json();
+  return data.secure_url;
+}
+
 /**
  * Shared create/edit car form. Brand → model pickers are driven by the API's
  * bundled catalog with a free-text "Other" fallback; years are selectable
- * from the catalog range (min 1980). Photo uploads switch the submit to
- * multipart/form-data.
+ * from the catalog range (min 1980). Photos upload directly to Cloudinary
+ * from the browser; only the resulting URL is sent to the API.
  */
 export default function CarForm({ car = null, onSaved }) {
   const isEdit = !!car;
@@ -26,7 +45,7 @@ export default function CarForm({ car = null, onSaved }) {
     notes: car?.notes || "",
   });
   const [photo, setPhoto] = useState(null);
-  const [photoPreview, setPhotoPreview] = useState(car?.photo_url ? mediaUrl(car.photo_url) : null);
+  const [photoPreview, setPhotoPreview] = useState(car?.photo_url || null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -87,7 +106,7 @@ export default function CarForm({ car = null, onSaved }) {
   function pickPhoto(event) {
     const file = event.target.files?.[0] || null;
     setPhoto(file);
-    setPhotoPreview(file ? URL.createObjectURL(file) : car?.photo_url ? mediaUrl(car.photo_url) : null);
+    setPhotoPreview(file ? URL.createObjectURL(file) : car?.photo_url || null);
   }
 
   async function handleSubmit(event) {
@@ -113,19 +132,13 @@ export default function CarForm({ car = null, onSaved }) {
         notes: form.notes,
       };
 
-      let saved;
+      if (photo) {
+        fields.photo_url = await uploadToCloudinary(photo);
+      }
+
       const path = isEdit ? `/cars/${car.id}/` : "/cars/";
       const method = isEdit ? "PATCH" : "POST";
-
-      if (photo) {
-        const body = new FormData();
-        Object.entries(fields).forEach(([key, value]) => body.append(key, value));
-        if (year !== null) body.append("year", year);
-        body.append("photo", photo);
-        saved = await api(path, { method, body, isForm: true });
-      } else {
-        saved = await api(path, { method, body: { ...fields, year } });
-      }
+      const saved = await api(path, { method, body: { ...fields, year } });
       onSaved(saved);
     } catch (err) {
       setError(err.message);

@@ -58,7 +58,17 @@ app.example.com  ->  <gateway IP>     # frontend
 api.example.com  ->  <gateway IP>     # Django API + /admin
 ```
 
-Then add TLS: create a Google-managed `Certificate` and attach it to an `https` listener on the Gateway in `k8s/50-gateway.yaml` (see [GKE Gateway TLS docs](https://cloud.google.com/kubernetes-engine/docs/how-to/managed-certs-gateway)), once DNS points at the Gateway's external IP.
+Then add TLS, once DNS points at the Gateway's external IP — GKE Gateway TLS uses Certificate Manager, not a Gateway `certificateRef` directly:
+
+```bash
+gcloud certificate-manager certificates create mycar-app-cert --domains="app.example.com"
+gcloud certificate-manager certificates create mycar-api-cert --domains="api.example.com"
+gcloud certificate-manager maps create mycar-cert-map
+gcloud certificate-manager maps entries create mycar-app-entry --map=mycar-cert-map --hostname=app.example.com --certificates=mycar-app-cert
+gcloud certificate-manager maps entries create mycar-api-entry --map=mycar-cert-map --hostname=api.example.com --certificates=mycar-api-cert
+```
+
+`k8s/50-gateway.yaml` already has the `https` listener and the `networking.gke.io/certmap: mycar-cert-map` annotation wired up — `kubectl apply -f k8s/50-gateway.yaml` picks up the map once it exists. Certs sit in `PROVISIONING` until Google validates domain ownership against the load balancer, typically 15–60 minutes (check with `gcloud certificate-manager certificates describe mycar-app-cert --format='value(managed.state)'`).
 
 Verify:
 

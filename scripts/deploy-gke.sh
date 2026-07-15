@@ -29,6 +29,16 @@ cd "$(dirname "$0")/.."
 : "${APP_HOST:?set APP_HOST e.g. app.example.com}"
 : "${API_HOST:?set API_HOST e.g. api.example.com}"
 : "${GOOGLE_OAUTH_CLIENT_ID:=}"
+: "${CLOUDINARY_CLOUD_NAME:=}"
+: "${CLOUDINARY_UPLOAD_PRESET:=}"
+: "${EMAIL_BACKEND:=django.core.mail.backends.smtp.EmailBackend}"
+: "${EMAIL_HOST:=smtp.gmail.com}"
+: "${EMAIL_PORT:=587}"
+: "${EMAIL_USE_TLS:=True}"
+: "${EMAIL_HOST_USER:=}"
+: "${EMAIL_HOST_PASSWORD:=}"
+: "${DEFAULT_FROM_EMAIL:=noreply@mycar.com}"
+: "${OTP_EXPIRY_MINUTES:=10}"
 
 exists() { "$@" >/dev/null 2>&1; }
 
@@ -73,7 +83,7 @@ exists gcloud redis instances describe "$REDIS" --region "$REGION" || \
   gcloud redis instances create "$REDIS" --region "$REGION" --tier=basic \
     --size=1 --redis-version=redis_7_0 --network="$NETWORK" --enable-auth -q
 REDIS_HOST=$(gcloud redis instances describe "$REDIS" --region "$REGION" --format='value(host)')
-REDIS_AUTH=$(gcloud redis instances get-auth-string "$REDIS" --region "$REGION")
+REDIS_AUTH=$(gcloud redis instances get-auth-string "$REDIS" --region "$REGION" --format='value(authString)')
 
 # ── 7. Build & push images (Cloud Build, no local Docker needed) ──────────────
 gcloud builds submit ./api --tag "${REGISTRY}/mycar-api:${IMAGE_TAG}" -q
@@ -88,6 +98,10 @@ steps:
       - NEXT_PUBLIC_API_URL=https://${API_HOST}/api/v1
       - --build-arg
       - NEXT_PUBLIC_GOOGLE_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID}
+      - --build-arg
+      - NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME}
+      - --build-arg
+      - NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET=${CLOUDINARY_UPLOAD_PRESET}
       - -t
       - ${REGISTRY}/mycar-frontend:${IMAGE_TAG}
       - .
@@ -110,6 +124,14 @@ kubectl -n mycar create secret generic mycar-env \
   --from-literal=ADMIN_EMAIL="$ADMIN_EMAIL" \
   --from-literal=ADMIN_PASSWORD="$ADMIN_PASSWORD" \
   --from-literal=GOOGLE_OAUTH_CLIENT_ID="$GOOGLE_OAUTH_CLIENT_ID" \
+  --from-literal=EMAIL_BACKEND="$EMAIL_BACKEND" \
+  --from-literal=EMAIL_HOST="$EMAIL_HOST" \
+  --from-literal=EMAIL_PORT="$EMAIL_PORT" \
+  --from-literal=EMAIL_USE_TLS="$EMAIL_USE_TLS" \
+  --from-literal=EMAIL_HOST_USER="$EMAIL_HOST_USER" \
+  --from-literal=EMAIL_HOST_PASSWORD="$EMAIL_HOST_PASSWORD" \
+  --from-literal=DEFAULT_FROM_EMAIL="$DEFAULT_FROM_EMAIL" \
+  --from-literal=OTP_EXPIRY_MINUTES="$OTP_EXPIRY_MINUTES" \
   --dry-run=client -o yaml | kubectl apply -f -
 
 # ── 9. Deploy workloads (substitute image placeholders) ───────────────────────

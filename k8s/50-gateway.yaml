@@ -1,21 +1,29 @@
 # Uses GKE's Gateway API controller (external Global L7 load balancer). Modern
 # GKE clusters route through Gateway API rather than the legacy "gce" Ingress
 # controller — a plain networking.k8s.io/v1 Ingress is never reconciled here.
-# Replace the hostnames with your DNS records, then add TLS: attach a
-# Google-managed certificate to the "https" listener (see
-# https://cloud.google.com/kubernetes-engine/docs/how-to/managed-certs-gateway)
-# once DNS points at the Gateway's external IP.
+#
+# TLS is Google-managed via Certificate Manager, not a Gateway TLS
+# certificateRef — the certmap annotation below points at a certificate map.
+# See docs/deploy-gke.md for the gcloud certificate-manager commands that
+# create it.
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
 metadata:
   name: mycar
   namespace: mycar
+  annotations:
+    networking.gke.io/certmap: mycar-cert-map
 spec:
   gatewayClassName: gke-l7-global-external-managed
   listeners:
     - name: http
       protocol: HTTP
       port: 80
+      allowedRoutes:
+        namespaces: { from: Same }
+    - name: https
+      protocol: HTTPS
+      port: 443
       allowedRoutes:
         namespaces: { from: Same }
 ---
@@ -28,7 +36,7 @@ spec:
   parentRefs:
     - name: mycar
   hostnames:
-    - app.example.com
+    - app.glavbox.com
   rules:
     - backendRefs:
         - name: frontend
@@ -43,7 +51,7 @@ spec:
   parentRefs:
     - name: mycar
   hostnames:
-    - api.example.com
+    - api.glavbox.com
   rules:
     - backendRefs:
         - name: api
