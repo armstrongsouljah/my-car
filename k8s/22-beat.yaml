@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: beat
+  namespace: mycar
+  labels: { app: beat }
+spec:
+  # MUST stay at 1 — multiple beat schedulers double-fire periodic tasks.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: { app: beat }
+  template:
+    metadata:
+      labels: { app: beat }
+    spec:
+      containers:
+        - name: beat
+          image: ${REGISTRY}/mycar-api:${IMAGE_TAG}
+          command:
+            - celery
+            - -A
+            - config
+            - beat
+            - --loglevel=info
+            - --schedule=/tmp/celerybeat-schedule
+          envFrom:
+            - secretRef: { name: mycar-env }
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { cpu: 200m, memory: 256Mi }

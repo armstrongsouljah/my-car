@@ -26,3 +26,7 @@ frontend/out/
 .DS_Store
 .idea/
 .vscode/
+
+# GKE deploy secrets
+scripts/deploy-gke.env
+k8s/secret.yaml

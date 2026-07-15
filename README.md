@@ -11,14 +11,14 @@ A monolith repository for **My Car** — a mobile-first app where car owners reg
 | Database   | PostgreSQL 17                                               |
 | Cache      | Redis (car information caching via `django-redis`)          |
 | Async      | Celery worker + beat (OTP/welcome emails, daily reminder sweep) |
-| Deployment | GitHub Actions → `nivoapp` Azure Container Registry → `my-car` Azure Container App |
+| Deployment | GitHub Actions → Artifact Registry → GKE (`mycar-gke`) |
 
 ## Repository layout
 
 ```
 my-car/
 ├── docker-compose.yml        # db, redis, api, worker, beat, frontend
-├── .github/workflows/        # CI: test → build/push images → deploy to Azure
+├── .github/workflows/        # CI: test → build/push images → deploy to GKE
 ├── api/                      # Django REST Framework monolith
 │   ├── config/               # settings, urls, celery app
 │   ├── utils/                # shared craft: Views, Serializers, QueryParams,
@@ -117,18 +117,19 @@ GET|POST   /api/v1/expenses/             GET   /api/v1/expenses/analytics/
 
 ## Deployment
 
+Deploys to **Google Kubernetes Engine** (Autopilot), with Postgres on Cloud SQL and Redis on Memorystore. See [docs/deploy-gke.md](docs/deploy-gke.md) for the full setup (first-time provisioning via `scripts/deploy-gke.sh`, and the one-time Workload Identity Federation setup for CI).
+
 Pushing to `main` triggers `.github/workflows/deploy.yml`:
 
 1. **test** — `uv sync` + `pytest`
-2. **build-and-push** — builds `api/` and `frontend/` images and pushes them to the **nivoapp** container registry (`nivoapp.azurecr.io/my-car-api`, `nivoapp.azurecr.io/my-car-frontend`)
-3. **deploy** — updates the **my-car** (and `my-car-frontend`) Azure Container Apps
+2. **build-and-push** — builds `api/` and `frontend/` images and pushes them to **Artifact Registry**
+3. **deploy** — re-runs the migrate Job, then rolls the new images out to the `api`, `worker`, `beat`, and `frontend` Deployments on GKE
 
-Required repository configuration:
+Required repository configuration (no secrets — auth is via Workload Identity Federation):
 
-| Type   | Name                                        |
-|--------|---------------------------------------------|
-| Secret | `ACR_USERNAME`, `ACR_PASSWORD`, `AZURE_CREDENTIALS` |
-| Var    | `AZURE_RESOURCE_GROUP`, `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_GOOGLE_CLIENT_ID` |
+| Type | Name                                        |
+|------|----------------------------------------------|
+| Var  | `GCP_PROJECT_ID`, `GCP_REGION`, `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_SERVICE_ACCOUNT`, `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_GOOGLE_CLIENT_ID` |
 
 ## Roadmap
 

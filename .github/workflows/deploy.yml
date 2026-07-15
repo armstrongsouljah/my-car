@@ -1,4 +1,4 @@
-name: Deploy to Azure
+name: Deploy to Google Cloud
 
 on:
   push:
@@ -6,10 +6,10 @@ on:
   workflow_dispatch:
 
 env:
-  REGISTRY: nivoapp.azurecr.io
-  API_IMAGE: nivoapp.azurecr.io/my-car-api
-  FRONTEND_IMAGE: nivoapp.azurecr.io/my-car-frontend
-  CONTAINER_APP: my-car
+  REGISTRY: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/mycar
+  API_IMAGE: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/mycar/mycar-api
+  FRONTEND_IMAGE: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/mycar/mycar-frontend
+  CLUSTER: ${{ vars.GCP_CLUSTER }}
 
 jobs:
   test:
@@ -55,15 +55,21 @@ jobs:
   build-and-push:
     needs: [test, test-frontend]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
 
-      - name: Log in to nivoapp container registry
-        uses: docker/login-action@v3
+      - id: auth
+        name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ secrets.ACR_USERNAME }}
-          password: ${{ secrets.ACR_PASSWORD }}
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker "${{ vars.GCP_REGION }}-docker.pkg.dev" --quiet
 
       - name: Build and push API image
         uses: docker/build-push-action@v6
@@ -89,22 +95,38 @@ jobs:
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
-      - name: Azure login
-        uses: azure/login@v2
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      - uses: actions/checkout@v4
 
-      - name: Deploy API to Azure Container App (my-car)
-        uses: azure/container-apps-deploy-action@v2
+      - id: auth
+        name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
         with:
-          containerAppName: ${{ env.CONTAINER_APP }}
-          resourceGroup: ${{ vars.AZURE_RESOURCE_GROUP }}
-          imageToDeploy: ${{ env.API_IMAGE }}:${{ github.sha }}
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
 
-      - name: Deploy frontend to Azure Container App (my-car-frontend)
-        uses: azure/container-apps-deploy-action@v2
+      - uses: google-github-actions/get-gke-credentials@v2
         with:
-          containerAppName: ${{ env.CONTAINER_APP }}-frontend
-          resourceGroup: ${{ vars.AZURE_RESOURCE_GROUP }}
-          imageToDeploy: ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
+          cluster_name: ${{ env.CLUSTER }}
+          location: ${{ vars.GCP_REGION }}
+
+      - name: Run migrations
+        run: |
+          kubectl -n mycar delete job/migrate --ignore-not-found
+          REGISTRY="${{ env.REGISTRY }}" IMAGE_TAG="${{ github.sha }}" \
+            envsubst '${REGISTRY} ${IMAGE_TAG}' < k8s/40-migrate-job.yaml | kubectl apply -f -
+          kubectl -n mycar wait --for=condition=complete job/migrate --timeout=300s
+
+      - name: Roll out new images
+        run: |
+          kubectl -n mycar set image deployment/api api="${{ env.API_IMAGE }}:${{ github.sha }}"
+          kubectl -n mycar set image deployment/worker worker="${{ env.API_IMAGE }}:${{ github.sha }}"
+          kubectl -n mycar set image deployment/beat beat="${{ env.API_IMAGE }}:${{ github.sha }}"
+          kubectl -n mycar set image deployment/frontend frontend="${{ env.FRONTEND_IMAGE }}:${{ github.sha }}"
+          kubectl -n mycar rollout status deployment/api
+          kubectl -n mycar rollout status deployment/worker
+          kubectl -n mycar rollout status deployment/beat
+          kubectl -n mycar rollout status deployment/frontend

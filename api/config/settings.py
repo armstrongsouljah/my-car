@@ -12,9 +12,10 @@ DEBUG = config("DEBUG", default=True, cast=bool)
 
 ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1", cast=Csv())
 
-# Azure Container Apps terminates TLS at the edge and forwards plain HTTP to the
-# container, so Django must be told to trust X-Forwarded-Proto to know a request
-# was actually HTTPS (otherwise CSRF's Origin check rejects same-origin admin logins).
+# The GKE ingress (GCLB) terminates TLS at the edge and forwards plain HTTP to
+# the container, so Django must be told to trust X-Forwarded-Proto to know a
+# request was actually HTTPS (otherwise CSRF's Origin check rejects same-origin
+# admin logins).
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 CSRF_TRUSTED_ORIGINS = config("CSRF_TRUSTED_ORIGINS", default="", cast=Csv())
