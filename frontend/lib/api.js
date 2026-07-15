@@ -1,5 +1,8 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
-const API_ORIGIN = API_URL.replace(/\/api\/v\d+\/?$/, "");
+// Prefer an explicit media origin when the API URL doesn't follow the
+// `.../api/v{n}` convention (custom proxy path, versionless API, etc.) —
+// falls back to stripping that suffix for the common case.
+const API_ORIGIN = process.env.NEXT_PUBLIC_MEDIA_ORIGIN || API_URL.replace(/\/api\/v\d+\/?$/, "");
 
 // Media files (car photos, inspection reports) come back as relative paths.
 export function mediaUrl(path) {

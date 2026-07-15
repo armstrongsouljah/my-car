@@ -46,6 +46,16 @@ class CarEditSerializer(EditModelSerializer):
             )
         return value
 
+    def update(self, instance, validated_data):
+        # current_odometer_km always goes through record_odometer() so the
+        # write is atomic against concurrent updates and odometer_updated_at
+        # stays in sync (matches the ServiceRecord/Inspection save() path).
+        odometer_km = validated_data.pop("current_odometer_km", None)
+        instance = super().update(instance, validated_data)
+        if odometer_km is not None:
+            instance.record_odometer(odometer_km)
+        return instance
+
 
 class CarListSerializer(ListModelSerializer):
     display_name = serializers.CharField(source="__str__", read_only=True)

@@ -51,6 +51,16 @@ export default function CarForm({ car = null, onSaved }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    // Revoke the previous blob: URL whenever the preview changes (a new
+    // photo is picked) and on unmount, so object URLs don't leak. The
+    // initial preview sourced from car.photo_url is a normal http(s) URL
+    // and is left alone.
+    return () => {
+      if (photoPreview?.startsWith("blob:")) URL.revokeObjectURL(photoPreview);
+    };
+  }, [photoPreview]);
+
   const models = useMemo(() => {
     if (!catalog || !form.brandChoice || form.brandChoice === OTHER) return [];
     return catalog.brands.find((b) => b.name === form.brandChoice)?.models || [];
@@ -91,10 +101,10 @@ export default function CarForm({ car = null, onSaved }) {
 
     setLoading(true);
     try {
+      const year = form.year ? Number(form.year) : null;
       const fields = {
         make: form.make.trim(),
         model: form.model.trim(),
-        year: form.year || "",
         registration_number: form.registration_number,
         vin: form.vin,
         color: form.color,
@@ -110,10 +120,11 @@ export default function CarForm({ car = null, onSaved }) {
       if (photo) {
         const body = new FormData();
         Object.entries(fields).forEach(([key, value]) => body.append(key, value));
+        if (year !== null) body.append("year", year);
         body.append("photo", photo);
         saved = await api(path, { method, body, isForm: true });
       } else {
-        saved = await api(path, { method, body: { ...fields, year: form.year ? Number(form.year) : null } });
+        saved = await api(path, { method, body: { ...fields, year } });
       }
       onSaved(saved);
     } catch (err) {

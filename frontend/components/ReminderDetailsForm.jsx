@@ -7,6 +7,12 @@ import TrackingMethodPicker from "@/components/TrackingMethodPicker";
 const needsKm = (method) => method === "mileage" || method === "date_and_mileage";
 const needsMonths = (method) => method === "date" || method === "date_and_mileage";
 
+function todayLocal() {
+  const now = new Date();
+  const offsetMs = now.getTimezoneOffset() * 60 * 1000;
+  return new Date(now.getTime() - offsetMs).toISOString().slice(0, 10);
+}
+
 export default function ReminderDetailsForm({ car, reminder = null, preset = null, trackingMethod, editableMethod = false, onSaved }) {
   const isEdit = !!reminder;
   const isCustom = isEdit ? !reminder.catalog_key : !preset;
@@ -17,7 +23,7 @@ export default function ReminderDetailsForm({ car, reminder = null, preset = nul
     interval_km: String(reminder?.interval_km ?? preset?.default_interval_km ?? ""),
     interval_months: String(reminder?.interval_months ?? preset?.default_interval_months ?? ""),
     baseline_odometer_km: String(reminder?.baseline_odometer_km ?? car.current_odometer_km ?? ""),
-    baseline_date: reminder?.baseline_date ?? new Date().toISOString().slice(0, 10),
+    baseline_date: reminder?.baseline_date ?? todayLocal(),
     notes: reminder?.notes ?? "",
   });
   const [error, setError] = useState("");

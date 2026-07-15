@@ -17,11 +17,16 @@ function Reminders() {
     api("/services/reminders/")
       .then((entries) => {
         setData(entries);
-        entries.forEach((entry) => {
-          api(`/reminders/?car=${entry.car_id}`)
-            .then((page) => setReminders((prev) => ({ ...prev, [entry.car_id]: page.results || page })))
-            .catch(() => {});
+        return api("/reminders/");
+      })
+      .then((page) => {
+        const results = page.results || page;
+        const grouped = {};
+        results.forEach((reminder) => {
+          grouped[reminder.car] = grouped[reminder.car] || [];
+          grouped[reminder.car].push(reminder);
         });
+        setReminders(grouped);
       })
       .catch((err) => setError(err.message));
   }, []);

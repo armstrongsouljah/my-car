@@ -14,6 +14,7 @@ export default function TrackingMethodPicker({ value, onChange, suggested, sugge
             <button
               key={method.value}
               type="button"
+              aria-pressed={selected}
               onClick={() => onChange(method.value)}
               className={`card block w-full text-left ${selected ? "ring-2 ring-gray-900" : ""}`}
             >

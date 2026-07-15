@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 /**
  * Mobile-friendly confirmation sheet — slides up from the bottom with a
@@ -17,24 +17,32 @@ export default function ConfirmDialog({
   onConfirm,
   onCancel,
 }) {
+  const confirmRef = useRef(null);
+  const previouslyFocused = useRef(null);
+
   useEffect(() => {
     if (!open) return;
-    const onKey = (event) => event.key === "Escape" && onCancel?.();
+    const onKey = (event) => event.key === "Escape" && !loading && onCancel?.();
     document.addEventListener("keydown", onKey);
     document.body.style.overflow = "hidden";
+    previouslyFocused.current = document.activeElement;
+    confirmRef.current?.focus();
     return () => {
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = "";
+      previouslyFocused.current?.focus?.();
     };
-  }, [open, onCancel]);
+  }, [open, loading, onCancel]);
 
   if (!open) return null;
+
+  const dismiss = () => !loading && onCancel?.();
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" role="dialog" aria-modal="true">
       <button
         aria-label="Close"
-        onClick={onCancel}
+        onClick={dismiss}
         className="absolute inset-0 bg-black/40 backdrop-blur-[2px] transition-opacity"
       />
       <div className="relative z-10 w-full max-w-lg animate-[slideUp_.2s_ease-out] rounded-t-3xl bg-white p-6 pb-8 shadow-2xl sm:max-w-sm sm:rounded-3xl sm:pb-6">
@@ -50,6 +58,7 @@ export default function ConfirmDialog({
         <p className="mt-2 text-center text-sm text-gray-500">{message}</p>
         <div className="mt-6 space-y-2">
           <button
+            ref={confirmRef}
             onClick={onConfirm}
             disabled={loading}
             className={`w-full rounded-xl px-4 py-3 text-[15px] font-semibold text-white active:scale-[0.99] disabled:opacity-50 ${
@@ -58,7 +67,7 @@ export default function ConfirmDialog({
           >
             {loading ? "Please wait…" : confirmLabel}
           </button>
-          <button onClick={onCancel} disabled={loading} className="btn-secondary">
+          <button onClick={dismiss} disabled={loading} className="btn-secondary">
             {cancelLabel}
           </button>
         </div>

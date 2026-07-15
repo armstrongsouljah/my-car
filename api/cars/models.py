@@ -58,10 +58,20 @@ class Car(models.Model):
         return label
 
     def record_odometer(self, odometer_km):
-        """Moves the odometer forward; readings never go backwards."""
+        """
+        Moves the odometer forward; readings never go backwards. Uses a
+        single conditional UPDATE (rather than compare-then-save) so
+        concurrent writers can't race a higher reading back down.
+        """
         from django.utils import timezone
 
-        if odometer_km and odometer_km > self.current_odometer_km:
+        if not odometer_km:
+            return
+
+        now = timezone.now()
+        updated = Car.objects.filter(pk=self.pk, current_odometer_km__lt=odometer_km).update(
+            current_odometer_km=odometer_km, odometer_updated_at=now, updated_at=now,
+        )
+        if updated:
             self.current_odometer_km = odometer_km
-            self.odometer_updated_at = timezone.now()
-            self.save(update_fields=["current_odometer_km", "odometer_updated_at", "updated_at"])
+            self.odometer_updated_at = now

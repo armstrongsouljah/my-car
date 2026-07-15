@@ -11,6 +11,8 @@ Status semantics match `services/reminders.py`:
 - due_soon: within REMINDER_DUE_SOON_KM km or REMINDER_DUE_SOON_DAYS days.
 - ok:       neither threshold is near.
 """
+from datetime import timedelta
+
 from django.utils import timezone
 from django.utils.timesince import timeuntil
 
@@ -64,7 +66,7 @@ def _build_message(status, remaining_km, remaining_days):
         if remaining_days <= 0:
             parts.append("date passed")
         else:
-            due = timezone.localdate() + timezone.timedelta(days=remaining_days)
+            due = timezone.localdate() + timedelta(days=remaining_days)
             parts.append(f"in {timeuntil(due)}")
 
     if not parts:

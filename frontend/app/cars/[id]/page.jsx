@@ -193,6 +193,7 @@ function CarDetail() {
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [error, setError] = useState("");
+  const [deleteError, setDeleteError] = useState("");
 
   const load = useCallback(() => {
     api(`/cars/${id}/`).then(setCar).catch((err) => setError(err.message));
@@ -204,13 +205,13 @@ function CarDetail() {
 
   async function deleteCar() {
     setRemoving(true);
+    setDeleteError("");
     try {
       await api(`/cars/${id}/`, { method: "DELETE" });
       router.replace("/dashboard");
     } catch (err) {
-      setError(err.message);
+      setDeleteError(err.message);
       setRemoving(false);
-      setConfirmRemove(false);
     }
   }
 
@@ -271,6 +272,7 @@ function CarDetail() {
             <div><p className="text-gray-400">Odometer</p><p className="font-medium">{Number(car.current_odometer_km).toLocaleString()} km</p></div>
           </div>
           {car.notes && <div className="card text-sm text-gray-600">{car.notes}</div>}
+          {deleteError && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{deleteError}</p>}
           <button onClick={() => setConfirmRemove(true)} className="w-full rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[15px] font-semibold text-red-600">
             Remove car
           </button>

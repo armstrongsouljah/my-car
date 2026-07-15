@@ -58,7 +58,7 @@ function AddReminder() {
       byCategory[item.category] = byCategory[item.category] || [];
       byCategory[item.category].push(item);
     }
-    if (!search) {
+    if (!search && filter === "all") {
       byCategory.other = [...(byCategory.other || []), CUSTOM_ITEM];
     }
 

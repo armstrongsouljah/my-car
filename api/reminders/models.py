@@ -53,13 +53,22 @@ class Reminder(models.Model):
         return f"{self.title} — {self.car}"
 
     def compute_next_due(self):
+        needs_km = self.tracking_method in (
+            Constants.REMINDER_TRACKING_METHOD_MILEAGE,
+            Constants.REMINDER_TRACKING_METHOD_DATE_AND_MILEAGE,
+        )
+        needs_months = self.tracking_method in (
+            Constants.REMINDER_TRACKING_METHOD_DATE,
+            Constants.REMINDER_TRACKING_METHOD_DATE_AND_MILEAGE,
+        )
+
         self.next_due_odometer_km = (
             self.baseline_odometer_km + self.interval_km
-            if self.baseline_odometer_km is not None and self.interval_km else None
+            if needs_km and self.baseline_odometer_km is not None and self.interval_km is not None else None
         )
         self.next_due_date = (
             self.baseline_date + relativedelta(months=self.interval_months)
-            if self.baseline_date is not None and self.interval_months else None
+            if needs_months and self.baseline_date is not None and self.interval_months is not None else None
         )
 
     def save(self, *args, **kwargs):

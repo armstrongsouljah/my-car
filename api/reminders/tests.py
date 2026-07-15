@@ -151,3 +151,37 @@ class TestReminderSerializers:
         updated = serializer.save()
         assert updated.baseline_odometer_km == car.current_odometer_km
         assert updated.next_due_odometer_km == car.current_odometer_km + 15000
+
+    def test_edit_switching_tracking_method_without_interval_raises(self, car):
+        reminder = Reminder.objects.create(
+            car=car, title="Windshield wiper blade replacement",
+            tracking_method=Constants.REMINDER_TRACKING_METHOD_DATE,
+            interval_months=12, baseline_date=date.today(),
+        )
+        serializer = ReminderEditSerializer(
+            reminder, data={"tracking_method": Constants.REMINDER_TRACKING_METHOD_MILEAGE},
+            partial=True,
+        )
+        with pytest.raises(CustomValidation):
+            serializer.is_valid()
+
+    def test_edit_switching_tracking_method_clears_stale_threshold(self, car):
+        reminder = Reminder.objects.create(
+            car=car, title="Engine oil & filter change",
+            tracking_method=Constants.REMINDER_TRACKING_METHOD_DATE_AND_MILEAGE,
+            interval_km=5000, interval_months=6,
+            baseline_odometer_km=40000, baseline_date=date.today(),
+        )
+        assert reminder.next_due_odometer_km is not None
+        assert reminder.next_due_date is not None
+
+        serializer = ReminderEditSerializer(
+            reminder, data={"tracking_method": Constants.REMINDER_TRACKING_METHOD_DATE},
+            partial=True,
+        )
+        assert serializer.is_valid(), serializer.errors
+        updated = serializer.save()
+        # Switching to date-only must drop the now-irrelevant km threshold,
+        # even though the old interval_km/baseline_odometer_km are still stored.
+        assert updated.next_due_odometer_km is None
+        assert updated.next_due_date is not None
