@@ -125,11 +125,11 @@ Pushing to `main` triggers `.github/workflows/deploy.yml`:
 2. **build-and-push** — builds `api/` and `frontend/` images and pushes them to **Artifact Registry**
 3. **deploy** — re-runs the migrate Job, then rolls the new images out to the `api`, `worker`, `beat`, and `frontend` Deployments on GKE
 
-Required repository configuration (no secrets — auth is via Workload Identity Federation):
+Required repository configuration (Settings → Secrets and variables → Actions → Secrets; auth itself is via Workload Identity Federation, no long-lived keys):
 
-| Type | Name                                        |
-|------|----------------------------------------------|
-| Var  | `GCP_PROJECT_ID`, `GCP_REGION`, `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_SERVICE_ACCOUNT`, `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_GOOGLE_CLIENT_ID` |
+| Type   | Name                                        |
+|--------|----------------------------------------------|
+| Secret | `GCP_PROJECT_ID`, `GCP_REGION`, `GCP_CLUSTER`, `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_SERVICE_ACCOUNT`, `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_GOOGLE_CLIENT_ID` |
 
 ## Roadmap
 

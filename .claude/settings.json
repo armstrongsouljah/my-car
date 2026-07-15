@@ -10,7 +10,16 @@
       "Bash(kill %1)",
       "Bash(pkill -f \"next dev -p 3100\")",
       "Bash(git add *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(chmod +x /Users/armstrong/Personal/my-car/scripts/deploy-gke.sh)",
+      "Bash(bash -n /Users/armstrong/Personal/my-car/scripts/deploy-gke.sh)",
+      "Bash(gcloud --version)",
+      "Bash(gcloud auth *)",
+      "Bash(gcloud config *)",
+      "Bash(gcloud container *)",
+      "Bash(grep -E --line-buffered \"ERROR|error:|Error|failed|FAILED|denied|not found|forbidden|Ingress external IP|Point .* DNS|rollout status|complete$|migrate|Traceback|WARNING: |ready\\\\.$|Created |kubeconfig|Waiting for operation|PUSH|latest:|digest:\")",
+      "Bash(gcloud sql *)",
+      "Bash(gcloud redis *)"
     ]
   }
 }

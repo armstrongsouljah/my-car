@@ -60,7 +60,7 @@ gcloud services vpc-peerings connect --service=servicenetworking.googleapis.com 
 
 # ── 5. Managed Postgres (Cloud SQL, private IP) ────────────────────────────────
 exists gcloud sql instances describe "$PG" || gcloud sql instances create "$PG" \
-  --database-version=POSTGRES_17 --tier=db-f1-micro --region "$REGION" \
+  --database-version=POSTGRES_17 --edition=ENTERPRISE --tier=db-f1-micro --region "$REGION" \
   --network="$NETWORK" --no-assign-ip --root-password="$DB_PASSWORD" -q
 exists gcloud sql databases describe mycar --instance "$PG" || \
   gcloud sql databases create mycar --instance "$PG" -q
@@ -71,7 +71,7 @@ PG_HOST=$(gcloud sql instances describe "$PG" --format='value(ipAddresses[0].ipA
 # ── 6. Managed Redis (Memorystore, private IP) ─────────────────────────────────
 exists gcloud redis instances describe "$REDIS" --region "$REGION" || \
   gcloud redis instances create "$REDIS" --region "$REGION" --tier=basic \
-    --size=1 --redis-version=redis_7_0 --network="$NETWORK" --auth-enabled -q
+    --size=1 --redis-version=redis_7_0 --network="$NETWORK" --enable-auth -q
 REDIS_HOST=$(gcloud redis instances describe "$REDIS" --region "$REGION" --format='value(host)')
 REDIS_AUTH=$(gcloud redis instances get-auth-string "$REDIS" --region "$REGION")
 

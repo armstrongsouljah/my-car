@@ -113,10 +113,10 @@ gcloud projects add-iam-policy-binding "$PROJECT_ID" \
   --role=roles/artifactregistry.writer
 ```
 
-Then set repository variables (Settings → Secrets and variables → Actions → Variables) — no secrets required:
+Then set repository secrets (Settings → Secrets and variables → Actions → Secrets). None of these are used for authentication itself — that's Workload Identity Federation — but they're set as Secrets rather than Variables in this repo:
 
-| Var | Value |
-|-----|-------|
+| Secret | Value |
+|--------|-------|
 | `GCP_PROJECT_ID` | `<your-project-id>` |
 | `GCP_REGION` | e.g. `us-central1` |
 | `GCP_CLUSTER` | must match `CLUSTER` in `scripts/deploy-gke.env` |
