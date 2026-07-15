@@ -1,8 +1,10 @@
 export const THEME_KEY = "my-car-theme";
+const VALID_THEMES = ["light", "dark", "system"];
 
 export function getStoredTheme() {
   if (typeof window === "undefined") return "system";
-  return localStorage.getItem(THEME_KEY) || "system";
+  const stored = localStorage.getItem(THEME_KEY);
+  return VALID_THEMES.includes(stored) ? stored : "system";
 }
 
 export function resolveTheme(theme) {

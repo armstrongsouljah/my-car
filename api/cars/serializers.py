@@ -1,9 +1,26 @@
+from urllib.parse import urlparse
+
 from rest_framework import serializers, status
 
 from utils.Exception import CustomValidation
 from utils.Serializers import CreateModelSerializer, EditModelSerializer, ListModelSerializer
 
 from cars.models import Car
+
+CLOUDINARY_HOST = "res.cloudinary.com"
+
+
+def _check_cloudinary_url(value):
+    # photo_url is populated by the browser's direct-to-Cloudinary upload
+    # (see CarForm.jsx) — reject anything else so this field can't be used
+    # to store arbitrary external links.
+    if value and urlparse(value).netloc != CLOUDINARY_HOST:
+        raise CustomValidation(
+            "Photo must be uploaded via Cloudinary.",
+            field="photo_url",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+    return value
 
 
 class CarCreateSerializer(CreateModelSerializer):
@@ -13,6 +30,9 @@ class CarCreateSerializer(CreateModelSerializer):
             "owner", "make", "model", "year", "registration_number", "vin",
             "color", "fuel_type", "photo_url", "current_odometer_km", "notes",
         )
+
+    def validate_photo_url(self, value):
+        return _check_cloudinary_url(value)
 
     def validate(self, attrs):
         registration_number = (attrs.get("registration_number") or "").strip().upper()
@@ -36,6 +56,9 @@ class CarEditSerializer(EditModelSerializer):
             "make", "model", "year", "registration_number", "vin",
             "color", "fuel_type", "photo_url", "current_odometer_km", "notes",
         )
+
+    def validate_photo_url(self, value):
+        return _check_cloudinary_url(value)
 
     def validate_current_odometer_km(self, value):
         if self.instance and value < self.instance.current_odometer_km:

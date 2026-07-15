@@ -10,7 +10,7 @@ export default function BottomNav() {
     <Link
       href={href}
       className={`flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] font-medium ${
-        pathname === href ? "text-gray-900 dark:text-white" : "text-gray-400 dark:text-gray-600"
+        pathname === href ? "text-gray-900 dark:text-white" : "text-gray-400 dark:text-gray-400"
       }`}
     >
       <span className="text-xl leading-none">{icon}</span>

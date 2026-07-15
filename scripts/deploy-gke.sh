@@ -31,7 +31,6 @@ cd "$(dirname "$0")/.."
 : "${GOOGLE_OAUTH_CLIENT_ID:=}"
 : "${CLOUDINARY_CLOUD_NAME:=}"
 : "${CLOUDINARY_UPLOAD_PRESET:=}"
-: "${EMAIL_BACKEND:=django.core.mail.backends.smtp.EmailBackend}"
 : "${EMAIL_HOST:=smtp.gmail.com}"
 : "${EMAIL_PORT:=587}"
 : "${EMAIL_USE_TLS:=True}"
@@ -39,6 +38,15 @@ cd "$(dirname "$0")/.."
 : "${EMAIL_HOST_PASSWORD:=}"
 : "${DEFAULT_FROM_EMAIL:=noreply@mycar.com}"
 : "${OTP_EXPIRY_MINUTES:=10}"
+
+# Only default to SMTP if credentials were actually provided — otherwise keep
+# settings.py's own console-backend fallback (writing an empty-credential SMTP
+# backend into the secret would make every OTP/welcome-email task fail).
+if [[ -n "$EMAIL_HOST_USER" && -n "$EMAIL_HOST_PASSWORD" ]]; then
+  : "${EMAIL_BACKEND:=django.core.mail.backends.smtp.EmailBackend}"
+else
+  : "${EMAIL_BACKEND:=django.core.mail.backends.console.EmailBackend}"
+fi
 
 exists() { "$@" >/dev/null 2>&1; }
 
@@ -110,29 +118,39 @@ EOF
 )
 
 # ── 8. Namespace + secret (generated, never committed) ────────────────────────
+# Built as a YAML manifest on stdin rather than --from-literal, which would
+# put every secret value in this process's argv (visible via `ps` to anyone
+# else on the machine while the command runs).
 kubectl apply -f k8s/00-namespace.yaml
-kubectl -n mycar create secret generic mycar-env \
-  --from-literal=SECRET_KEY="$DJANGO_SECRET_KEY" \
-  --from-literal=DEBUG="False" \
-  --from-literal=ALLOWED_HOSTS="${API_HOST},api" \
-  --from-literal=DATABASE_URL="postgresql://mycar:${DB_PASSWORD}@${PG_HOST}:5432/mycar?sslmode=require" \
-  --from-literal=REDIS_URL="redis://:${REDIS_AUTH}@${REDIS_HOST}:6379/1" \
-  --from-literal=CELERY_BROKER_URL="redis://:${REDIS_AUTH}@${REDIS_HOST}:6379/0" \
-  --from-literal=CELERY_RESULT_BACKEND="redis://:${REDIS_AUTH}@${REDIS_HOST}:6379/0" \
-  --from-literal=CORS_ALLOWED_ORIGINS="https://${APP_HOST}" \
-  --from-literal=FRONTEND_URL="https://${APP_HOST}" \
-  --from-literal=ADMIN_EMAIL="$ADMIN_EMAIL" \
-  --from-literal=ADMIN_PASSWORD="$ADMIN_PASSWORD" \
-  --from-literal=GOOGLE_OAUTH_CLIENT_ID="$GOOGLE_OAUTH_CLIENT_ID" \
-  --from-literal=EMAIL_BACKEND="$EMAIL_BACKEND" \
-  --from-literal=EMAIL_HOST="$EMAIL_HOST" \
-  --from-literal=EMAIL_PORT="$EMAIL_PORT" \
-  --from-literal=EMAIL_USE_TLS="$EMAIL_USE_TLS" \
-  --from-literal=EMAIL_HOST_USER="$EMAIL_HOST_USER" \
-  --from-literal=EMAIL_HOST_PASSWORD="$EMAIL_HOST_PASSWORD" \
-  --from-literal=DEFAULT_FROM_EMAIL="$DEFAULT_FROM_EMAIL" \
-  --from-literal=OTP_EXPIRY_MINUTES="$OTP_EXPIRY_MINUTES" \
-  --dry-run=client -o yaml | kubectl apply -f -
+cat <<YAML | kubectl apply -f -
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mycar-env
+  namespace: mycar
+type: Opaque
+stringData:
+  SECRET_KEY: "${DJANGO_SECRET_KEY}"
+  DEBUG: "False"
+  ALLOWED_HOSTS: "${API_HOST},api"
+  DATABASE_URL: "postgresql://mycar:${DB_PASSWORD}@${PG_HOST}:5432/mycar?sslmode=require"
+  REDIS_URL: "redis://:${REDIS_AUTH}@${REDIS_HOST}:6379/1"
+  CELERY_BROKER_URL: "redis://:${REDIS_AUTH}@${REDIS_HOST}:6379/0"
+  CELERY_RESULT_BACKEND: "redis://:${REDIS_AUTH}@${REDIS_HOST}:6379/0"
+  CORS_ALLOWED_ORIGINS: "https://${APP_HOST}"
+  FRONTEND_URL: "https://${APP_HOST}"
+  ADMIN_EMAIL: "${ADMIN_EMAIL}"
+  ADMIN_PASSWORD: "${ADMIN_PASSWORD}"
+  GOOGLE_OAUTH_CLIENT_ID: "${GOOGLE_OAUTH_CLIENT_ID}"
+  EMAIL_BACKEND: "${EMAIL_BACKEND}"
+  EMAIL_HOST: "${EMAIL_HOST}"
+  EMAIL_PORT: "${EMAIL_PORT}"
+  EMAIL_USE_TLS: "${EMAIL_USE_TLS}"
+  EMAIL_HOST_USER: "${EMAIL_HOST_USER}"
+  EMAIL_HOST_PASSWORD: "${EMAIL_HOST_PASSWORD}"
+  DEFAULT_FROM_EMAIL: "${DEFAULT_FROM_EMAIL}"
+  OTP_EXPIRY_MINUTES: "${OTP_EXPIRY_MINUTES}"
+YAML
 
 # ── 9. Deploy workloads (substitute image placeholders) ───────────────────────
 export REGISTRY IMAGE_TAG

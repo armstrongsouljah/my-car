@@ -50,17 +50,36 @@ export default function AuthPage() {
   const [info, setInfo] = useState("");
   const [loading, setLoading] = useState(false);
   const googleButtonRef = useRef(null);
+  const googleInitializedRef = useRef(false);
+  const googleScriptLoadingRef = useRef(false);
 
   useEffect(() => {
     if (isLoggedIn()) router.replace("/dashboard");
   }, [router]);
 
   // ── Google Sign-In ──────────────────────────────────────────────────────────
+  // GIS must only be initialize()d once per page (repeat calls reset its
+  // global state) — the button itself does need re-rendering on mode change
+  // since its container unmounts while mode === "verify".
   useEffect(() => {
     if (!GOOGLE_CLIENT_ID || mode === "verify") return;
 
-    const init = () => {
-      if (!window.google || !googleButtonRef.current) return;
+    const renderButton = () => {
+      if (!googleButtonRef.current) return;
+      // GIS wants a pixel width (200–400), not a percentage — measure the container.
+      const width = Math.min(400, Math.max(200, Math.round(googleButtonRef.current.offsetWidth)));
+      window.google.accounts.id.renderButton(googleButtonRef.current, {
+        theme: "filled_black",
+        size: "large",
+        width,
+        text: "continue_with",
+        shape: "pill",
+      });
+    };
+
+    const initOnce = () => {
+      if (googleInitializedRef.current) return;
+      googleInitializedRef.current = true;
       window.google.accounts.id.initialize({
         client_id: GOOGLE_CLIENT_ID,
         callback: async (response) => {
@@ -77,24 +96,20 @@ export default function AuthPage() {
           }
         },
       });
-      // GIS wants a pixel width (200–400), not a percentage — measure the container.
-      const width = Math.min(400, Math.max(200, Math.round(googleButtonRef.current.offsetWidth)));
-      window.google.accounts.id.renderButton(googleButtonRef.current, {
-        theme: "filled_black",
-        size: "large",
-        width,
-        text: "continue_with",
-        shape: "pill",
-      });
     };
 
     if (window.google) {
-      init();
-    } else {
+      initOnce();
+      renderButton();
+    } else if (!googleScriptLoadingRef.current) {
+      googleScriptLoadingRef.current = true;
       const script = document.createElement("script");
       script.src = "https://accounts.google.com/gsi/client";
       script.async = true;
-      script.onload = init;
+      script.onload = () => {
+        initOnce();
+        renderButton();
+      };
       document.body.appendChild(script);
     }
   }, [mode, router]);
@@ -208,12 +223,12 @@ export default function AuthPage() {
           {mode === "signup" && (
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="auth-label">First name</label>
-                <input className="auth-input" value={form.first_name} onChange={update("first_name")} />
+                <label className="auth-label" htmlFor="first_name">First name</label>
+                <input id="first_name" className="auth-input" value={form.first_name} onChange={update("first_name")} />
               </div>
               <div>
-                <label className="auth-label">Last name</label>
-                <input className="auth-input" value={form.last_name} onChange={update("last_name")} />
+                <label className="auth-label" htmlFor="last_name">Last name</label>
+                <input id="last_name" className="auth-input" value={form.last_name} onChange={update("last_name")} />
               </div>
             </div>
           )}
@@ -221,12 +236,13 @@ export default function AuthPage() {
           {mode !== "verify" && (
             <>
               <div>
-                <label className="auth-label">Email address</label>
+                <label className="auth-label" htmlFor="email">Email address</label>
                 <div className="relative">
                   <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-white/40">
                     <MailIcon />
                   </span>
                   <input
+                    id="email"
                     className="auth-input pl-11"
                     type="email"
                     required
@@ -238,12 +254,13 @@ export default function AuthPage() {
                 </div>
               </div>
               <div>
-                <label className="auth-label">Password</label>
+                <label className="auth-label" htmlFor="password">Password</label>
                 <div className="relative">
                   <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-white/40">
                     <LockIcon />
                   </span>
                   <input
+                    id="password"
                     className="auth-input pl-11 pr-11"
                     type={showPassword ? "text" : "password"}
                     required
@@ -268,8 +285,9 @@ export default function AuthPage() {
 
           {mode === "verify" && (
             <div>
-              <label className="auth-label">Verification code</label>
+              <label className="auth-label" htmlFor="otp">Verification code</label>
               <input
+                id="otp"
                 className="auth-input text-center text-2xl tracking-[0.5em]"
                 inputMode="numeric"
                 maxLength={6}

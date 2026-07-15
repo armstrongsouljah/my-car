@@ -58,7 +58,7 @@ app.example.com  ->  <gateway IP>     # frontend
 api.example.com  ->  <gateway IP>     # Django API + /admin
 ```
 
-Then add TLS, once DNS points at the Gateway's external IP — GKE Gateway TLS uses Certificate Manager, not a Gateway `certificateRef` directly:
+Then add TLS, once DNS points at the Gateway's external IP — GKE Gateway TLS uses Certificate Manager, not a Gateway `certificateRef` directly. Substitute your actual `$APP_HOST`/`$API_HOST` for `app.example.com`/`api.example.com` below — they must match the hostnames in `k8s/50-gateway.yaml`'s `HTTPRoute`s:
 
 ```bash
 gcloud certificate-manager certificates create mycar-app-cert --domains="app.example.com"

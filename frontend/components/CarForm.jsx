@@ -10,16 +10,28 @@ const CLOUDINARY_CLOUD_NAME = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
 const CLOUDINARY_UPLOAD_PRESET = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
 
 // Uploads straight from the browser to Cloudinary (unsigned preset) — the
-// API never sees the file, only the resulting secure_url.
+// API never sees the file, only the resulting secure_url. Bounded by a
+// timeout so a hung request can't leave the form stuck in "Saving…" forever.
 async function uploadToCloudinary(file) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30000);
+
   const body = new FormData();
   body.append("file", file);
   body.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
 
-  const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, {
-    method: "POST",
-    body,
-  });
+  let res;
+  try {
+    res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, {
+      method: "POST",
+      body,
+      signal: controller.signal,
+    });
+  } catch (err) {
+    throw new Error(err.name === "AbortError" ? "Photo upload timed out. Please try again." : "Photo upload failed. Please try again.");
+  } finally {
+    clearTimeout(timeout);
+  }
   if (!res.ok) throw new Error("Photo upload failed. Please try again.");
   const data = await res.json();
   return data.secure_url;
