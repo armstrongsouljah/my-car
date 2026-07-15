@@ -2,9 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Dancing_Script } from "next/font/google";
 import { api, setTokens, setUser, isLoggedIn } from "@/lib/api";
 
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+const brandFont = Dancing_Script({ subsets: ["latin"], weight: ["700"] });
 
 function MailIcon() {
   return (
@@ -165,11 +167,16 @@ export default function AuthPage() {
           alt=""
           className="absolute inset-0 h-full w-full object-cover"
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-[#04120c] via-[#04120c]/10 to-[#0a1a14]" />
+        <div className="absolute inset-0 bg-gradient-to-b from-[#04120c] via-[#04120c]/20 to-[#0a1a14]" />
+        <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-black/80 via-black/40 to-transparent" />
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(52,211,153,0.4),transparent_55%)]" />
-        <div className="relative flex h-full flex-col items-center justify-start pt-14">
-          <h1 className="text-2xl font-bold tracking-tight">My Car</h1>
-          <p className="mt-1 text-sm text-emerald-100/70">{tagline}</p>
+        <div className="relative flex h-full flex-col items-center justify-start pt-12">
+          <h1
+            className={`${brandFont.className} text-4xl font-bold tracking-wide text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)]`}
+          >
+            My Car
+          </h1>
+          <p className="mt-0.5 text-sm text-emerald-100/80 drop-shadow-[0_1px_6px_rgba(0,0,0,0.9)]">{tagline}</p>
         </div>
       </div>
 
