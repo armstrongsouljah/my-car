@@ -1,16 +1,47 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { api, mediaUrl } from "@/lib/api";
+import { api } from "@/lib/api";
 
 const OTHER = "__other__";
 const FUEL_TYPES = ["petrol", "diesel", "hybrid", "electric"];
 
+const CLOUDINARY_CLOUD_NAME = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+const CLOUDINARY_UPLOAD_PRESET = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
+
+// Uploads straight from the browser to Cloudinary (unsigned preset) — the
+// API never sees the file, only the resulting secure_url. Bounded by a
+// timeout so a hung request can't leave the form stuck in "Saving…" forever.
+async function uploadToCloudinary(file) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30000);
+
+  const body = new FormData();
+  body.append("file", file);
+  body.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+
+  let res;
+  try {
+    res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, {
+      method: "POST",
+      body,
+      signal: controller.signal,
+    });
+  } catch (err) {
+    throw new Error(err.name === "AbortError" ? "Photo upload timed out. Please try again." : "Photo upload failed. Please try again.");
+  } finally {
+    clearTimeout(timeout);
+  }
+  if (!res.ok) throw new Error("Photo upload failed. Please try again.");
+  const data = await res.json();
+  return data.secure_url;
+}
+
 /**
  * Shared create/edit car form. Brand → model pickers are driven by the API's
  * bundled catalog with a free-text "Other" fallback; years are selectable
- * from the catalog range (min 1980). Photo uploads switch the submit to
- * multipart/form-data.
+ * from the catalog range (min 1980). Photos upload directly to Cloudinary
+ * from the browser; only the resulting URL is sent to the API.
  */
 export default function CarForm({ car = null, onSaved }) {
   const isEdit = !!car;
@@ -26,7 +57,7 @@ export default function CarForm({ car = null, onSaved }) {
     notes: car?.notes || "",
   });
   const [photo, setPhoto] = useState(null);
-  const [photoPreview, setPhotoPreview] = useState(car?.photo_url ? mediaUrl(car.photo_url) : null);
+  const [photoPreview, setPhotoPreview] = useState(car?.photo_url || null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -87,7 +118,7 @@ export default function CarForm({ car = null, onSaved }) {
   function pickPhoto(event) {
     const file = event.target.files?.[0] || null;
     setPhoto(file);
-    setPhotoPreview(file ? URL.createObjectURL(file) : car?.photo_url ? mediaUrl(car.photo_url) : null);
+    setPhotoPreview(file ? URL.createObjectURL(file) : car?.photo_url || null);
   }
 
   async function handleSubmit(event) {
@@ -113,19 +144,13 @@ export default function CarForm({ car = null, onSaved }) {
         notes: form.notes,
       };
 
-      let saved;
+      if (photo) {
+        fields.photo_url = await uploadToCloudinary(photo);
+      }
+
       const path = isEdit ? `/cars/${car.id}/` : "/cars/";
       const method = isEdit ? "PATCH" : "POST";
-
-      if (photo) {
-        const body = new FormData();
-        Object.entries(fields).forEach(([key, value]) => body.append(key, value));
-        if (year !== null) body.append("year", year);
-        body.append("photo", photo);
-        saved = await api(path, { method, body, isForm: true });
-      } else {
-        saved = await api(path, { method, body: { ...fields, year } });
-      }
+      const saved = await api(path, { method, body: { ...fields, year } });
       onSaved(saved);
     } catch (err) {
       setError(err.message);
@@ -135,7 +160,7 @@ export default function CarForm({ car = null, onSaved }) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      {error && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+      {error && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700 dark:bg-red-500/10 dark:text-red-400">{error}</p>}
 
       {/* Photo */}
       <div>
@@ -143,9 +168,9 @@ export default function CarForm({ car = null, onSaved }) {
         <label className="block cursor-pointer">
           {photoPreview ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={photoPreview} alt="Car" className="h-44 w-full rounded-2xl border border-gray-200 object-cover" />
+            <img src={photoPreview} alt="Car" className="h-44 w-full rounded-2xl border border-gray-200 object-cover dark:border-gray-800" />
           ) : (
-            <div className="flex h-44 w-full flex-col items-center justify-center gap-1 rounded-2xl border-2 border-dashed border-gray-300 bg-gray-50 text-gray-400">
+            <div className="flex h-44 w-full flex-col items-center justify-center gap-1 rounded-2xl border-2 border-dashed border-gray-300 bg-gray-50 text-gray-400 dark:border-gray-700 dark:bg-gray-800/60 dark:text-gray-500">
               <span className="text-3xl">📷</span>
               <span className="text-sm font-medium">Add a photo of your car</span>
             </div>

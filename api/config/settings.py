@@ -121,7 +121,12 @@ else:
         "default": {
             "BACKEND": "django_redis.cache.RedisCache",
             "LOCATION": REDIS_URL,
-            "OPTIONS": {"CLIENT_CLASS": "django_redis.client.DefaultClient"},
+            "OPTIONS": {
+                "CLIENT_CLASS": "django_redis.client.DefaultClient",
+                # Cache is a read-through optimization, not a hard dependency —
+                # a Redis blip should degrade to uncached responses, not 500s.
+                "IGNORE_EXCEPTIONS": True,
+            },
             "KEY_PREFIX": "mycar",
         }
     }

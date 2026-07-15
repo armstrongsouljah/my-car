@@ -6,6 +6,7 @@ import { api, getTokens, clearSession, setUser } from "@/lib/api";
 import AuthGuard from "@/components/AuthGuard";
 import BottomNav from "@/components/BottomNav";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import { useTheme } from "@/components/ThemeProvider";
 
 const REMINDER_FREQUENCIES = [
   ["off", "Off"],
@@ -14,12 +15,44 @@ const REMINDER_FREQUENCIES = [
   ["monthly", "Monthly"],
 ];
 
+const THEME_OPTIONS = [
+  ["light", "Light", "☀️"],
+  ["dark", "Dark", "🌙"],
+  ["system", "System", "🖥️"],
+];
+
 function Section({ title, children }) {
   return (
     <section className="card space-y-3">
       <p className="font-semibold">{title}</p>
       {children}
     </section>
+  );
+}
+
+function AppearanceSection() {
+  const { theme, setTheme } = useTheme();
+  return (
+    <Section title="Appearance">
+      <div className="grid grid-cols-3 gap-2">
+        {THEME_OPTIONS.map(([value, label, icon]) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => setTheme(value)}
+            aria-pressed={theme === value}
+            className={`flex flex-col items-center gap-1 rounded-xl border py-3 text-[13px] font-medium transition ${
+              theme === value
+                ? "border-gray-900 bg-gray-900 text-white dark:border-white dark:bg-white dark:text-gray-900"
+                : "border-gray-200 text-gray-600 dark:border-gray-700 dark:text-gray-400"
+            }`}
+          >
+            <span className="text-lg">{icon}</span>
+            {label}
+          </button>
+        ))}
+      </div>
+    </Section>
   );
 }
 
@@ -111,11 +144,13 @@ function Settings() {
     <main className="space-y-4 px-4 pb-24 pt-6">
       <h1 className="text-2xl font-bold">Settings</h1>
 
-      {message && <p className="rounded-xl bg-green-50 p-3 text-sm text-green-700">{message}</p>}
-      {error && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+      {message && <p className="rounded-xl bg-green-50 p-3 text-sm text-green-700 dark:bg-green-500/10 dark:text-green-400">{message}</p>}
+      {error && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700 dark:bg-red-500/10 dark:text-red-400">{error}</p>}
+
+      <AppearanceSection />
 
       <Section title="Account details">
-        {profile && <p className="text-sm text-gray-500">{profile.email}</p>}
+        {profile && <p className="text-sm text-gray-500 dark:text-gray-400">{profile.email}</p>}
         <form onSubmit={saveProfile} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -145,7 +180,7 @@ function Settings() {
                 <option key={value} value={value}>{label}</option>
               ))}
             </select>
-            <p className="mt-1 text-[12px] text-gray-400">
+            <p className="mt-1 text-[12px] text-gray-400 dark:text-gray-500">
               We&apos;ll email you a nudge to update your cars&apos; odometer readings so service reminders stay accurate.
             </p>
           </div>
@@ -179,7 +214,7 @@ function Settings() {
       </Section>
 
       <Section title="Danger zone">
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-gray-500 dark:text-gray-400">
           Deactivating your account signs you out everywhere and disables logins. Your data is kept and support can reactivate you.
         </p>
         <div className="space-y-3">
@@ -190,7 +225,7 @@ function Settings() {
           </div>
           <button
             onClick={() => setConfirmDeactivate(true)}
-            className="w-full rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[15px] font-semibold text-red-600"
+            className="w-full rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[15px] font-semibold text-red-600 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400"
           >
             Deactivate account
           </button>

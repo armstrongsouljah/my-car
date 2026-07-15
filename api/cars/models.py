@@ -7,6 +7,9 @@ from utils import Constants
 
 
 def car_photo_path(instance, filename):
+    # No longer used by any field — kept importable because migration 0002
+    # references it by path (upload_to=car_photo_path) and Django replays
+    # full migration history from a fresh database.
     return f"car_photos/{instance.owner_id}/{filename}"
 
 
@@ -29,7 +32,7 @@ class Car(models.Model):
     color = models.CharField(max_length=50, blank=True)
     fuel_type = models.CharField(max_length=20, choices=Constants.FUEL_TYPES, default=Constants.FUEL_TYPE_PETROL)
 
-    photo = models.ImageField(upload_to=car_photo_path, null=True, blank=True)
+    photo_url = models.URLField(max_length=500, null=True, blank=True)
 
     current_odometer_km = models.PositiveIntegerField(default=0)
     odometer_updated_at = models.DateTimeField(null=True, blank=True)

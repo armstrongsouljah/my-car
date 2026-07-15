@@ -4,21 +4,29 @@
 
 @layer components {
   .input {
-    @apply w-full rounded-xl border border-gray-300 px-4 py-3 text-[15px] outline-none focus:border-gray-900 focus:ring-1 focus:ring-gray-900;
+    @apply w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-[15px] text-gray-900 outline-none placeholder:text-gray-400 focus:border-gray-900 focus:ring-1 focus:ring-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-500 dark:focus:border-gray-100 dark:focus:ring-gray-100;
   }
   .btn-primary {
-    @apply w-full rounded-xl bg-gray-900 px-4 py-3 text-[15px] font-semibold text-white active:scale-[0.99] disabled:opacity-50;
+    @apply w-full rounded-xl bg-gray-900 px-4 py-3 text-[15px] font-semibold text-white active:scale-[0.99] disabled:opacity-50 dark:bg-white dark:text-gray-900;
   }
   .btn-secondary {
-    @apply w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-[15px] font-semibold text-gray-900 active:scale-[0.99];
+    @apply w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-[15px] font-semibold text-gray-900 active:scale-[0.99] dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100;
   }
   .card {
-    @apply rounded-2xl border border-gray-200 bg-white p-4 shadow-sm;
+    @apply rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900;
   }
   .label {
-    @apply mb-1 block text-[13px] font-medium text-gray-600;
+    @apply mb-1 block text-[13px] font-medium text-gray-600 dark:text-gray-400;
   }
   .chip {
     @apply inline-block rounded-full px-2.5 py-0.5 text-[12px] font-medium;
+  }
+
+  /* Auth page (always dark, brand-locked — independent of the app theme setting) */
+  .auth-input {
+    @apply w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3.5 text-[15px] text-white placeholder:text-white/30 outline-none transition focus:border-emerald-400/60 focus:bg-white/10 focus:ring-1 focus:ring-emerald-400/60;
+  }
+  .auth-label {
+    @apply mb-1.5 block text-[13px] font-medium text-white/50;
   }
 }

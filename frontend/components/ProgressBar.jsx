@@ -7,7 +7,7 @@ export default function ProgressBar({ percent, status }) {
   const clamped = Math.max(0, Math.min(100, percent ?? 0));
 
   return (
-    <div className="h-2 w-full rounded-full bg-gray-100">
+    <div className="h-2 w-full rounded-full bg-gray-100 dark:bg-gray-800">
       <div
         className={`h-2 rounded-full ${fill[status] || fill.ok}`}
         style={{ width: `${clamped}%` }}

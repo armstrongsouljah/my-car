@@ -1,3 +1,5 @@
+from urllib.parse import urlparse
+
 from rest_framework import serializers, status
 
 from utils.Exception import CustomValidation
@@ -5,14 +7,32 @@ from utils.Serializers import CreateModelSerializer, EditModelSerializer, ListMo
 
 from cars.models import Car
 
+CLOUDINARY_HOST = "res.cloudinary.com"
+
+
+def _check_cloudinary_url(value):
+    # photo_url is populated by the browser's direct-to-Cloudinary upload
+    # (see CarForm.jsx) — reject anything else so this field can't be used
+    # to store arbitrary external links.
+    if value and urlparse(value).netloc != CLOUDINARY_HOST:
+        raise CustomValidation(
+            "Photo must be uploaded via Cloudinary.",
+            field="photo_url",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+    return value
+
 
 class CarCreateSerializer(CreateModelSerializer):
     class Meta:
         model = Car
         fields = (
             "owner", "make", "model", "year", "registration_number", "vin",
-            "color", "fuel_type", "photo", "current_odometer_km", "notes",
+            "color", "fuel_type", "photo_url", "current_odometer_km", "notes",
         )
+
+    def validate_photo_url(self, value):
+        return _check_cloudinary_url(value)
 
     def validate(self, attrs):
         registration_number = (attrs.get("registration_number") or "").strip().upper()
@@ -34,8 +54,11 @@ class CarEditSerializer(EditModelSerializer):
         model = Car
         fields = (
             "make", "model", "year", "registration_number", "vin",
-            "color", "fuel_type", "photo", "current_odometer_km", "notes",
+            "color", "fuel_type", "photo_url", "current_odometer_km", "notes",
         )
+
+    def validate_photo_url(self, value):
+        return _check_cloudinary_url(value)
 
     def validate_current_odometer_km(self, value):
         if self.instance and value < self.instance.current_odometer_km:
@@ -59,7 +82,6 @@ class CarEditSerializer(EditModelSerializer):
 
 class CarListSerializer(ListModelSerializer):
     display_name = serializers.CharField(source="__str__", read_only=True)
-    photo_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Car
@@ -68,9 +90,6 @@ class CarListSerializer(ListModelSerializer):
             "color", "fuel_type", "photo_url", "current_odometer_km", "is_active", "created_at",
         )
 
-    def get_photo_url(self, car):
-        return car.photo.url if car.photo else None
-
     @staticmethod
     def select_related_fields():
         return []
@@ -78,7 +97,6 @@ class CarListSerializer(ListModelSerializer):
 
 class CarDetailSerializer(ListModelSerializer):
     display_name = serializers.CharField(source="__str__", read_only=True)
-    photo_url = serializers.SerializerMethodField()
     reminders = serializers.SerializerMethodField()
 
     class Meta:
@@ -89,9 +107,6 @@ class CarDetailSerializer(ListModelSerializer):
             "odometer_updated_at", "notes", "is_active", "reminders",
             "created_at", "updated_at",
         )
-
-    def get_photo_url(self, car):
-        return car.photo.url if car.photo else None
 
     def get_reminders(self, car):
         from services.reminders import build_car_reminders

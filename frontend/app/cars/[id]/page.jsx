@@ -60,7 +60,7 @@ function ServiceForm({ carId, onSaved }) {
   return (
     <form onSubmit={submit} className="card space-y-3">
       <p className="font-semibold">Log a service</p>
-      {error && <p className="rounded-xl bg-red-50 p-2 text-sm text-red-700">{error}</p>}
+      {error && <p className="rounded-xl bg-red-50 dark:bg-red-500/10 p-2 text-sm text-red-700 dark:text-red-400">{error}</p>}
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="label">Type</label>
@@ -87,8 +87,8 @@ function ServiceForm({ carId, onSaved }) {
         <label className="label">Garage</label>
         <input className="input" value={form.garage_name} onChange={update("garage_name")} />
       </div>
-      <div className="rounded-xl bg-gray-50 p-3">
-        <p className="mb-2 text-[13px] font-medium text-gray-600">Next service — whichever comes first</p>
+      <div className="rounded-xl bg-gray-50 dark:bg-gray-800/60 p-3">
+        <p className="mb-2 text-[13px] font-medium text-gray-600 dark:text-gray-300">Next service — whichever comes first</p>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="label">After (km)</label>
@@ -142,7 +142,7 @@ function InspectionForm({ carId, onSaved }) {
   return (
     <form onSubmit={submit} className="card space-y-3">
       <p className="font-semibold">Log an inspection</p>
-      {error && <p className="rounded-xl bg-red-50 p-2 text-sm text-red-700">{error}</p>}
+      {error && <p className="rounded-xl bg-red-50 dark:bg-red-500/10 p-2 text-sm text-red-700 dark:text-red-400">{error}</p>}
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="label">Date</label>
@@ -215,26 +215,26 @@ function CarDetail() {
     }
   }
 
-  if (error) return <main className="p-6"><p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p></main>;
-  if (!car) return <main className="p-6 text-sm text-gray-400">Loading…</main>;
+  if (error) return <main className="p-6"><p className="rounded-xl bg-red-50 dark:bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-400">{error}</p></main>;
+  if (!car) return <main className="p-6 text-sm text-gray-400 dark:text-gray-500">Loading…</main>;
 
   return (
     <main className="px-4 pb-24 pt-6">
-      <button onClick={() => router.push("/dashboard")} className="mb-4 text-sm text-gray-500">‹ Garage</button>
+      <button onClick={() => router.push("/dashboard")} className="mb-4 text-sm text-gray-500 dark:text-gray-400">‹ Garage</button>
 
       {car.photo_url && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={mediaUrl(car.photo_url)} alt={`${car.make} ${car.model}`} className="mb-4 h-48 w-full rounded-2xl border border-gray-200 object-cover" />
+        <img src={mediaUrl(car.photo_url)} alt={`${car.make} ${car.model}`} className="mb-4 h-48 w-full rounded-2xl border border-gray-200 dark:border-gray-800 object-cover" />
       )}
 
       <header className="mb-4 flex items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">{car.make} {car.model} {car.year ? `(${car.year})` : ""}</h1>
-          <p className="mt-1 text-sm text-gray-500">
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
             {car.registration_number || "No plate"} · {Number(car.current_odometer_km).toLocaleString()} km
           </p>
         </div>
-        <Link href={`/cars/${id}/edit`} className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold">
+        <Link href={`/cars/${id}/edit`} className="rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm font-semibold">
           Edit
         </Link>
       </header>
@@ -244,18 +244,18 @@ function CarDetail() {
           <div key={reminder.kind} className="card flex items-center justify-between gap-3 py-3">
             <div>
               <p className="text-[13px] font-semibold capitalize">{reminder.kind}</p>
-              <p className="text-[13px] text-gray-500">{reminder.message}</p>
+              <p className="text-[13px] text-gray-500 dark:text-gray-400">{reminder.message}</p>
             </div>
             <StatusChip status={reminder.status} />
           </div>
         ))}
       </div>
 
-      <div className="mb-4 grid grid-cols-3 rounded-xl bg-gray-200 p-1 text-[13px] font-semibold">
+      <div className="mb-4 grid grid-cols-3 rounded-xl bg-gray-200 dark:bg-gray-800 p-1 text-[13px] font-semibold">
         {["overview", "service", "inspections"].map((key) => (
           <button
             key={key}
-            className={`rounded-lg py-2 capitalize ${tab === key ? "bg-white shadow" : "text-gray-500"}`}
+            className={`rounded-lg py-2 capitalize ${tab === key ? "bg-white shadow dark:bg-gray-700 dark:text-white" : "text-gray-500 dark:text-gray-400"}`}
             onClick={() => { setTab(key); setShowForm(false); }}
           >
             {key}
@@ -266,14 +266,14 @@ function CarDetail() {
       {tab === "overview" && (
         <div className="space-y-3">
           <div className="card grid grid-cols-2 gap-y-3 text-sm">
-            <div><p className="text-gray-400">Colour</p><p className="font-medium">{car.color || "—"}</p></div>
-            <div><p className="text-gray-400">Fuel</p><p className="font-medium capitalize">{car.fuel_type}</p></div>
-            <div><p className="text-gray-400">VIN</p><p className="break-all font-medium">{car.vin || "—"}</p></div>
-            <div><p className="text-gray-400">Odometer</p><p className="font-medium">{Number(car.current_odometer_km).toLocaleString()} km</p></div>
+            <div><p className="text-gray-400 dark:text-gray-500">Colour</p><p className="font-medium">{car.color || "—"}</p></div>
+            <div><p className="text-gray-400 dark:text-gray-500">Fuel</p><p className="font-medium capitalize">{car.fuel_type}</p></div>
+            <div><p className="text-gray-400 dark:text-gray-500">VIN</p><p className="break-all font-medium">{car.vin || "—"}</p></div>
+            <div><p className="text-gray-400 dark:text-gray-500">Odometer</p><p className="font-medium">{Number(car.current_odometer_km).toLocaleString()} km</p></div>
           </div>
-          {car.notes && <div className="card text-sm text-gray-600">{car.notes}</div>}
-          {deleteError && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{deleteError}</p>}
-          <button onClick={() => setConfirmRemove(true)} className="w-full rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[15px] font-semibold text-red-600">
+          {car.notes && <div className="card text-sm text-gray-600 dark:text-gray-300">{car.notes}</div>}
+          {deleteError && <p className="rounded-xl bg-red-50 dark:bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-400">{deleteError}</p>}
+          <button onClick={() => setConfirmRemove(true)} className="w-full rounded-xl border border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10 px-4 py-3 text-[15px] font-semibold text-red-600 dark:text-red-400">
             Remove car
           </button>
         </div>
@@ -298,20 +298,20 @@ function CarDetail() {
           ) : (
             <button className="btn-secondary" onClick={() => setShowForm(true)}>+ Log a service</button>
           )}
-          {servicesData.length === 0 && !showForm && <p className="text-center text-sm text-gray-400">No services logged yet.</p>}
+          {servicesData.length === 0 && !showForm && <p className="text-center text-sm text-gray-400 dark:text-gray-500">No services logged yet.</p>}
           {servicesData.map((record) => (
             <div key={record.id} className="card text-sm">
               <div className="flex items-center justify-between">
                 <p className="font-semibold">{record.service_type_display}</p>
-                <p className="text-gray-500">{record.service_date}</p>
+                <p className="text-gray-500 dark:text-gray-400">{record.service_date}</p>
               </div>
-              <p className="mt-1 text-gray-500">
+              <p className="mt-1 text-gray-500 dark:text-gray-400">
                 {Number(record.odometer_km).toLocaleString()} km
                 {record.garage_name ? ` · ${record.garage_name}` : ""}
                 {record.cost ? ` · ${record.cost}` : ""}
               </p>
               {(record.next_due_odometer_km || record.next_due_date) && (
-                <p className="mt-1 text-[13px] text-gray-400">
+                <p className="mt-1 text-[13px] text-gray-400 dark:text-gray-500">
                   Next due:{" "}
                   {[
                     record.next_due_odometer_km ? `${Number(record.next_due_odometer_km).toLocaleString()} km` : null,
@@ -332,16 +332,16 @@ function CarDetail() {
           ) : (
             <button className="btn-secondary" onClick={() => setShowForm(true)}>+ Log an inspection</button>
           )}
-          {inspections.length === 0 && !showForm && <p className="text-center text-sm text-gray-400">No inspections logged yet.</p>}
+          {inspections.length === 0 && !showForm && <p className="text-center text-sm text-gray-400 dark:text-gray-500">No inspections logged yet.</p>}
           {inspections.map((inspection) => (
             <div key={inspection.id} className="card text-sm">
               <div className="flex items-center justify-between">
                 <p className="font-semibold">{inspection.status_display}</p>
-                <p className="text-gray-500">{inspection.inspection_date}</p>
+                <p className="text-gray-500 dark:text-gray-400">{inspection.inspection_date}</p>
               </div>
-              {inspection.inspector_name && <p className="mt-1 text-gray-500">{inspection.inspector_name}</p>}
+              {inspection.inspector_name && <p className="mt-1 text-gray-500 dark:text-gray-400">{inspection.inspector_name}</p>}
               {inspection.next_inspection_date && (
-                <p className="mt-1 text-[13px] text-gray-400">Next inspection: {inspection.next_inspection_date}</p>
+                <p className="mt-1 text-[13px] text-gray-400 dark:text-gray-500">Next inspection: {inspection.next_inspection_date}</p>
               )}
               {inspection.report_url && (
                 <a href={inspection.report_url} target="_blank" rel="noreferrer" className="mt-2 inline-block text-[13px] font-medium underline">

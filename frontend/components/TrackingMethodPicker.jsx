@@ -16,20 +16,20 @@ export default function TrackingMethodPicker({ value, onChange, suggested, sugge
               type="button"
               aria-pressed={selected}
               onClick={() => onChange(method.value)}
-              className={`card block w-full text-left ${selected ? "ring-2 ring-gray-900" : ""}`}
+              className={`card block w-full text-left ${selected ? "ring-2 ring-gray-900 dark:ring-white" : ""}`}
             >
               {method.value === suggested && (
-                <p className="mb-0.5 text-[12px] font-semibold text-amber-600">Suggested</p>
+                <p className="mb-0.5 text-[12px] font-semibold text-amber-600 dark:text-amber-400">Suggested</p>
               )}
               <p className="font-semibold">{method.label}</p>
-              <p className="mt-0.5 text-[13px] text-gray-500">{method.explainer}</p>
+              <p className="mt-0.5 text-[13px] text-gray-500 dark:text-gray-400">{method.explainer}</p>
             </button>
           );
         })}
       </div>
 
       {suggestionNote && (
-        <div className="rounded-xl bg-blue-50 p-3 text-[13px] text-blue-700">
+        <div className="rounded-xl bg-blue-50 p-3 text-[13px] text-blue-700 dark:bg-blue-500/10 dark:text-blue-400">
           <p className="font-medium">Reminder suggestion</p>
           <p className="mt-0.5">{suggestionNote}</p>
         </div>

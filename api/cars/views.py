@@ -29,14 +29,7 @@ class CarListCreateView(SmartPaginationAPIView):
     permission_classes = [IsAuthenticated]
 
     def override_post_data(self, data):
-        # request.data is an immutable QueryDict when the photo comes in as
-        # multipart/form-data — flatten it while preserving the file objects.
-        if hasattr(data, "dict"):
-            files = {key: data[key] for key in data if hasattr(data[key], "read")}
-            data = data.dict()
-            data.update(files)
-        else:
-            data = dict(data)
+        data = dict(data)
         data["owner"] = self.request.user.pk
         return data
 

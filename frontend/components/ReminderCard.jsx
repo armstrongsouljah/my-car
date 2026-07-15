@@ -19,16 +19,16 @@ export default function ReminderCard({ reminder }) {
     <Link href={`/reminders/${reminder.id}/edit`} className="card block">
       <div className="flex items-start justify-between gap-3">
         <div>
-          {reminder.is_essential && <p className="text-[12px] font-semibold text-blue-600">Essential</p>}
+          {reminder.is_essential && <p className="text-[12px] font-semibold text-blue-600 dark:text-blue-400">Essential</p>}
           <p className="font-semibold">{reminder.title}</p>
         </div>
         <StatusChip status={reminder.status} />
       </div>
-      <p className="mt-1 text-[13px] text-gray-500">{reminder.message}</p>
+      <p className="mt-1 text-[13px] text-gray-500 dark:text-gray-400">{reminder.message}</p>
       <div className="mt-2">
         <ProgressBar percent={reminder.progress_percent} status={reminder.status} />
         {range && (
-          <div className="mt-1 flex justify-between text-[12px] text-gray-400">
+          <div className="mt-1 flex justify-between text-[12px] text-gray-400 dark:text-gray-500">
             <span>{range[0]}</span>
             <span>{range[1]}</span>
           </div>
