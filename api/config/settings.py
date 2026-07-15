@@ -48,6 +48,7 @@ LOCAL_APPS = [
     "services",
     "inspections",
     "expenses",
+    "reminders",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -218,5 +219,9 @@ CELERY_BEAT_SCHEDULE = {
     "send-service-reminders": {
         "task": "tasks.send_due_reminders_task",
         "schedule": 60 * 60 * 24,  # once a day
+    },
+    "send-mileage-reminders": {
+        "task": "tasks.send_mileage_reminders_task",
+        "schedule": 60 * 60 * 24,  # once a day; per-user cadence applied inside
     },
 }

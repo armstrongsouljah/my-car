@@ -47,6 +47,29 @@ REMINDER_DUE_SOON_KM = 500
 REMINDER_DUE_SOON_DAYS = 30
 
 # ---------------------------------------------------------------------------
+# User-created reminders (catalog-driven or custom)
+# ---------------------------------------------------------------------------
+REMINDER_CATEGORY_MAINTENANCE = "maintenance"
+REMINDER_CATEGORY_DOCUMENTATION = "documentation"
+REMINDER_CATEGORY_OTHER = "other"
+
+REMINDER_CATEGORIES = [
+    (REMINDER_CATEGORY_MAINTENANCE, "Maintenance"),
+    (REMINDER_CATEGORY_DOCUMENTATION, "Documents"),
+    (REMINDER_CATEGORY_OTHER, "Other"),
+]
+
+REMINDER_TRACKING_METHOD_DATE_AND_MILEAGE = "date_and_mileage"
+REMINDER_TRACKING_METHOD_DATE = "date"
+REMINDER_TRACKING_METHOD_MILEAGE = "mileage"
+
+REMINDER_TRACKING_METHODS = [
+    (REMINDER_TRACKING_METHOD_DATE_AND_MILEAGE, "By date & mileage"),
+    (REMINDER_TRACKING_METHOD_DATE, "By date"),
+    (REMINDER_TRACKING_METHOD_MILEAGE, "By mileage"),
+]
+
+# ---------------------------------------------------------------------------
 # Inspection statuses
 # ---------------------------------------------------------------------------
 INSPECTION_STATUS_PASSED = "passed"
@@ -82,6 +105,27 @@ EXPENSE_CATEGORIES = [
     (EXPENSE_CATEGORY_CLEANING, "Cleaning & Detailing"),
     (EXPENSE_CATEGORY_OTHER, "Other"),
 ]
+
+# ---------------------------------------------------------------------------
+# Mileage update reminder frequencies (account-level setting)
+# ---------------------------------------------------------------------------
+MILEAGE_REMINDER_OFF = "off"
+MILEAGE_REMINDER_DAILY = "daily"
+MILEAGE_REMINDER_WEEKLY = "weekly"
+MILEAGE_REMINDER_MONTHLY = "monthly"
+
+MILEAGE_REMINDER_FREQUENCIES = [
+    (MILEAGE_REMINDER_OFF, "Off"),
+    (MILEAGE_REMINDER_DAILY, "Daily"),
+    (MILEAGE_REMINDER_WEEKLY, "Weekly"),
+    (MILEAGE_REMINDER_MONTHLY, "Monthly"),
+]
+
+MILEAGE_REMINDER_INTERVAL_DAYS = {
+    MILEAGE_REMINDER_DAILY: 1,
+    MILEAGE_REMINDER_WEEKLY: 7,
+    MILEAGE_REMINDER_MONTHLY: 30,
+}
 
 # ---------------------------------------------------------------------------
 # Fuel types

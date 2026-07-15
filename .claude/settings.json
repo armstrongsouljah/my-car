@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -iE \"\\\\.\\(py|tsx|ts\\)$\")",
+      "Bash(docker network *)",
+      "Bash(docker build *)",
+      "Bash(docker run *)",
+      "Bash(curl -s __TRACKED_VAR__/reminders/catalog/)",
+      "Bash(npm install *)",
+      "Bash(kill %1)",
+      "Bash(pkill -f \"next dev -p 3100\")",
+      "Bash(git add *)",
+      "Bash(git push *)"
+    ]
+  }
+}

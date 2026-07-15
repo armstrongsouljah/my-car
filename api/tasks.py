@@ -15,6 +15,72 @@ def send_welcome_email_task(email, first_name=""):
     send_welcome_email(email=email, first_name=first_name)
 
 
+@shared_task(name="tasks.send_mileage_reminders_task")
+def send_mileage_reminders_task():
+    """
+    Daily sweep: emails owners whose chosen mileage-reminder cadence
+    (daily/weekly/monthly) has elapsed since the last nudge, asking them to
+    update their cars' odometer readings.
+    """
+    from django.db.models import Prefetch
+    from django.utils import timezone
+    from django.utils.timesince import timesince
+
+    from accounts.models import User
+    from cars.models import Car
+    from utils import Constants
+    from utils.Email import send_mileage_reminder_email
+
+    now = timezone.now()
+    sent = 0
+
+    queryset = (
+        User.objects
+        .filter(is_active=True)
+        .exclude(mileage_reminder_frequency=Constants.MILEAGE_REMINDER_OFF)
+        .prefetch_related(
+            Prefetch("cars", queryset=Car.objects.filter(is_active=True), to_attr="active_cars")
+        )
+    )
+
+    for user in queryset:
+        interval_days = Constants.MILEAGE_REMINDER_INTERVAL_DAYS.get(user.mileage_reminder_frequency)
+        if not interval_days:
+            continue
+
+        if user.last_mileage_reminder_at and (now - user.last_mileage_reminder_at).days < interval_days:
+            continue
+
+        cars = []
+        for car in user.active_cars:
+            updated_ago = (
+                f"updated {timesince(car.odometer_updated_at, now)} ago"
+                if car.odometer_updated_at else "never updated"
+            )
+            cars.append({
+                "label": str(car),
+                "current_odometer_km": car.current_odometer_km,
+                "updated_ago": updated_ago,
+            })
+
+        if not cars:
+            continue
+
+        # Atomically claim this send *before* emailing (conditioned on the
+        # last_mileage_reminder_at value read above) so two concurrent
+        # workers that both pass the eligibility check can't double-send.
+        claimed = User.objects.filter(
+            pk=user.pk, last_mileage_reminder_at=user.last_mileage_reminder_at,
+        ).update(last_mileage_reminder_at=now, updated_at=now)
+        if not claimed:
+            continue
+
+        send_mileage_reminder_email(email=user.email, first_name=user.first_name, cars=cars)
+        sent += 1
+
+    return f"Sent {sent} mileage reminder email(s)"
+
+
 @shared_task(name="tasks.send_due_reminders_task")
 def send_due_reminders_task():
     """

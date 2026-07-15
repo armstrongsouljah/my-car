@@ -2,9 +2,12 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 
-from utils import Cache, QueryParams
-from utils.Views import SmartDetailView, SmartPaginationAPIView
+from rest_framework.permissions import AllowAny
 
+from utils import Cache, QueryParams
+from utils.Views import SmartAPIView, SmartDetailView, SmartPaginationAPIView
+
+from cars.catalog import get_catalog
 from cars.models import Car
 from cars.serializers import (
     CarCreateSerializer,
@@ -26,7 +29,14 @@ class CarListCreateView(SmartPaginationAPIView):
     permission_classes = [IsAuthenticated]
 
     def override_post_data(self, data):
-        data = dict(data)
+        # request.data is an immutable QueryDict when the photo comes in as
+        # multipart/form-data — flatten it while preserving the file objects.
+        if hasattr(data, "dict"):
+            files = {key: data[key] for key in data if hasattr(data[key], "read")}
+            data = data.dict()
+            data.update(files)
+        else:
+            data = dict(data)
         data["owner"] = self.request.user.pk
         return data
 
@@ -57,6 +67,18 @@ class CarListCreateView(SmartPaginationAPIView):
         if is_default_request and response.status_code == status.HTTP_200_OK:
             Cache.set_car_list(request.user.pk, response.data)
         return response
+
+
+class CarCatalogView(SmartAPIView):
+    """
+    GET — static catalog of popular brands with their common models, plus the
+    selectable year range (1980..current). Backing this with a live source
+    (e.g. NHTSA vPIC) later won't change the response shape.
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request, **kwargs):
+        return Response(get_catalog(), status=status.HTTP_200_OK)
 
 
 class CarDetailView(SmartDetailView):

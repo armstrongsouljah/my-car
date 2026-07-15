@@ -39,6 +39,14 @@ class User(AbstractBaseUser, PermissionsMixin):
     is_staff = models.BooleanField(default=False)
     is_email_verified = models.BooleanField(default=False)
 
+    # Account-level nudge to keep odometer readings fresh (off/daily/weekly/monthly).
+    mileage_reminder_frequency = models.CharField(
+        max_length=10,
+        choices=Constants.MILEAGE_REMINDER_FREQUENCIES,
+        default=Constants.MILEAGE_REMINDER_OFF,
+    )
+    last_mileage_reminder_at = models.DateTimeField(null=True, blank=True)
+
     date_joined = models.DateTimeField(default=timezone.now)
     deactivated_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
