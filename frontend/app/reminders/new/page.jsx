@@ -78,14 +78,14 @@ function AddReminder() {
   }
 
   if (!carId) {
-    return <main className="p-6 text-sm text-gray-400">No car selected.</main>;
+    return <main className="p-6 text-sm text-gray-400 dark:text-gray-500">No car selected.</main>;
   }
-  if (error) return <main className="p-6"><p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p></main>;
-  if (!car || !catalog) return <main className="p-6 text-sm text-gray-400">Loading…</main>;
+  if (error) return <main className="p-6"><p className="rounded-xl bg-red-50 dark:bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-400">{error}</p></main>;
+  if (!car || !catalog) return <main className="p-6 text-sm text-gray-400 dark:text-gray-500">Loading…</main>;
 
   return (
     <main className="px-4 pb-24 pt-6">
-      <button onClick={back} className="mb-4 text-sm text-gray-500">‹ Back</button>
+      <button onClick={back} className="mb-4 text-sm text-gray-500 dark:text-gray-400">‹ Back</button>
 
       {step === "browse" && (
         <>
@@ -103,23 +103,23 @@ function AddReminder() {
           <div className="space-y-5">
             {grouped.map(([category, items]) => (
               <div key={category}>
-                <p className="mb-2 text-[13px] font-semibold text-gray-500">{CATEGORY_LABELS[category] || category}</p>
+                <p className="mb-2 text-[13px] font-semibold text-gray-500 dark:text-gray-400">{CATEGORY_LABELS[category] || category}</p>
                 <div className="space-y-2">
                   {items.map((item) => (
                     <button key={item.key || "custom"} onClick={() => pick(item)} className="card flex w-full items-center gap-3 text-left">
                       <span className="text-2xl">{item.icon}</span>
                       <span className="flex-1">
-                        {item.is_essential && <span className="block text-[12px] font-semibold text-blue-600">Essential Reminder</span>}
+                        {item.is_essential && <span className="block text-[12px] font-semibold text-blue-600 dark:text-blue-400">Essential Reminder</span>}
                         <span className="block font-semibold">{item.title}</span>
-                        <span className="block text-[13px] text-gray-500">{item.description}</span>
+                        <span className="block text-[13px] text-gray-500 dark:text-gray-400">{item.description}</span>
                       </span>
-                      <span className="text-gray-300">›</span>
+                      <span className="text-gray-300 dark:text-gray-600">›</span>
                     </button>
                   ))}
                 </div>
               </div>
             ))}
-            {grouped.length === 0 && <p className="text-center text-sm text-gray-400">No reminders match your search.</p>}
+            {grouped.length === 0 && <p className="text-center text-sm text-gray-400 dark:text-gray-500">No reminders match your search.</p>}
           </div>
         </>
       )}
@@ -127,7 +127,7 @@ function AddReminder() {
       {step === "method" && selected && (
         <>
           <h1 className="mb-1 text-2xl font-bold">{selected.title || "Custom reminder"}</h1>
-          <p className="mb-4 text-sm text-gray-500">How should we remind you?</p>
+          <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">How should we remind you?</p>
           <TrackingMethodPicker
             value={trackingMethod}
             onChange={setTrackingMethod}
@@ -158,7 +158,7 @@ function AddReminder() {
 export default function Page() {
   return (
     <AuthGuard>
-      <Suspense fallback={<main className="p-6 text-sm text-gray-400">Loading…</main>}>
+      <Suspense fallback={<main className="p-6 text-sm text-gray-400 dark:text-gray-500">Loading…</main>}>
         <AddReminder />
       </Suspense>
     </AuthGuard>

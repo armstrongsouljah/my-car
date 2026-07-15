@@ -35,10 +35,10 @@ function Reminders() {
     <main className="px-4 pb-24 pt-6">
       <h1 className="mb-6 text-2xl font-bold">Reminders</h1>
 
-      {error && <p className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
-      {data === null && !error && <p className="text-sm text-gray-400">Loading…</p>}
+      {error && <p className="mb-4 rounded-xl bg-red-50 dark:bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-400">{error}</p>}
+      {data === null && !error && <p className="text-sm text-gray-400 dark:text-gray-500">Loading…</p>}
       {data?.length === 0 && (
-        <div className="card text-center text-sm text-gray-500">Add a car to start getting service and inspection reminders.</div>
+        <div className="card text-center text-sm text-gray-500 dark:text-gray-400">Add a car to start getting service and inspection reminders.</div>
       )}
 
       <div className="space-y-4">
@@ -46,13 +46,13 @@ function Reminders() {
           <div key={entry.car_id} className="card">
             <Link href={`/cars/${entry.car_id}`} className="flex items-center justify-between">
               <p className="font-semibold">{entry.car}</p>
-              <span className="text-gray-300">›</span>
+              <span className="text-gray-300 dark:text-gray-600">›</span>
             </Link>
-            <p className="mt-0.5 text-[13px] text-gray-400">{Number(entry.current_odometer_km).toLocaleString()} km</p>
+            <p className="mt-0.5 text-[13px] text-gray-400 dark:text-gray-500">{Number(entry.current_odometer_km).toLocaleString()} km</p>
             <div className="mt-3 space-y-2">
               {entry.reminders.map((reminder) => (
-                <div key={reminder.kind} className="flex items-center justify-between gap-3 rounded-xl bg-gray-50 p-3">
-                  <p className="text-[13px] text-gray-600">{reminder.message}</p>
+                <div key={reminder.kind} className="flex items-center justify-between gap-3 rounded-xl bg-gray-50 dark:bg-gray-800/60 p-3">
+                  <p className="text-[13px] text-gray-600 dark:text-gray-300">{reminder.message}</p>
                   <StatusChip status={reminder.status} />
                 </div>
               ))}

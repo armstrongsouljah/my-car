@@ -6,10 +6,44 @@ import { api, setTokens, setUser, isLoggedIn } from "@/lib/api";
 
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
 
+function MailIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="m3 7 9 6 9-6" />
+    </svg>
+  );
+}
+
+function LockIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="4" y="11" width="16" height="10" rx="2" />
+      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+    </svg>
+  );
+}
+
+function EyeIcon({ open }) {
+  return open ? (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  ) : (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 3l18 18" />
+      <path d="M10.6 5.1A10.9 10.9 0 0 1 12 5c6.5 0 10 7 10 7a15.6 15.6 0 0 1-3.4 4.3M6.7 6.7C4 8.5 2 12 2 12s3.5 7 10 7a10.6 10.6 0 0 0 4.2-.9" />
+      <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" />
+    </svg>
+  );
+}
+
 export default function AuthPage() {
   const router = useRouter();
   const [mode, setMode] = useState("login"); // login | signup | verify
   const [form, setForm] = useState({ email: "", password: "", first_name: "", last_name: "", otp: "" });
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
   const [loading, setLoading] = useState(false);
@@ -41,11 +75,14 @@ export default function AuthPage() {
           }
         },
       });
+      // GIS wants a pixel width (200–400), not a percentage — measure the container.
+      const width = Math.min(400, Math.max(200, Math.round(googleButtonRef.current.offsetWidth)));
       window.google.accounts.id.renderButton(googleButtonRef.current, {
-        theme: "outline",
+        theme: "filled_black",
         size: "large",
-        width: "100%",
+        width,
         text: "continue_with",
+        shape: "pill",
       });
     };
 
@@ -115,99 +152,160 @@ export default function AuthPage() {
     }
   }
 
+  const tagline =
+    mode === "signup" ? "Your garage starts here" : mode === "verify" ? "Check your inbox for the code" : "Welcome back to your garage";
+
   return (
-    <main className="flex min-h-screen flex-col justify-center px-6 py-10">
-      <div className="mb-8 text-center">
-        <div className="text-4xl">🚗</div>
-        <h1 className="mt-2 text-2xl font-bold">My Car</h1>
-        <p className="mt-1 text-sm text-gray-500">Service history, reminders and expenses — all your cars in one place.</p>
+    <main className="flex min-h-screen flex-col bg-[#04120c] text-white">
+      {/* Hero */}
+      <div className="relative h-80 overflow-hidden">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="https://res.cloudinary.com/soultech/image/upload/e_improve,w_900,h_700,c_fill,g_auto,q_auto,f_auto/v1784111131/MANSORY_P1100_Audi_RS6_Carbon_Turquoise_Madness_Part_2_zos9uq.jpg"
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-[#04120c] via-[#04120c]/10 to-[#0a1a14]" />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(52,211,153,0.4),transparent_55%)]" />
+        <div className="relative flex h-full flex-col items-center justify-start pt-14">
+          <h1 className="text-2xl font-bold tracking-tight">My Car</h1>
+          <p className="mt-1 text-sm text-emerald-100/70">{tagline}</p>
+        </div>
       </div>
 
-      {mode !== "verify" && (
-        <div className="mb-6 grid grid-cols-2 rounded-xl bg-gray-200 p-1 text-sm font-semibold">
-          <button
-            className={`rounded-lg py-2 ${mode === "login" ? "bg-white shadow" : "text-gray-500"}`}
-            onClick={() => setMode("login")}
-          >
-            Log in
-          </button>
-          <button
-            className={`rounded-lg py-2 ${mode === "signup" ? "bg-white shadow" : "text-gray-500"}`}
-            onClick={() => setMode("signup")}
-          >
-            Sign up
-          </button>
-        </div>
-      )}
-
-      {info && <p className="mb-4 rounded-xl bg-blue-50 p-3 text-sm text-blue-700">{info}</p>}
-      {error && <p className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
-
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {mode === "signup" && (
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="label">First name</label>
-              <input className="input" value={form.first_name} onChange={update("first_name")} />
-            </div>
-            <div>
-              <label className="label">Last name</label>
-              <input className="input" value={form.last_name} onChange={update("last_name")} />
-            </div>
-          </div>
-        )}
-
+      {/* Form sheet */}
+      <div className="relative flex-1 rounded-t-[32px] bg-[#0a1a14] px-6 pb-10 pt-8 shadow-[0_-20px_60px_rgba(0,0,0,0.5)]">
         {mode !== "verify" && (
-          <>
-            <div>
-              <label className="label">Email</label>
-              <input className="input" type="email" required autoComplete="email" value={form.email} onChange={update("email")} />
-            </div>
-            <div>
-              <label className="label">Password</label>
-              <input
-                className="input"
-                type="password"
-                required
-                minLength={8}
-                autoComplete={mode === "login" ? "current-password" : "new-password"}
-                value={form.password}
-                onChange={update("password")}
-              />
-            </div>
-          </>
-        )}
-
-        {mode === "verify" && (
-          <div>
-            <label className="label">Verification code</label>
-            <input
-              className="input text-center text-2xl tracking-[0.5em]"
-              inputMode="numeric"
-              maxLength={6}
-              required
-              value={form.otp}
-              onChange={update("otp")}
-            />
-            <button type="button" onClick={resendOtp} className="mt-2 text-sm font-medium text-gray-500 underline">
-              Resend code
+          <div className="mb-6 grid grid-cols-2 rounded-full bg-white/5 p-1 text-sm font-semibold">
+            <button
+              type="button"
+              className={`rounded-full py-2.5 transition ${mode === "login" ? "bg-emerald-400 text-[#04120c]" : "text-white/50"}`}
+              onClick={() => setMode("login")}
+            >
+              Log in
+            </button>
+            <button
+              type="button"
+              className={`rounded-full py-2.5 transition ${mode === "signup" ? "bg-emerald-400 text-[#04120c]" : "text-white/50"}`}
+              onClick={() => setMode("signup")}
+            >
+              Sign up
             </button>
           </div>
         )}
 
-        <button className="btn-primary" disabled={loading}>
-          {loading ? "Please wait…" : mode === "login" ? "Log in" : mode === "signup" ? "Create account" : "Verify & continue"}
-        </button>
-      </form>
+        {info && <p className="mb-4 rounded-xl bg-emerald-400/10 p-3 text-sm text-emerald-300">{info}</p>}
+        {error && <p className="mb-4 rounded-xl bg-red-400/10 p-3 text-sm text-red-300">{error}</p>}
 
-      {mode !== "verify" && GOOGLE_CLIENT_ID && (
-        <>
-          <div className="my-6 flex items-center gap-3 text-xs text-gray-400">
-            <div className="h-px flex-1 bg-gray-200" /> OR <div className="h-px flex-1 bg-gray-200" />
-          </div>
-          <div ref={googleButtonRef} className="flex justify-center" />
-        </>
-      )}
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {mode === "signup" && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="auth-label">First name</label>
+                <input className="auth-input" value={form.first_name} onChange={update("first_name")} />
+              </div>
+              <div>
+                <label className="auth-label">Last name</label>
+                <input className="auth-input" value={form.last_name} onChange={update("last_name")} />
+              </div>
+            </div>
+          )}
+
+          {mode !== "verify" && (
+            <>
+              <div>
+                <label className="auth-label">Email address</label>
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-white/40">
+                    <MailIcon />
+                  </span>
+                  <input
+                    className="auth-input pl-11"
+                    type="email"
+                    required
+                    autoComplete="email"
+                    placeholder="you@example.com"
+                    value={form.email}
+                    onChange={update("email")}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="auth-label">Password</label>
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-white/40">
+                    <LockIcon />
+                  </span>
+                  <input
+                    className="auth-input pl-11 pr-11"
+                    type={showPassword ? "text" : "password"}
+                    required
+                    minLength={8}
+                    autoComplete={mode === "login" ? "current-password" : "new-password"}
+                    placeholder="Enter password"
+                    value={form.password}
+                    onChange={update("password")}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70"
+                  >
+                    <EyeIcon open={showPassword} />
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+
+          {mode === "verify" && (
+            <div>
+              <label className="auth-label">Verification code</label>
+              <input
+                className="auth-input text-center text-2xl tracking-[0.5em]"
+                inputMode="numeric"
+                maxLength={6}
+                required
+                value={form.otp}
+                onChange={update("otp")}
+              />
+              <button type="button" onClick={resendOtp} className="mt-2 text-sm font-medium text-emerald-400 underline underline-offset-2">
+                Resend code
+              </button>
+            </div>
+          )}
+
+          <button
+            className="w-full rounded-full bg-gradient-to-r from-emerald-400 to-green-500 px-4 py-3.5 text-[15px] font-bold text-[#04120c] shadow-[0_8px_24px_rgba(52,211,153,0.35)] transition active:scale-[0.99] disabled:opacity-50"
+            disabled={loading}
+          >
+            {loading ? "Please wait…" : mode === "login" ? "Sign in" : mode === "signup" ? "Sign up" : "Verify & continue"}
+          </button>
+        </form>
+
+        {mode !== "verify" && GOOGLE_CLIENT_ID && (
+          <>
+            <div className="my-6 flex items-center gap-3 text-xs text-white/30">
+              <div className="h-px flex-1 bg-white/10" /> or continue with <div className="h-px flex-1 bg-white/10" />
+            </div>
+            <div ref={googleButtonRef} className="flex justify-center" />
+          </>
+        )}
+
+        {mode !== "verify" && (
+          <p className="mt-6 text-center text-sm text-white/50">
+            {mode === "login" ? "Don't have an account? " : "Already have an account? "}
+            <button
+              type="button"
+              onClick={() => setMode(mode === "login" ? "signup" : "login")}
+              className="font-semibold text-emerald-400"
+            >
+              {mode === "login" ? "Sign up" : "Sign in"}
+            </button>
+          </p>
+        )}
+      </div>
     </main>
   );
 }

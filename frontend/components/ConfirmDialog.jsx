@@ -45,24 +45,24 @@ export default function ConfirmDialog({
         onClick={dismiss}
         className="absolute inset-0 bg-black/40 backdrop-blur-[2px] transition-opacity"
       />
-      <div className="relative z-10 w-full max-w-lg animate-[slideUp_.2s_ease-out] rounded-t-3xl bg-white p-6 pb-8 shadow-2xl sm:max-w-sm sm:rounded-3xl sm:pb-6">
-        <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-gray-200 sm:hidden" />
+      <div className="relative z-10 w-full max-w-lg animate-[slideUp_.2s_ease-out] rounded-t-3xl bg-white p-6 pb-8 shadow-2xl dark:bg-gray-900 sm:max-w-sm sm:rounded-3xl sm:pb-6">
+        <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-gray-200 dark:bg-gray-700 sm:hidden" />
         <div
           className={`mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full text-2xl ${
-            destructive ? "bg-red-50" : "bg-gray-100"
+            destructive ? "bg-red-50 dark:bg-red-500/10" : "bg-gray-100 dark:bg-gray-800"
           }`}
         >
           {destructive ? "🗑️" : "❓"}
         </div>
         <h2 className="text-center text-lg font-bold">{title}</h2>
-        <p className="mt-2 text-center text-sm text-gray-500">{message}</p>
+        <p className="mt-2 text-center text-sm text-gray-500 dark:text-gray-400">{message}</p>
         <div className="mt-6 space-y-2">
           <button
             ref={confirmRef}
             onClick={onConfirm}
             disabled={loading}
             className={`w-full rounded-xl px-4 py-3 text-[15px] font-semibold text-white active:scale-[0.99] disabled:opacity-50 ${
-              destructive ? "bg-red-600" : "bg-gray-900"
+              destructive ? "bg-red-600" : "bg-gray-900 dark:bg-white dark:text-gray-900"
             }`}
           >
             {loading ? "Please wait…" : confirmLabel}

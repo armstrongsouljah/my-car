@@ -135,7 +135,7 @@ export default function CarForm({ car = null, onSaved }) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      {error && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+      {error && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700 dark:bg-red-500/10 dark:text-red-400">{error}</p>}
 
       {/* Photo */}
       <div>
@@ -143,9 +143,9 @@ export default function CarForm({ car = null, onSaved }) {
         <label className="block cursor-pointer">
           {photoPreview ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={photoPreview} alt="Car" className="h-44 w-full rounded-2xl border border-gray-200 object-cover" />
+            <img src={photoPreview} alt="Car" className="h-44 w-full rounded-2xl border border-gray-200 object-cover dark:border-gray-800" />
           ) : (
-            <div className="flex h-44 w-full flex-col items-center justify-center gap-1 rounded-2xl border-2 border-dashed border-gray-300 bg-gray-50 text-gray-400">
+            <div className="flex h-44 w-full flex-col items-center justify-center gap-1 rounded-2xl border-2 border-dashed border-gray-300 bg-gray-50 text-gray-400 dark:border-gray-700 dark:bg-gray-800/60 dark:text-gray-500">
               <span className="text-3xl">📷</span>
               <span className="text-sm font-medium">Add a photo of your car</span>
             </div>

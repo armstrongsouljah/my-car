@@ -20,30 +20,30 @@ function Dashboard() {
   return (
     <main className="px-4 pb-24 pt-6">
       <header className="mb-6">
-        <p className="text-sm text-gray-500">Welcome back{user?.first_name ? `, ${user.first_name}` : ""} 👋</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400">Welcome back{user?.first_name ? `, ${user.first_name}` : ""} 👋</p>
         <h1 className="text-2xl font-bold">Your Garage</h1>
       </header>
 
-      {error && <p className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+      {error && <p className="mb-4 rounded-xl bg-red-50 dark:bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-400">{error}</p>}
 
-      {cars === null && !error && <p className="text-sm text-gray-400">Loading…</p>}
+      {cars === null && !error && <p className="text-sm text-gray-400 dark:text-gray-500">Loading…</p>}
 
       {cars?.length === 0 && (
         <div className="card text-center">
           <div className="text-3xl">🅿️</div>
           <p className="mt-2 font-semibold">No cars yet</p>
-          <p className="mt-1 text-sm text-gray-500">Add your first car to start tracking services and expenses.</p>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Add your first car to start tracking services and expenses.</p>
         </div>
       )}
 
       <div className="space-y-3">
         {cars?.map((car) => (
-          <Link key={car.id} href={`/cars/${car.id}`} className="block overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm active:scale-[0.99]">
+          <Link key={car.id} href={`/cars/${car.id}`} className="block overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm active:scale-[0.99]">
             {car.photo_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={mediaUrl(car.photo_url)} alt={`${car.make} ${car.model}`} className="h-40 w-full object-cover" />
             ) : (
-              <div className="flex h-40 w-full items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 text-5xl">
+              <div className="flex h-40 w-full items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 text-5xl dark:from-gray-800 dark:to-gray-700">
                 🚗
               </div>
             )}
@@ -52,11 +52,11 @@ function Dashboard() {
                 <p className="font-semibold">
                   {car.make} {car.model} {car.year ? `(${car.year})` : ""}
                 </p>
-                <p className="mt-0.5 text-sm text-gray-500">
+                <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
                   {car.registration_number || "No plate"} · {Number(car.current_odometer_km).toLocaleString()} km
                 </p>
               </div>
-              <span className="text-gray-300">›</span>
+              <span className="text-gray-300 dark:text-gray-600">›</span>
             </div>
           </Link>
         ))}
@@ -66,7 +66,7 @@ function Dashboard() {
         <Link
           href="/cars/new"
           aria-label="Add a car"
-          className="pointer-events-auto flex h-14 w-14 items-center justify-center rounded-full bg-gray-900 text-2xl text-white shadow-lg active:scale-95"
+          className="pointer-events-auto flex h-14 w-14 items-center justify-center rounded-full bg-gray-900 text-2xl text-white shadow-lg active:scale-95 dark:bg-white dark:text-gray-900"
         >
           +
         </Link>

@@ -72,7 +72,7 @@ export default function ReminderDetailsForm({ car, reminder = null, preset = nul
 
   return (
     <form onSubmit={submit} className="space-y-3">
-      {error && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+      {error && <p className="rounded-xl bg-red-50 dark:bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-400">{error}</p>}
 
       {isCustom && (
         <div>

@@ -55,7 +55,7 @@ function ExpenseForm({ cars, onSaved }) {
   return (
     <form onSubmit={submit} className="card space-y-3">
       <p className="font-semibold">Log an expense</p>
-      {error && <p className="rounded-xl bg-red-50 p-2 text-sm text-red-700">{error}</p>}
+      {error && <p className="rounded-xl bg-red-50 dark:bg-red-500/10 p-2 text-sm text-red-700 dark:text-red-400">{error}</p>}
       <div>
         <label className="label">Car *</label>
         <select className="input" required value={form.car} onChange={update("car")}>
@@ -113,12 +113,12 @@ function MonthChart({ months }) {
       <div className="flex items-end gap-2 overflow-x-auto pb-1" style={{ height: 140 }}>
         {months.map((month) => (
           <div key={month.month} className="flex min-w-[44px] flex-1 flex-col items-center justify-end gap-1">
-            <p className="text-[10px] font-medium text-gray-500">{Math.round(month.total).toLocaleString()}</p>
+            <p className="text-[10px] font-medium text-gray-500 dark:text-gray-400">{Math.round(month.total).toLocaleString()}</p>
             <div
-              className="w-full rounded-t-md bg-gray-900"
+              className="w-full rounded-t-md bg-gray-900 dark:bg-white"
               style={{ height: `${Math.max((month.total / max) * 100, 2)}%` }}
             />
-            <p className="text-[10px] text-gray-400">{monthLabel(month.month)}</p>
+            <p className="text-[10px] text-gray-400 dark:text-gray-500">{monthLabel(month.month)}</p>
           </div>
         ))}
       </div>
@@ -152,7 +152,7 @@ function Expenses() {
     <main className="px-4 pb-24 pt-6">
       <h1 className="mb-4 text-2xl font-bold">Expenses</h1>
 
-      {error && <p className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+      {error && <p className="mb-4 rounded-xl bg-red-50 dark:bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-400">{error}</p>}
 
       <select className="input mb-4" value={carFilter} onChange={(e) => setCarFilter(e.target.value)}>
         <option value="">All cars</option>
@@ -164,16 +164,16 @@ function Expenses() {
       {latest && (
         <div className="mb-4 grid grid-cols-2 gap-3">
           <div className="card">
-            <p className="text-[12px] text-gray-400">This month</p>
+            <p className="text-[12px] text-gray-400 dark:text-gray-500">This month</p>
             <p className="text-xl font-bold">{latest.total.toLocaleString()}</p>
             {latest.change_percent_vs_previous_month !== null && latest.change_percent_vs_previous_month !== undefined && (
-              <p className={`text-[12px] font-medium ${latest.change_percent_vs_previous_month > 0 ? "text-red-600" : "text-green-600"}`}>
+              <p className={`text-[12px] font-medium ${latest.change_percent_vs_previous_month > 0 ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`}>
                 {latest.change_percent_vs_previous_month > 0 ? "▲" : "▼"} {Math.abs(latest.change_percent_vs_previous_month)}% vs last month
               </p>
             )}
           </div>
           <div className="card">
-            <p className="text-[12px] text-gray-400">Last 12 months</p>
+            <p className="text-[12px] text-gray-400 dark:text-gray-500">Last 12 months</p>
             <p className="text-xl font-bold">{analytics.grand_total.toLocaleString()}</p>
           </div>
         </div>
@@ -196,7 +196,7 @@ function Expenses() {
           <div key={expense.id} className="card flex items-center justify-between text-sm">
             <div>
               <p className="font-semibold">{CATEGORY_LABELS[expense.category] || expense.category}</p>
-              <p className="text-gray-500">
+              <p className="text-gray-500 dark:text-gray-400">
                 {expense.expense_date}
                 {expense.vendor ? ` · ${expense.vendor}` : ""}
                 {expense.litres ? ` · ${expense.litres} L` : ""}
@@ -205,7 +205,7 @@ function Expenses() {
             <p className="font-bold">{Number(expense.amount).toLocaleString()}</p>
           </div>
         ))}
-        {expenses.length === 0 && <p className="text-center text-sm text-gray-400">No expenses logged yet.</p>}
+        {expenses.length === 0 && <p className="text-center text-sm text-gray-400 dark:text-gray-500">No expenses logged yet.</p>}
       </div>
 
       <BottomNav />

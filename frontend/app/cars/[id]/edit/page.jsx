@@ -18,10 +18,10 @@ function EditCar() {
 
   return (
     <main className="px-4 pb-10 pt-6">
-      <button onClick={() => router.push(`/cars/${id}`)} className="mb-4 text-sm text-gray-500">‹ Back</button>
+      <button onClick={() => router.push(`/cars/${id}`)} className="mb-4 text-sm text-gray-500 dark:text-gray-400">‹ Back</button>
       <h1 className="mb-6 text-2xl font-bold">Edit Car</h1>
-      {error && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
-      {!car && !error && <p className="text-sm text-gray-400">Loading…</p>}
+      {error && <p className="rounded-xl bg-red-50 dark:bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-400">{error}</p>}
+      {!car && !error && <p className="text-sm text-gray-400 dark:text-gray-500">Loading…</p>}
       {car && <CarForm car={car} onSaved={() => router.replace(`/cars/${id}`)} />}
     </main>
   );

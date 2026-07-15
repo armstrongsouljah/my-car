@@ -41,12 +41,12 @@ function EditReminder() {
     }
   }
 
-  if (error) return <main className="p-6"><p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p></main>;
-  if (!reminder || !car) return <main className="p-6 text-sm text-gray-400">Loading…</main>;
+  if (error) return <main className="p-6"><p className="rounded-xl bg-red-50 dark:bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-400">{error}</p></main>;
+  if (!reminder || !car) return <main className="p-6 text-sm text-gray-400 dark:text-gray-500">Loading…</main>;
 
   return (
     <main className="px-4 pb-24 pt-6">
-      <button onClick={() => router.back()} className="mb-4 text-sm text-gray-500">‹ Back</button>
+      <button onClick={() => router.back()} className="mb-4 text-sm text-gray-500 dark:text-gray-400">‹ Back</button>
       <h1 className="mb-4 text-2xl font-bold">{reminder.title}</h1>
 
       <ReminderDetailsForm
@@ -58,7 +58,7 @@ function EditReminder() {
 
       <button
         onClick={() => setConfirmRemove(true)}
-        className="mt-3 w-full rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[15px] font-semibold text-red-600"
+        className="mt-3 w-full rounded-xl border border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10 px-4 py-3 text-[15px] font-semibold text-red-600 dark:text-red-400"
       >
         Remove reminder
       </button>
