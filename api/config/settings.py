@@ -131,7 +131,10 @@ else:
         }
     }
 
-CAR_CACHE_TTL_SECONDS = config("CAR_CACHE_TTL_SECONDS", default=900, cast=int)
+# Cars change rarely — Cache.invalidate_owner()/invalidate_car() bust this on
+# every create/update/delete, so a long TTL is safe and just cuts DB load for
+# untouched cars in between.
+CAR_CACHE_TTL_SECONDS = config("CAR_CACHE_TTL_SECONDS", default=86400, cast=int)
 
 # ---------------------------------------------------------------------------
 # DRF / JWT

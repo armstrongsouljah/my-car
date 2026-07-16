@@ -5,9 +5,15 @@ import Link from "next/link";
 import { api, getUser, mediaUrl } from "@/lib/api";
 import AuthGuard from "@/components/AuthGuard";
 import BottomNav from "@/components/BottomNav";
+import StatusChip from "@/components/StatusChip";
+
+const STATUS_PRIORITY = { overdue: 0, due_soon: 1, ok: 2 };
+const UPCOMING_COUNT = 3;
 
 function Dashboard() {
   const [cars, setCars] = useState(null);
+  const [reminders, setReminders] = useState(null);
+  const [remindersError, setRemindersError] = useState(false);
   const [error, setError] = useState("");
   const user = getUser();
 
@@ -15,7 +21,15 @@ function Dashboard() {
     api("/cars/")
       .then((data) => setCars(data.results || data))
       .catch((err) => setError(err.message));
+    api("/reminders/")
+      .then((data) => setReminders(data.results || data))
+      .catch(() => setRemindersError(true));
   }, []);
+
+  const carById = Object.fromEntries((cars || []).map((car) => [car.id, car]));
+  const upcoming = [...(reminders || [])]
+    .sort((a, b) => (STATUS_PRIORITY[a.status] ?? 99) - (STATUS_PRIORITY[b.status] ?? 99))
+    .slice(0, UPCOMING_COUNT);
 
   return (
     <main className="px-4 pb-24 pt-6">
@@ -36,7 +50,7 @@ function Dashboard() {
         </div>
       )}
 
-      <div className="space-y-3">
+      <div className="max-h-[480px] space-y-3 overflow-y-auto pr-0.5">
         {cars?.map((car) => (
           <Link key={car.id} href={`/cars/${car.id}`} className="block overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm active:scale-[0.99]">
             {car.photo_url ? (
@@ -61,6 +75,44 @@ function Dashboard() {
           </Link>
         ))}
       </div>
+
+      {cars?.length > 0 && (
+        <div className="mt-6">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="font-semibold">Upcoming</p>
+            <Link href="/reminders" className="text-[13px] font-medium text-gray-500 dark:text-gray-400">See all</Link>
+          </div>
+
+          {reminders === null && !remindersError ? (
+            <p className="text-sm text-gray-400 dark:text-gray-500">Loading…</p>
+          ) : remindersError ? (
+            <p className="card text-center text-sm text-gray-500 dark:text-gray-400">Couldn&apos;t load reminders right now.</p>
+          ) : upcoming.length === 0 ? (
+            <Link href="/reminders/new" className="card block text-center text-sm text-gray-500 dark:text-gray-400">
+              No reminders yet — add one to stay on top of maintenance.
+            </Link>
+          ) : (
+            <div className="space-y-2">
+              {upcoming.map((reminder) => (
+                <Link
+                  key={reminder.id}
+                  href={`/reminders/${reminder.id}/edit`}
+                  className="card flex items-center justify-between gap-3 py-3"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold">{reminder.title}</p>
+                    <p className="truncate text-[13px] text-gray-500 dark:text-gray-400">
+                      {carById[reminder.car] ? `${carById[reminder.car].make} ${carById[reminder.car].model} · ` : ""}
+                      {reminder.message}
+                    </p>
+                  </div>
+                  <StatusChip status={reminder.status} />
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="pointer-events-none fixed inset-x-0 bottom-20 z-30 mx-auto flex w-full max-w-lg justify-end px-4">
         <Link
