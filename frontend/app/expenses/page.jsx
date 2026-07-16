@@ -37,12 +37,21 @@ function ExpenseForm({ cars, expense = null, onSaved, onCancel }) {
     cost_per_litre: initialCostPerLitre,
   });
   const [error, setError] = useState("");
-  const update = (key) => (event) => setForm({ ...form, [key]: event.target.value });
+  // Editing an existing fuel expense without touching amount/category/cost
+  // per litre should leave the stored litres exactly as they were, rather
+  // than round-tripping through the rounded cost-per-litre display value.
+  const [fuelInputsChanged, setFuelInputsChanged] = useState(false);
+  const update = (key) => (event) => {
+    if (isEdit && (key === "amount" || key === "category" || key === "cost_per_litre")) setFuelInputsChanged(true);
+    setForm({ ...form, [key]: event.target.value });
+  };
 
   const litres =
-    form.category === "fuel" && form.amount && form.cost_per_litre && Number(form.cost_per_litre) > 0
-      ? Number(form.amount) / Number(form.cost_per_litre)
-      : null;
+    isEdit && !fuelInputsChanged && expense.category === "fuel" && expense.litres != null
+      ? Number(expense.litres)
+      : form.category === "fuel" && form.amount && form.cost_per_litre && Number(form.cost_per_litre) > 0
+        ? Number(form.amount) / Number(form.cost_per_litre)
+        : null;
 
   async function submit(event) {
     event.preventDefault();
@@ -217,6 +226,7 @@ function Expenses() {
       {formTarget ? (
         <div className="mb-4">
           <ExpenseForm
+            key={formTarget === "new" ? "new" : formTarget.id}
             cars={cars}
             expense={formTarget === "new" ? null : formTarget}
             onSaved={() => { setFormTarget(null); load(); }}

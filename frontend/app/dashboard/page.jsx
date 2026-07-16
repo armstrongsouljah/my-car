@@ -13,6 +13,7 @@ const UPCOMING_COUNT = 3;
 function Dashboard() {
   const [cars, setCars] = useState(null);
   const [reminders, setReminders] = useState(null);
+  const [remindersError, setRemindersError] = useState(false);
   const [error, setError] = useState("");
   const user = getUser();
 
@@ -22,7 +23,7 @@ function Dashboard() {
       .catch((err) => setError(err.message));
     api("/reminders/")
       .then((data) => setReminders(data.results || data))
-      .catch(() => setReminders([]));
+      .catch(() => setRemindersError(true));
   }, []);
 
   const carById = Object.fromEntries((cars || []).map((car) => [car.id, car]));
@@ -82,7 +83,11 @@ function Dashboard() {
             <Link href="/reminders" className="text-[13px] font-medium text-gray-500 dark:text-gray-400">See all</Link>
           </div>
 
-          {upcoming.length === 0 ? (
+          {reminders === null && !remindersError ? (
+            <p className="text-sm text-gray-400 dark:text-gray-500">Loading…</p>
+          ) : remindersError ? (
+            <p className="card text-center text-sm text-gray-500 dark:text-gray-400">Couldn&apos;t load reminders right now.</p>
+          ) : upcoming.length === 0 ? (
             <Link href="/reminders/new" className="card block text-center text-sm text-gray-500 dark:text-gray-400">
               No reminders yet — add one to stay on top of maintenance.
             </Link>
