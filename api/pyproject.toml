@@ -20,6 +20,7 @@ dependencies = [
     "google-auth>=2.36",
     "python-dateutil>=2.9",
     "requests>=2.32",
+    "google-genai>=1.0",
 ]
 
 [dependency-groups]

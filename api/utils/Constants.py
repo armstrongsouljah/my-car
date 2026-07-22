@@ -141,3 +141,19 @@ FUEL_TYPES = [
     (FUEL_TYPE_HYBRID, "Hybrid"),
     (FUEL_TYPE_ELECTRIC, "Electric"),
 ]
+
+# ---------------------------------------------------------------------------
+# AI assistant — chat message roles
+# ---------------------------------------------------------------------------
+# "user" and "model" mirror Gemini's own role names so history maps 1:1 onto
+# the provider's `contents`. "tool" rows record a tool call + its result for
+# transparency and are not replayed as conversational turns.
+ASSISTANT_ROLE_USER = "user"
+ASSISTANT_ROLE_MODEL = "model"
+ASSISTANT_ROLE_TOOL = "tool"
+
+ASSISTANT_ROLES = [
+    (ASSISTANT_ROLE_USER, "User"),
+    (ASSISTANT_ROLE_MODEL, "Assistant"),
+    (ASSISTANT_ROLE_TOOL, "Tool"),
+]

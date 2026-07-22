@@ -20,6 +20,7 @@ urlpatterns = [
     path(f"{API_PREFIX}inspections/", include("inspections.urls")),
     path(f"{API_PREFIX}reminders/", include("reminders.urls")),
     path(f"{API_PREFIX}expenses/", include("expenses.urls")),
+    path(f"{API_PREFIX}assistant/", include("assistant.urls")),
 ]
 
 # Serve media files in development
