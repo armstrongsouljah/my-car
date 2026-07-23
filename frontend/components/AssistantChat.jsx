@@ -88,6 +88,20 @@ export default function AssistantChat() {
   const [input, setInput] = useState("");
   const [error, setError] = useState("");
   const bottomRef = useRef(null);
+  const dialogRef = useRef(null);
+
+  useEffect(() => {
+    if (open) dialogRef.current?.focus();
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onKeyDown(event) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open]);
 
   const loadCars = useCallback(async () => {
     try {
@@ -157,7 +171,8 @@ export default function AssistantChat() {
 
     setInput("");
     setError("");
-    setMessages((prev) => [...prev, { id: `local-${Date.now()}`, role: "user", content }]);
+    const localId = `local-${Date.now()}`;
+    setMessages((prev) => [...prev, { id: localId, role: "user", content }]);
     setSending(true);
     try {
       const reply = await api(`/assistant/conversations/${conversation.id}/messages/`, {
@@ -167,6 +182,8 @@ export default function AssistantChat() {
       setMessages((prev) => [...prev, reply]);
     } catch (err) {
       setError(err.message);
+      setMessages((prev) => prev.filter((m) => m.id !== localId));
+      setInput(content);
     } finally {
       setSending(false);
     }
@@ -198,7 +215,12 @@ export default function AssistantChat() {
           onClick={() => setOpen(false)}
         >
           <div
-            className="flex h-[85vh] w-full max-w-lg flex-col rounded-t-2xl bg-white dark:bg-gray-900"
+            ref={dialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Car assistant"
+            tabIndex={-1}
+            className="flex h-[85vh] w-full max-w-lg flex-col rounded-t-2xl bg-white outline-none dark:bg-gray-900"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-gray-800">
