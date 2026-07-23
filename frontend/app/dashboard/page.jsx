@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, getUser, mediaUrl } from "@/lib/api";
+import AssistantChat from "@/components/AssistantChat";
 import AuthGuard from "@/components/AuthGuard";
 import BottomNav from "@/components/BottomNav";
 import StatusChip from "@/components/StatusChip";
@@ -37,6 +38,12 @@ function Dashboard() {
         <p className="text-sm text-gray-500 dark:text-gray-400">Welcome back{user?.first_name ? `, ${user.first_name}` : ""} 👋</p>
         <h1 className="text-2xl font-bold">Your Garage</h1>
       </header>
+
+      {cars?.length > 0 && (
+        <div className="mb-6">
+          <AssistantChat />
+        </div>
+      )}
 
       {error && <p className="mb-4 rounded-xl bg-red-50 dark:bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-400">{error}</p>}
 

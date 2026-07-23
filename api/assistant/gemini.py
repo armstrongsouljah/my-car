@@ -75,6 +75,9 @@ def run_chat(history, user_text, context, max_steps=5):
         response = client.models.generate_content(
             model=settings.GEMINI_MODEL, contents=contents, config=config
         )
+        if not response.candidates:
+            # Can happen when the prompt is blocked by safety filters.
+            return ChatResult(text="I couldn't produce an answer for that. Try rephrasing?", tool_calls=tool_calls)
         candidate = response.candidates[0]
         contents.append(candidate.content)
 

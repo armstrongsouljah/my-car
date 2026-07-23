@@ -1,3 +1,5 @@
+import logging
+
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
@@ -17,6 +19,8 @@ from assistant.serializers import (
     MessageListSerializer,
 )
 from assistant.tools import ToolContext
+
+logger = logging.getLogger(__name__)
 
 
 class ChatThrottle(UserRateThrottle):
@@ -105,6 +109,8 @@ class MessageListCreateView(SmartAPIView):
         user_text = (request.data.get("content") or "").strip()
         if not user_text:
             raise CustomValidation("Message content is required.", field="content")
+        if len(user_text) > 4000:
+            raise CustomValidation("Message is too long.", field="content")
 
         history = list(
             conversation.messages.filter(
@@ -119,9 +125,10 @@ class MessageListCreateView(SmartAPIView):
         context = ToolContext(car=conversation.car, owner_id=conversation.owner_id)
         try:
             result = run_chat(history=history, user_text=user_text, context=context)
-        except Exception as exc:  # noqa: BLE001 — surface any provider/SDK error as a clean 502
+        except Exception:  # noqa: BLE001 — log the provider/SDK detail, surface a clean 502
+            logger.exception("Gemini chat call failed for conversation %s", conversation.id)
             raise CustomValidation(
-                f"The assistant is unavailable right now: {exc}",
+                "The assistant is unavailable right now. Please try again shortly.",
                 field="detail",
                 status_code=status.HTTP_502_BAD_GATEWAY,
             )

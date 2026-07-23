@@ -157,7 +157,7 @@ REST_FRAMEWORK = {
 # AI assistant (Gemini)
 # ---------------------------------------------------------------------------
 GEMINI_API_KEY = config("GEMINI_API_KEY", default="")
-GEMINI_MODEL = config("GEMINI_MODEL", default="gemini-2.0-flash")
+GEMINI_MODEL = config("GEMINI_MODEL", default="gemini-3.6-flash")
 
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=config("JWT_ACCESS_MINUTES", default=60, cast=int)),

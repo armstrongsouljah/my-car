@@ -13,6 +13,7 @@ straight from models we already own. VIN decoding hits the free NHTSA vPIC
 API. DTC and part lookups are stubbed — they need licensed automotive data —
 but the tool surface is in place so wiring a real provider later is a drop-in.
 """
+import re
 from dataclasses import dataclass
 from decimal import Decimal
 
@@ -121,15 +122,20 @@ def _format_money(value):
 # ---------------------------------------------------------------------------
 # External automotive tools.
 # ---------------------------------------------------------------------------
+_VIN_RE = re.compile(r"^[A-HJ-NPR-Z0-9]{17}$")  # 17 chars; VINs exclude I, O, Q
+
+
 def decode_vin(context, vin=None):
     """
     Decode a VIN via NHTSA vPIC (free, no key). Defaults to the pinned car's
     VIN. Returns the decoded make/model/year/engine so answers can be precise
     even when the owner never filled in those fields.
     """
-    vin = (vin or context.car.vin or "").strip()
+    vin = (vin or context.car.vin or "").strip().upper()
     if not vin:
         return {"error": "No VIN available for this car. Ask the owner to add one."}
+    if not _VIN_RE.match(vin):
+        return {"error": f"'{vin}' isn't a valid 17-character VIN."}
     try:
         resp = requests.get(
             f"https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValues/{vin}?format=json",
@@ -259,5 +265,5 @@ def execute_tool(name, args, context):
         return {"error": f"Unknown tool: {name}"}
     try:
         return func(context, **(args or {}))
-    except TypeError as exc:
+    except (TypeError, ValueError) as exc:
         return {"error": f"Bad arguments for {name}: {exc}"}
