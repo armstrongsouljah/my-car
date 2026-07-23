@@ -89,15 +89,44 @@ export default function AssistantChat() {
   const [error, setError] = useState("");
   const bottomRef = useRef(null);
   const dialogRef = useRef(null);
+  const triggerRef = useRef(null);
+
+  function focusableElements() {
+    const nodes = dialogRef.current?.querySelectorAll('button, input, [href], [tabindex]:not([tabindex="-1"])');
+    return Array.from(nodes || []).filter((el) => !el.disabled);
+  }
 
   useEffect(() => {
-    if (open) dialogRef.current?.focus();
+    if (open) {
+      const first = focusableElements()[0];
+      (first || dialogRef.current)?.focus();
+    } else {
+      triggerRef.current?.focus();
+    }
   }, [open]);
 
   useEffect(() => {
     if (!open) return;
+
     function onKeyDown(event) {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape") {
+        setOpen(false);
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      const focusable = focusableElements();
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
@@ -195,6 +224,7 @@ export default function AssistantChat() {
   return (
     <>
       <button
+        ref={triggerRef}
         onClick={() => setOpen(true)}
         className="card flex w-full items-center gap-3 text-left active:scale-[0.99]"
       >
