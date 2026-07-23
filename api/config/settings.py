@@ -50,6 +50,7 @@ LOCAL_APPS = [
     "inspections",
     "expenses",
     "reminders",
+    "assistant",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -146,7 +147,17 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 20,
+    "DEFAULT_THROTTLE_RATES": {
+        # Caps AI assistant message sends per user — each one costs LLM tokens.
+        "assistant_chat": config("ASSISTANT_CHAT_THROTTLE", default="30/min"),
+    },
 }
+
+# ---------------------------------------------------------------------------
+# AI assistant (Gemini)
+# ---------------------------------------------------------------------------
+GEMINI_API_KEY = config("GEMINI_API_KEY", default="")
+GEMINI_MODEL = config("GEMINI_MODEL", default="gemini-3.6-flash")
 
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=config("JWT_ACCESS_MINUTES", default=60, cast=int)),
