@@ -10,12 +10,16 @@ registry below is provider-agnostic; ``assistant/gemini.py`` adapts
 
 Vehicle context, service history, maintenance status and expenses come
 straight from models we already own. VIN decoding hits the free NHTSA vPIC
-API. DTC and part lookups are stubbed — they need licensed automotive data —
-but the tool surface is in place so wiring a real provider later is a drop-in.
+API. Generic DTC codes are bundled as static data (data/generic_dtc_codes.json).
+Manufacturer-specific DTCs and part lookups are stubbed — they need licensed
+automotive data — but the tool surface is in place so wiring a real provider
+later is a drop-in.
 """
+import json
 import re
 from dataclasses import dataclass
 from decimal import Decimal
+from pathlib import Path
 
 import requests
 from django.db.models import Sum
@@ -150,17 +154,10 @@ def decode_vin(context, vin=None):
     return {"vin": vin, "decoded": decoded or {"note": "vPIC returned no fields for this VIN."}}
 
 
-# Minimal seed of common generic OBD-II codes. The full SAE set is public and
-# would be loaded from a table; manufacturer-specific codes need licensed data.
-_GENERIC_DTC = {
-    "P0300": "Random/multiple cylinder misfire detected.",
-    "P0301": "Cylinder 1 misfire detected.",
-    "P0420": "Catalyst system efficiency below threshold (bank 1).",
-    "P0442": "Evaporative emission system leak detected (small leak).",
-    "P0455": "Evaporative emission system leak detected (large leak).",
-    "P0171": "System too lean (bank 1).",
-    "P0128": "Coolant thermostat below regulating temperature.",
-}
+# Generic (SAE J2012 / ISO 15031-6) OBD-II codes — standardised across every
+# manufacturer, so safe to bundle as static data. Manufacturer-specific codes
+# (most P1xxx, B1-3xxx, C1-3xxx, U1-3xxx) vary by make and need licensed data.
+_GENERIC_DTC = json.loads((Path(__file__).parent / "data" / "generic_dtc_codes.json").read_text())
 
 
 def lookup_dtc(context, code):
@@ -173,9 +170,8 @@ def lookup_dtc(context, code):
         "code": code,
         "meaning": None,
         "note": (
-            "Not in the generic seed set. Manufacturer-specific codes and the "
-            "full SAE table require a licensed diagnostics data source (not yet "
-            "connected)."
+            "Not in the generic code set. Manufacturer-specific codes require a "
+            "licensed diagnostics data source (not yet connected)."
         ),
     }
 

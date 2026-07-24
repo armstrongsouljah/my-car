@@ -56,6 +56,18 @@ class TestTools:
         assert result["scope"] == "generic"
         assert "Catalyst" in result["meaning"]
 
+    def test_lookup_dtc_covers_the_full_bundled_generic_set(self, car):
+        from assistant.tools import _GENERIC_DTC
+
+        assert len(_GENERIC_DTC) > 100
+        result = execute_tool("lookup_dtc", {"code": "U0100"}, ToolContext(car=car, owner_id=car.owner_id))
+        assert "ECM" in result["meaning"]
+
+    def test_lookup_dtc_manufacturer_specific_code_is_reported_as_unavailable(self, car):
+        result = execute_tool("lookup_dtc", {"code": "P1234"}, ToolContext(car=car, owner_id=car.owner_id))
+        assert result["meaning"] is None
+        assert "licensed" in result["note"]
+
     def test_unknown_tool_returns_error(self, car):
         result = execute_tool("nope", {}, ToolContext(car=car, owner_id=car.owner_id))
         assert "error" in result
