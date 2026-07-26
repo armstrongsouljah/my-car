@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
+import { trackSignal } from "@/lib/telemetry";
 
 const LAST_CAR_KEY = "mycar_assistant_car";
 
@@ -225,7 +226,10 @@ export default function AssistantChat() {
     <>
       <button
         ref={triggerRef}
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          trackSignal("assistant_chat_opened");
+          setOpen(true);
+        }}
         className="card flex w-full items-center gap-3 text-left active:scale-[0.99]"
       >
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gray-100 text-xl dark:bg-gray-800">

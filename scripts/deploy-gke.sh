@@ -31,6 +31,7 @@ cd "$(dirname "$0")/.."
 : "${GOOGLE_OAUTH_CLIENT_ID:=}"
 : "${CLOUDINARY_CLOUD_NAME:=}"
 : "${CLOUDINARY_UPLOAD_PRESET:=}"
+: "${TELEMETRYDECK_APP_ID:=}"
 : "${EMAIL_HOST:=smtp.gmail.com}"
 : "${EMAIL_PORT:=587}"
 : "${EMAIL_USE_TLS:=True}"
@@ -110,6 +111,8 @@ steps:
       - NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME}
       - --build-arg
       - NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET=${CLOUDINARY_UPLOAD_PRESET}
+      - --build-arg
+      - NEXT_PUBLIC_TELEMETRYDECK_APP_ID=${TELEMETRYDECK_APP_ID}
       - -t
       - ${REGISTRY}/mycar-frontend:${IMAGE_TAG}
       - .
