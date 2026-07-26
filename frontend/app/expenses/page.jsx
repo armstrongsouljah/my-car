@@ -138,9 +138,7 @@ function ExpenseForm({ cars, expense = null, onSaved, onCancel }) {
       </div>
       <div className="flex gap-2">
         <button className="btn-primary">{isEdit ? "Save changes" : "Save expense"}</button>
-        {isEdit && (
-          <button type="button" onClick={onCancel} className="btn-secondary">Cancel</button>
-        )}
+        <button type="button" onClick={onCancel} className="btn-secondary">Cancel</button>
       </div>
     </form>
   );

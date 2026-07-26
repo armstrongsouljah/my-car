@@ -189,7 +189,7 @@ export default function AuthPage() {
           <h1
             className={`${brandFont.className} text-4xl font-bold tracking-wide text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)]`}
           >
-            My Car
+            GlavBox
           </h1>
           <p className="mt-0.5 text-sm text-emerald-100/80 drop-shadow-[0_1px_6px_rgba(0,0,0,0.9)]">{tagline}</p>
         </div>

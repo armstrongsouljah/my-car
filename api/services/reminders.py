@@ -41,12 +41,26 @@ def _service_status(car, record, today):
     return Constants.REMINDER_STATUS_OK, None
 
 
+def _within_new_car_grace_period(car, today):
+    if car.created_at is None:
+        return False
+    return (today - car.created_at.date()).days < Constants.REMINDER_NEW_CAR_GRACE_DAYS
+
+
 def build_service_reminder(car, today=None):
     """Reminder payload for the car's next service, from its latest service record."""
     today = today or timezone.localdate()
     record = car.service_records.order_by("-service_date", "-created_at").first()
 
     if record is None:
+        if _within_new_car_grace_period(car, today):
+            return {
+                "kind": "service",
+                "status": Constants.REMINDER_STATUS_OK,
+                "message": "No service logged yet — log your last service to start tracking intervals.",
+                "next_due_odometer_km": None,
+                "next_due_date": None,
+            }
         return {
             "kind": "service",
             "status": Constants.REMINDER_STATUS_DUE_SOON,
@@ -90,6 +104,13 @@ def build_inspection_reminder(car, today=None):
     inspection = car.inspections.order_by("-inspection_date", "-created_at").first()
 
     if inspection is None:
+        if _within_new_car_grace_period(car, today):
+            return {
+                "kind": "inspection",
+                "status": Constants.REMINDER_STATUS_OK,
+                "message": "No general inspection on record yet — book one to know the state of your vehicle.",
+                "next_due_date": None,
+            }
         return {
             "kind": "inspection",
             "status": Constants.REMINDER_STATUS_DUE_SOON,
