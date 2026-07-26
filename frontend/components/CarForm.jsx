@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
+import { trackSignal } from "@/lib/telemetry";
 
 const OTHER = "__other__";
 const FUEL_TYPES = ["petrol", "diesel", "hybrid", "electric"];
@@ -151,6 +152,7 @@ export default function CarForm({ car = null, onSaved }) {
       const path = isEdit ? `/cars/${car.id}/` : "/cars/";
       const method = isEdit ? "PATCH" : "POST";
       const saved = await api(path, { method, body: { ...fields, year } });
+      trackSignal(isEdit ? "car_updated" : "car_added");
       onSaved(saved);
     } catch (err) {
       setError(err.message);

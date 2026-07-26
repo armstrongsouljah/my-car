@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { trackSignal } from "@/lib/telemetry";
 import AuthGuard from "@/components/AuthGuard";
 import BottomNav from "@/components/BottomNav";
 
@@ -69,8 +70,10 @@ function ExpenseForm({ cars, expense = null, onSaved, onCancel }) {
 
       if (isEdit) {
         await api(`/expenses/${expense.id}/`, { method: "PATCH", body: fields });
+        trackSignal("expense_updated", { category: form.category });
       } else {
         await api("/expenses/", { method: "POST", body: { ...fields, car: form.car } });
+        trackSignal("expense_added", { category: form.category });
       }
       onSaved();
     } catch (err) {

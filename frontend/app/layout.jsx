@@ -1,5 +1,6 @@
 import "./globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { TelemetryProvider } from "@/components/TelemetryProvider";
 import { THEME_KEY } from "@/lib/theme";
 
 export const metadata = {
@@ -23,7 +24,9 @@ export default function RootLayout({ children }) {
       </head>
       <body className="min-h-screen bg-gray-50 text-gray-900 antialiased dark:bg-gray-950 dark:text-gray-100">
         <ThemeProvider>
-          <div className="mx-auto min-h-screen w-full max-w-lg">{children}</div>
+          <TelemetryProvider>
+            <div className="mx-auto min-h-screen w-full max-w-lg">{children}</div>
+          </TelemetryProvider>
         </ThemeProvider>
       </body>
     </html>
