@@ -116,6 +116,18 @@ class TestServiceExpenseSync:
         record = ServiceRecord.objects.create(car=car, odometer_km=41000, interval_km=5000)
         assert not Expense.objects.filter(service_record=record).exists()
 
+    def test_zero_cost_still_creates_and_keeps_the_expense(self, car):
+        """A $0 service (e.g. covered under warranty) is a known cost, unlike
+        an unset one — it must not be treated the same as no cost at all."""
+        record = ServiceRecord.objects.create(
+            car=car, odometer_km=41000, interval_km=5000, cost="0.00",
+        )
+        expense = Expense.objects.get(service_record=record)
+        assert str(expense.amount) == "0.00"
+
+        record.save()
+        assert Expense.objects.filter(service_record=record).exists()
+
     def test_deleting_service_deletes_its_expense(self, car):
         record = ServiceRecord.objects.create(
             car=car, odometer_km=41000, interval_km=5000, cost="150.00",

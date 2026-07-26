@@ -10,7 +10,10 @@ const FUEL_TYPES = ["petrol", "diesel", "hybrid", "electric"];
 const MAX_ROWS = 20;
 
 function emptyRow() {
-  return { make: "", model: "", year: "", registration_number: "", fuel_type: "petrol", current_odometer_km: "" };
+  return {
+    id: crypto.randomUUID(),
+    make: "", model: "", year: "", registration_number: "", fuel_type: "petrol", current_odometer_km: "",
+  };
 }
 
 function isBlankRow(row) {
@@ -36,8 +39,14 @@ function BulkAddCars() {
   function removeRow(index) {
     setRows((prev) => prev.filter((_, i) => i !== index));
     setRowErrors((prev) => {
-      const next = { ...prev };
-      delete next[index];
+      // Errors are keyed by row position, so removing a row shifts every
+      // later row's error down by one — renumber instead of just deleting.
+      const next = {};
+      Object.entries(prev).forEach(([key, value]) => {
+        const k = Number(key);
+        if (k < index) next[k] = value;
+        else if (k > index) next[k - 1] = value;
+      });
       return next;
     });
   }
@@ -87,15 +96,23 @@ function BulkAddCars() {
       }
 
       // Keep only the rows that failed so the owner can fix and resubmit;
-      // successfully-created rows are already saved and drop out of the form.
-      const failedOriginalIndexes = new Set(errors.map((e) => candidates[e.index].index));
+      // successfully-created rows are already saved and drop out of the
+      // form. Errors are keyed by the *original* row position, but rows is
+      // about to be re-numbered by the filter below — remap error keys to
+      // match the retained rows' new positions, not their old ones.
+      const messagesByOriginalIndex = new Map(
+        errors.map((e) => [candidates[e.index].index, Object.values(e.errors).flat().join(" ")])
+      );
+      const nextRows = [];
       const nextRowErrors = {};
-      errors.forEach((e) => {
-        const originalIndex = candidates[e.index].index;
-        nextRowErrors[originalIndex] = Object.values(e.errors).flat().join(" ");
+      rows.forEach((row, i) => {
+        if (messagesByOriginalIndex.has(i)) {
+          nextRowErrors[nextRows.length] = messagesByOriginalIndex.get(i);
+          nextRows.push(row);
+        }
       });
 
-      setRows((prev) => prev.filter((_, i) => failedOriginalIndexes.has(i)));
+      setRows(nextRows);
       setRowErrors(nextRowErrors);
       setError(`${created.length} car(s) added. Fix the row(s) below to add the rest.`);
     } catch (err) {
@@ -133,7 +150,7 @@ function BulkAddCars() {
 
       <form onSubmit={handleSubmit} className="space-y-3">
         {rows.map((row, index) => (
-          <div key={index} className="card space-y-2">
+          <div key={row.id} className="card space-y-2">
             <div className="flex items-center justify-between">
               <p className="text-sm font-semibold text-gray-500 dark:text-gray-400">Car {index + 1}</p>
               {rows.length > 1 && (

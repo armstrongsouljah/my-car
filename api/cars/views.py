@@ -75,7 +75,7 @@ class CarBulkCreateView(SmartAPIView):
     max_cars = 20
 
     def post(self, request, *args, **kwargs):
-        rows = request.data.get("cars")
+        rows = request.data.get("cars") if isinstance(request.data, dict) else None
         if not isinstance(rows, list) or not rows:
             raise CustomValidation(
                 "Provide a non-empty list of cars under the 'cars' key.",
@@ -106,6 +106,12 @@ class CarBulkCreateView(SmartAPIView):
                 # number) rather than going through serializer.errors — catch
                 # per row so one bad row doesn't abort the rest of the batch.
                 errors.append({"index": index, "errors": exc.detail})
+            except Exception:
+                # Any other per-row failure (e.g. a DB-level integrity error)
+                # must not abort the batch — record it and continue.
+                errors.append(
+                    {"index": index, "errors": {"non_field_errors": ["Could not create this car."]}}
+                )
 
         if created:
             Cache.invalidate_owner(request.user.pk)

@@ -1,7 +1,7 @@
 import uuid
 
 from dateutil.relativedelta import relativedelta
-from django.db import models
+from django.db import models, transaction
 from django.utils import timezone
 
 from utils import Constants
@@ -55,10 +55,18 @@ class ServiceRecord(models.Model):
 
     def save(self, *args, **kwargs):
         self.compute_next_due()
-        super().save(*args, **kwargs)
-        # A fresh service reading moves the car's odometer forward.
-        self.car.record_odometer(self.odometer_km)
-        self._sync_expense()
+        is_new = self._state.adding
+        with transaction.atomic():
+            if not is_new:
+                # Lock the existing row so concurrent saves to the same
+                # service serialize instead of racing on the linked-expense
+                # upsert below (last save to acquire the lock wins cleanly,
+                # rather than an in-flight older save clobbering a newer one).
+                ServiceRecord.objects.select_for_update().filter(pk=self.pk).first()
+            super().save(*args, **kwargs)
+            # A fresh service reading moves the car's odometer forward.
+            self.car.record_odometer(self.odometer_km)
+            self._sync_expense()
 
     def _sync_expense(self):
         """
@@ -69,7 +77,7 @@ class ServiceRecord(models.Model):
         """
         from expenses.models import Expense
 
-        if not self.cost:
+        if self.cost is None:
             Expense.objects.filter(service_record=self).delete()
             return
 
