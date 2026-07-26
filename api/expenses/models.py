@@ -16,6 +16,13 @@ class Expense(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     car = models.ForeignKey(Car, on_delete=models.CASCADE, related_name="expenses")
 
+    # Set when this expense was auto-generated from a costed ServiceRecord
+    # (see ServiceRecord.save()) — cascades so deleting the service removes
+    # its expense too, and lets the sync logic find/update the existing row.
+    service_record = models.OneToOneField(
+        "services.ServiceRecord", on_delete=models.CASCADE, null=True, blank=True, related_name="expense",
+    )
+
     category = models.CharField(max_length=30, choices=Constants.EXPENSE_CATEGORIES, default=Constants.EXPENSE_CATEGORY_OTHER)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     expense_date = models.DateField(default=timezone.localdate)

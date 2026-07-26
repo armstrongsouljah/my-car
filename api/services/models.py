@@ -58,3 +58,30 @@ class ServiceRecord(models.Model):
         super().save(*args, **kwargs)
         # A fresh service reading moves the car's odometer forward.
         self.car.record_odometer(self.odometer_km)
+        self._sync_expense()
+
+    def _sync_expense(self):
+        """
+        A costed service is also a car expense — keep a linked Expense in
+        sync so it shows up in the expense log and month-on-month analytics
+        without the owner re-entering the same amount. Dropping the cost
+        (or logging one with none) removes any previously-linked expense.
+        """
+        from expenses.models import Expense
+
+        if not self.cost:
+            Expense.objects.filter(service_record=self).delete()
+            return
+
+        Expense.objects.update_or_create(
+            service_record=self,
+            defaults={
+                "car": self.car,
+                "category": Constants.EXPENSE_CATEGORY_GARAGE,
+                "amount": self.cost,
+                "expense_date": self.service_date,
+                "vendor": self.garage_name,
+                "description": self.description or f"{self.get_service_type_display()} service",
+                "odometer_km": self.odometer_km,
+            },
+        )

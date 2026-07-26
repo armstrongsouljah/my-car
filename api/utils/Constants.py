@@ -46,6 +46,11 @@ REMINDER_STATUS_OVERDUE = "overdue"
 REMINDER_DUE_SOON_KM = 500
 REMINDER_DUE_SOON_DAYS = 30
 
+# Newly-registered cars have no service/inspection history yet — don't nag
+# (dashboard chip or email digest) about that absence until this many days
+# after the car was added, giving the owner time to log its history.
+REMINDER_NEW_CAR_GRACE_DAYS = 14
+
 # ---------------------------------------------------------------------------
 # User-created reminders (catalog-driven or custom)
 # ---------------------------------------------------------------------------

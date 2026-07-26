@@ -5,6 +5,7 @@ from rest_framework import status
 from rest_framework.permissions import AllowAny
 
 from utils import Cache, QueryParams
+from utils.Exception import CustomValidation
 from utils.Views import SmartAPIView, SmartDetailView, SmartPaginationAPIView
 
 from cars.catalog import get_catalog
@@ -60,6 +61,59 @@ class CarListCreateView(SmartPaginationAPIView):
         if is_default_request and response.status_code == status.HTTP_200_OK:
             Cache.set_car_list(request.user.pk, response.data)
         return response
+
+
+class CarBulkCreateView(SmartAPIView):
+    """
+    POST — register several cars in one request: `{"cars": [{...}, {...}]}`.
+    Each row runs through CarCreateSerializer independently (same rules as
+    the single-car endpoint, including the per-owner registration-number
+    uniqueness check), so one bad row doesn't block the rest — the response
+    reports created cars and per-row errors side by side.
+    """
+    permission_classes = [IsAuthenticated]
+    max_cars = 20
+
+    def post(self, request, *args, **kwargs):
+        rows = request.data.get("cars")
+        if not isinstance(rows, list) or not rows:
+            raise CustomValidation(
+                "Provide a non-empty list of cars under the 'cars' key.",
+                field="cars",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+        if len(rows) > self.max_cars:
+            raise CustomValidation(
+                f"You can register at most {self.max_cars} cars at once.",
+                field="cars",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        created = []
+        errors = []
+        for index, row in enumerate(rows):
+            data = dict(row) if isinstance(row, dict) else {}
+            data["owner"] = request.user.pk
+            serializer = CarCreateSerializer(data=data)
+            try:
+                if serializer.is_valid():
+                    instance = serializer.save()
+                    created.append(CarDetailSerializer(instance).data)
+                else:
+                    errors.append({"index": index, "errors": serializer.errors})
+            except CustomValidation as exc:
+                # validate() raises this directly (e.g. duplicate registration
+                # number) rather than going through serializer.errors — catch
+                # per row so one bad row doesn't abort the rest of the batch.
+                errors.append({"index": index, "errors": exc.detail})
+
+        if created:
+            Cache.invalidate_owner(request.user.pk)
+
+        return Response(
+            {"created": created, "errors": errors},
+            status=status.HTTP_201_CREATED if created else status.HTTP_400_BAD_REQUEST,
+        )
 
 
 class CarCatalogView(SmartAPIView):
