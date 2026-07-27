@@ -6,6 +6,11 @@ as `cars/catalog.py`. Anything not covered here is handled by the frontend's
 """
 from utils import Constants
 
+# Referenced outside this module (services/views.py) to avoid showing the
+# generic "next service" reminder when the owner already tracks oil changes
+# via this specific catalog reminder.
+OIL_CHANGE_KEY = "engine_oil_filter_change"
+
 CATEGORIES = [
     {"key": Constants.REMINDER_CATEGORY_DOCUMENTATION, "label": "Documents"},
     {"key": Constants.REMINDER_CATEGORY_MAINTENANCE, "label": "Maintenance"},
@@ -49,7 +54,7 @@ CATALOG = [
 
     # --- Maintenance ---------------------------------------------------------
     {
-        "key": "engine_oil_filter_change", "title": "Engine oil & filter change",
+        "key": OIL_CHANGE_KEY, "title": "Engine oil & filter change",
         "category": Constants.REMINDER_CATEGORY_MAINTENANCE, "is_essential": True,
         "icon": "🛢️", "description": "Reduce engine wear and help extend engine life.",
         "suggested_method": Constants.REMINDER_TRACKING_METHOD_DATE_AND_MILEAGE,

@@ -2,11 +2,12 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 
-from utils import Cache, QueryParams
+from utils import Cache, Constants, QueryParams
 from utils.Exception import CustomValidation
 from utils.Views import SmartDetailView, SmartPaginationAPIView, SmartAPIView
 
 from cars.models import Car
+from reminders.catalog import OIL_CHANGE_KEY
 from services.models import ServiceRecord
 from services.reminders import build_car_reminders
 from services.serializers import (
@@ -81,6 +82,12 @@ class RemindersView(SmartAPIView):
     """
     GET — reminder digest across the owner's active cars: next service due
     (km/months, whichever comes first) and general inspection status.
+
+    Only surfaces reminders that need attention (skips "ok" ones — this is a
+    nudge list, not a full status report), and skips the generic "next
+    service" reminder entirely when the owner already has a dedicated
+    oil-change catalog reminder, since the two would otherwise say the same
+    thing twice.
     """
     permission_classes = [IsAuthenticated]
 
@@ -89,11 +96,21 @@ class RemindersView(SmartAPIView):
 
         payload = []
         for car in cars:
+            has_oil_change_reminder = car.reminders.filter(catalog_key=OIL_CHANGE_KEY).exists()
+            reminders = [
+                r for r in build_car_reminders(car)
+                if r["status"] != Constants.REMINDER_STATUS_OK
+                and not (r["kind"] == "service" and has_oil_change_reminder)
+            ]
+
             payload.append({
                 "car_id": str(car.pk),
-                "car": str(car),
+                "make": car.make,
+                "model": car.model,
+                "year": car.year,
+                "registration_number": car.registration_number,
                 "current_odometer_km": car.current_odometer_km,
-                "reminders": build_car_reminders(car),
+                "reminders": reminders,
             })
 
         return Response(payload, status=status.HTTP_200_OK)

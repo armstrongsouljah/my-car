@@ -2,11 +2,15 @@ from datetime import date, timedelta
 
 import pytest
 from dateutil.relativedelta import relativedelta
+from django.urls import reverse
 from django.utils import timezone
+from rest_framework.test import APIClient
 
 from accounts.models import User
 from cars.models import Car
 from expenses.models import Expense
+from reminders.catalog import OIL_CHANGE_KEY
+from reminders.models import Reminder
 from services.models import ServiceRecord
 from services.reminders import build_inspection_reminder, build_service_reminder
 from utils import Constants
@@ -16,6 +20,11 @@ from utils import Constants
 def car(db):
     owner = User.objects.create_user(email="owner@example.com", password="str0ng-pass-123")
     return Car.objects.create(owner=owner, make="Toyota", model="Corolla", current_odometer_km=40000)
+
+
+@pytest.fixture
+def client():
+    return APIClient()
 
 
 @pytest.mark.django_db
@@ -154,3 +163,50 @@ class TestNewCarGracePeriod:
     def test_no_inspection_is_ok_within_grace_period(self, car):
         reminder = build_inspection_reminder(car)
         assert reminder["status"] == Constants.REMINDER_STATUS_OK
+
+
+@pytest.mark.django_db
+class TestRemindersView:
+
+    def test_hides_ok_reminders(self, car, client):
+        client.force_authenticate(car.owner)
+        response = client.get(reverse("service-reminders"))
+        assert response.status_code == 200
+        assert response.data[0]["reminders"] == []
+
+    def test_surfaces_due_reminders(self, car, client):
+        ServiceRecord.objects.create(
+            car=car, odometer_km=40000,
+            service_date=date.today() - relativedelta(months=7),
+            interval_km=5000, interval_months=6,
+        )
+        client.force_authenticate(car.owner)
+        response = client.get(reverse("service-reminders"))
+        kinds = [r["kind"] for r in response.data[0]["reminders"]]
+        assert kinds == ["service"]
+
+    def test_suppresses_service_reminder_when_oil_change_reminder_exists(self, car, client):
+        ServiceRecord.objects.create(
+            car=car, odometer_km=40000,
+            service_date=date.today() - relativedelta(months=7),
+            interval_km=5000, interval_months=6,
+        )
+        Reminder.objects.create(
+            car=car, catalog_key=OIL_CHANGE_KEY, title="Engine oil & filter change",
+            tracking_method=Constants.REMINDER_TRACKING_METHOD_MILEAGE,
+            interval_km=5000, baseline_odometer_km=40000,
+        )
+        client.force_authenticate(car.owner)
+        response = client.get(reverse("service-reminders"))
+        assert response.data[0]["reminders"] == []
+
+    def test_exposes_make_model_and_plate_separately(self, car, client):
+        car.registration_number = "ABC123"
+        car.save()
+        client.force_authenticate(car.owner)
+        response = client.get(reverse("service-reminders"))
+        entry = response.data[0]
+        assert entry["make"] == "Toyota"
+        assert entry["model"] == "Corolla"
+        assert entry["registration_number"] == "ABC123"
+        assert "car" not in entry
