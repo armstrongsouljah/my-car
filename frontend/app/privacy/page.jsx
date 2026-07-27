@@ -2,12 +2,16 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { MdOutlineDeleteOutline, MdOutlineFactCheck, MdOutlineMailOutline, MdOutlineShield, MdOutlineVpnKey } from "react-icons/md";
 
-function Section({ icon, title, children }) {
+function Section({ Icon, title, children }) {
   return (
     <section className="card space-y-2">
       <h2 className="flex items-center gap-2 font-semibold">
-        <span className="text-lg" aria-hidden="true">{icon}</span> {title}
+        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300">
+          <Icon size={17} aria-hidden="true" />
+        </span>
+        {title}
       </h2>
       <div className="space-y-2 text-sm leading-relaxed text-gray-600 dark:text-gray-400">{children}</div>
     </section>
@@ -39,7 +43,7 @@ export default function PrivacyPage() {
         </p>
       </div>
 
-      <Section icon="🔒" title="Your data is safe with us">
+      <Section Icon={MdOutlineShield} title="Your data is safe with us">
         <p>
           GlavBox exists to help you take care of your car — not to profit from your information. We will never
           sell, rent, or trade your data to advertisers, data brokers, or anyone else. There are no ads in this app
@@ -51,7 +55,7 @@ export default function PrivacyPage() {
         </p>
       </Section>
 
-      <Section icon="📋" title="What we collect, and why">
+      <Section Icon={MdOutlineFactCheck} title="What we collect, and why">
         <p>Just what&apos;s needed to run the app well:</p>
         <ul className="list-disc space-y-1 pl-5">
           <li><span className="font-medium text-gray-700 dark:text-gray-300">Account info</span> — your email and name, so you can sign in and we can reach you about your account.</li>
@@ -67,7 +71,7 @@ export default function PrivacyPage() {
         </p>
       </Section>
 
-      <Section icon="🔑" title="Keep your account safe">
+      <Section Icon={MdOutlineVpnKey} title="Keep your account safe">
         <p>Your password is the main thing standing between your data and anyone else. A few habits that go a long way:</p>
         <ul className="list-disc space-y-1 pl-5">
           <li>Use a <span className="font-medium text-gray-700 dark:text-gray-300">strong, unique password</span> — at least 8 characters, ideally generated or unrelated to your other logins.</li>
@@ -77,7 +81,7 @@ export default function PrivacyPage() {
         <p>You can change your password any time from Settings.</p>
       </Section>
 
-      <Section icon="🗑️" title="Deleting your data">
+      <Section Icon={MdOutlineDeleteOutline} title="Deleting your data">
         <p>
           You&apos;re in control. Deactivate your account any time from Settings — you&apos;ll be signed out everywhere and
           logins will be disabled immediately.
@@ -90,7 +94,7 @@ export default function PrivacyPage() {
         </p>
       </Section>
 
-      <Section icon="✉️" title="Questions?">
+      <Section Icon={MdOutlineMailOutline} title="Questions?">
         <p>
           If anything here is unclear or you want your data handled differently, just reply to any email from
           GlavBox — a verification code, a reminder, whatever&apos;s in your inbox — and it&apos;ll reach us.
