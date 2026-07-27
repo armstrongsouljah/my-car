@@ -223,7 +223,7 @@ export default function CarForm({ car = null, onSaved }) {
           </select>
         </div>
         <div>
-          <label className="label">Plate No.</label>
+          <label className="label">Plate No. (optional)</label>
           <input className="input" value={form.registration_number} onChange={update("registration_number")} />
         </div>
       </div>
@@ -249,7 +249,7 @@ export default function CarForm({ car = null, onSaved }) {
       </div>
 
       <div>
-        <label className="label">VIN</label>
+        <label className="label">VIN (optional)</label>
         <input className="input" value={form.vin} onChange={update("vin")} />
       </div>
 

@@ -1,8 +1,12 @@
+from datetime import timedelta
+
 import pytest
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from accounts.models import User, EmailVerificationOTP
+from utils import Constants
 
 
 @pytest.fixture
@@ -69,3 +73,38 @@ class TestAuthFlow:
             "password": "str0ng-pass-123",
         })
         assert response.status_code in (401, 403)
+
+
+@pytest.mark.django_db
+class TestPurgeDeactivatedAccounts:
+
+    def test_purges_accounts_past_the_grace_period(self, owner):
+        from tasks import purge_deactivated_accounts_task
+
+        owner.deactivate()
+        User.objects.filter(pk=owner.pk).update(
+            deactivated_at=timezone.now() - timedelta(days=Constants.ACCOUNT_DELETION_GRACE_DAYS + 1)
+        )
+
+        purge_deactivated_accounts_task()
+
+        assert not User.objects.filter(pk=owner.pk).exists()
+
+    def test_keeps_accounts_still_within_the_grace_period(self, owner):
+        from tasks import purge_deactivated_accounts_task
+
+        owner.deactivate()
+        User.objects.filter(pk=owner.pk).update(
+            deactivated_at=timezone.now() - timedelta(days=Constants.ACCOUNT_DELETION_GRACE_DAYS - 1)
+        )
+
+        purge_deactivated_accounts_task()
+
+        assert User.objects.filter(pk=owner.pk).exists()
+
+    def test_keeps_active_accounts(self, owner):
+        from tasks import purge_deactivated_accounts_task
+
+        purge_deactivated_accounts_task()
+
+        assert User.objects.filter(pk=owner.pk).exists()

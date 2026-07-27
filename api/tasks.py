@@ -108,3 +108,25 @@ def send_due_reminders_task():
         sent += 1
 
     return f"Sent {sent} reminder email(s)"
+
+
+@shared_task(name="tasks.purge_deactivated_accounts_task")
+def purge_deactivated_accounts_task():
+    """
+    Daily sweep: permanently deletes accounts that have been deactivated for
+    longer than Constants.ACCOUNT_DELETION_GRACE_DAYS. Support can reactivate
+    a deactivated account any time before this runs; past the grace period
+    the deletion is final and cascades to the owner's cars, service history,
+    expenses, reminders and inspections.
+    """
+    from django.utils import timezone
+
+    from accounts.models import User
+    from utils import Constants
+
+    cutoff = timezone.now() - timezone.timedelta(days=Constants.ACCOUNT_DELETION_GRACE_DAYS)
+    queryset = User.objects.filter(is_active=False, deactivated_at__isnull=False, deactivated_at__lte=cutoff)
+
+    count = queryset.count()
+    queryset.delete()
+    return f"Purged {count} deactivated account(s) and their data"

@@ -133,6 +133,14 @@ MILEAGE_REMINDER_INTERVAL_DAYS = {
 }
 
 # ---------------------------------------------------------------------------
+# Account deactivation → deletion grace period
+# ---------------------------------------------------------------------------
+# A deactivated account can be reactivated by support within this window;
+# past it, the daily purge sweep (tasks.purge_deactivated_accounts_task)
+# permanently deletes the account and everything that cascades from it.
+ACCOUNT_DELETION_GRACE_DAYS = 60
+
+# ---------------------------------------------------------------------------
 # Fuel types
 # ---------------------------------------------------------------------------
 FUEL_TYPE_PETROL = "petrol"

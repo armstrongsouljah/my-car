@@ -25,6 +25,25 @@ const INSPECTION_STATUSES = [
   ["failed", "Failed"],
 ];
 
+function mask(value) {
+  return "•".repeat(Math.max(value.length, 4));
+}
+
+function RevealableValue({ value, revealed, onToggle, className = "" }) {
+  return (
+    <span className={`inline-flex flex-wrap items-center gap-1.5 ${className}`}>
+      <span className="break-all">{revealed ? value : mask(value)}</span>
+      <button
+        type="button"
+        onClick={onToggle}
+        className="text-[12px] font-medium text-gray-500 underline underline-offset-2 dark:text-gray-400"
+      >
+        {revealed ? "Hide" : "View"}
+      </button>
+    </span>
+  );
+}
+
 function ServiceForm({ carId, onSaved }) {
   const [form, setForm] = useState({
     service_type: "minor_service", service_date: "", odometer_km: "",
@@ -194,6 +213,8 @@ function CarDetail() {
   const [removing, setRemoving] = useState(false);
   const [error, setError] = useState("");
   const [deleteError, setDeleteError] = useState("");
+  const [showPlate, setShowPlate] = useState(false);
+  const [showVin, setShowVin] = useState(false);
 
   const load = useCallback(() => {
     api(`/cars/${id}/`).then(setCar).catch((err) => setError(err.message));
@@ -230,8 +251,13 @@ function CarDetail() {
       <header className="mb-4 flex items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">{car.make} {car.model} {car.year ? `(${car.year})` : ""}</h1>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            {car.registration_number || "No plate"} · {Number(car.current_odometer_km).toLocaleString()} km
+          <p className="mt-1 flex flex-wrap items-center gap-1 text-sm text-gray-500 dark:text-gray-400">
+            {car.registration_number ? (
+              <RevealableValue value={car.registration_number} revealed={showPlate} onToggle={() => setShowPlate((v) => !v)} />
+            ) : (
+              "No plate"
+            )}
+            <span>· {Number(car.current_odometer_km).toLocaleString()} km</span>
           </p>
         </div>
         <Link href={`/cars/${id}/edit`} className="rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm font-semibold">
@@ -268,7 +294,16 @@ function CarDetail() {
           <div className="card grid grid-cols-2 gap-y-3 text-sm">
             <div><p className="text-gray-400 dark:text-gray-500">Colour</p><p className="font-medium">{car.color || "—"}</p></div>
             <div><p className="text-gray-400 dark:text-gray-500">Fuel</p><p className="font-medium capitalize">{car.fuel_type}</p></div>
-            <div><p className="text-gray-400 dark:text-gray-500">VIN</p><p className="break-all font-medium">{car.vin || "—"}</p></div>
+            <div>
+              <p className="text-gray-400 dark:text-gray-500">VIN</p>
+              {car.vin ? (
+                <p className="font-medium">
+                  <RevealableValue value={car.vin} revealed={showVin} onToggle={() => setShowVin((v) => !v)} />
+                </p>
+              ) : (
+                <p className="font-medium">—</p>
+              )}
+            </div>
             <div><p className="text-gray-400 dark:text-gray-500">Odometer</p><p className="font-medium">{Number(car.current_odometer_km).toLocaleString()} km</p></div>
           </div>
           {car.notes && <div className="card text-sm text-gray-600 dark:text-gray-300">{car.notes}</div>}

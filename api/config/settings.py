@@ -244,4 +244,8 @@ CELERY_BEAT_SCHEDULE = {
         "task": "tasks.send_mileage_reminders_task",
         "schedule": 60 * 60 * 24,  # once a day; per-user cadence applied inside
     },
+    "purge-deactivated-accounts": {
+        "task": "tasks.purge_deactivated_accounts_task",
+        "schedule": 60 * 60 * 24,  # once a day
+    },
 }

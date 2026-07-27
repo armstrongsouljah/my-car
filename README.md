@@ -1,6 +1,6 @@
-# My Car 🚗
+# GlavBox 🚗
 
-A monolith repository for **My Car** — a mobile-first app where car owners register and track as many cars as they like, log service history with smart interval reminders, record general inspections, and track car-related expenses with month-on-month analytics.
+A monolith repository for **GlavBox** — a mobile-first app where car owners register and track as many cars as they like, log service history with smart interval reminders, record general inspections, and track car-related expenses with month-on-month analytics.
 
 ## Stack
 
