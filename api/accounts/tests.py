@@ -90,6 +90,19 @@ class TestPurgeDeactivatedAccounts:
 
         assert not User.objects.filter(pk=owner.pk).exists()
 
+    def test_purges_accounts_exactly_at_the_grace_period_boundary(self, owner):
+        """deactivated_at__lte means the boundary day itself is purge-eligible."""
+        from tasks import purge_deactivated_accounts_task
+
+        owner.deactivate()
+        User.objects.filter(pk=owner.pk).update(
+            deactivated_at=timezone.now() - timedelta(days=Constants.ACCOUNT_DELETION_GRACE_DAYS)
+        )
+
+        purge_deactivated_accounts_task()
+
+        assert not User.objects.filter(pk=owner.pk).exists()
+
     def test_keeps_accounts_still_within_the_grace_period(self, owner):
         from tasks import purge_deactivated_accounts_task
 

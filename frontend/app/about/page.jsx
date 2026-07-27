@@ -6,9 +6,9 @@ import { useRouter } from "next/navigation";
 function Section({ icon, title, children }) {
   return (
     <section className="card space-y-2">
-      <p className="flex items-center gap-2 font-semibold">
-        <span className="text-lg">{icon}</span> {title}
-      </p>
+      <h2 className="flex items-center gap-2 font-semibold">
+        <span className="text-lg" aria-hidden="true">{icon}</span> {title}
+      </h2>
       <div className="space-y-2 text-sm leading-relaxed text-gray-600 dark:text-gray-400">{children}</div>
     </section>
   );
@@ -17,9 +17,19 @@ function Section({ icon, title, children }) {
 export default function AboutPage() {
   const router = useRouter();
 
+  function goBack() {
+    // router.back() is a no-op if this page was opened directly (no
+    // in-app history to return to) — fall back to the login screen.
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back();
+    } else {
+      router.push("/");
+    }
+  }
+
   return (
     <main className="space-y-4 px-4 pb-12 pt-6">
-      <button onClick={() => router.back()} className="mb-1 text-sm text-gray-500 dark:text-gray-400">‹ Back</button>
+      <button onClick={goBack} className="mb-1 text-sm text-gray-500 dark:text-gray-400">‹ Back</button>
 
       <div>
         <h1 className="text-2xl font-bold">What is GlavBox?</h1>
@@ -67,7 +77,7 @@ export default function AboutPage() {
         <Link href="/" className="btn-primary inline-block">Get started</Link>
       </div>
 
-      <p className="pt-2 text-center text-[12px] text-gray-400 dark:text-gray-500">
+      <p className="pt-2 text-center text-[12px] text-gray-600 dark:text-gray-400">
         <Link href="/privacy" className="underline underline-offset-2">Privacy &amp; Security</Link>
       </p>
     </main>

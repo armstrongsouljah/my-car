@@ -224,6 +224,15 @@ function CarDetail() {
 
   useEffect(() => { load(); }, [load]);
 
+  useEffect(() => {
+    // This component instance is reused across /cars/[id] navigations (e.g.
+    // one car's detail page linking to another's) — reset both reveal
+    // toggles per car so the next car never opens with a previous car's
+    // plate or VIN already shown.
+    setShowPlate(false);
+    setShowVin(false);
+  }, [id]);
+
   async function deleteCar() {
     setRemoving(true);
     setDeleteError("");

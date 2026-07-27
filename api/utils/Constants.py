@@ -138,6 +138,9 @@ MILEAGE_REMINDER_INTERVAL_DAYS = {
 # A deactivated account can be reactivated by support within this window;
 # past it, the daily purge sweep (tasks.purge_deactivated_accounts_task)
 # permanently deletes the account and everything that cascades from it.
+# The "60 days" figure is also hardcoded in frontend copy (Settings' Danger
+# zone section + confirm dialog, and the /privacy page) — update those too
+# if this changes.
 ACCOUNT_DELETION_GRACE_DAYS = 60
 
 # ---------------------------------------------------------------------------
