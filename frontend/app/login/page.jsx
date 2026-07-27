@@ -8,6 +8,14 @@ import { api, setTokens, setUser, isLoggedIn } from "@/lib/api";
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
 const brandFont = Dancing_Script({ subsets: ["latin"], weight: ["700"] });
 
+// Module-scoped (not component refs): GIS's initialize() resets its client
+// config if called more than once per page per Google's own docs, and the
+// <script> tag it needs shouldn't be appended twice either. Refs reset on
+// every remount (e.g. logout -> back to /login), which would trigger both,
+// so these need to survive across that remount instead.
+let googleInitialized = false;
+let googleScriptLoading = false;
+
 function MailIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -53,8 +61,6 @@ function AuthPage() {
   const [info, setInfo] = useState("");
   const [loading, setLoading] = useState(false);
   const googleButtonRef = useRef(null);
-  const googleInitializedRef = useRef(false);
-  const googleScriptLoadingRef = useRef(false);
 
   useEffect(() => {
     if (isLoggedIn()) router.replace("/dashboard");
@@ -81,8 +87,8 @@ function AuthPage() {
     };
 
     const initOnce = () => {
-      if (googleInitializedRef.current) return;
-      googleInitializedRef.current = true;
+      if (googleInitialized) return;
+      googleInitialized = true;
       window.google.accounts.id.initialize({
         client_id: GOOGLE_CLIENT_ID,
         callback: async (response) => {
@@ -104,8 +110,8 @@ function AuthPage() {
     if (window.google) {
       initOnce();
       renderButton();
-    } else if (!googleScriptLoadingRef.current) {
-      googleScriptLoadingRef.current = true;
+    } else if (!googleScriptLoading) {
+      googleScriptLoading = true;
       const script = document.createElement("script");
       script.src = "https://accounts.google.com/gsi/client";
       script.async = true;
