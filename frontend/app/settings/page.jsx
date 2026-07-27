@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api, getTokens, clearSession, setUser } from "@/lib/api";
 import AuthGuard from "@/components/AuthGuard";
@@ -182,7 +181,7 @@ function Settings() {
       // best effort
     }
     clearSession();
-    router.replace("/");
+    router.replace("/login");
   }
 
   async function deactivate() {
@@ -194,7 +193,7 @@ function Settings() {
         body: { password: deactivatePassword, refresh: tokens?.refresh },
       });
       clearSession();
-      router.replace("/");
+      router.replace("/login");
     } catch (err) {
       setError(err.message);
       setDeactivating(false);
@@ -208,7 +207,10 @@ function Settings() {
     <main className="space-y-4 px-4 pb-24 pt-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Settings</h1>
-        <button onClick={logout} className="text-sm font-medium text-gray-500 dark:text-gray-400">
+        <button
+          onClick={logout}
+          className="rounded-full border border-gray-200 px-3 py-1.5 text-[13px] font-medium text-gray-600 transition active:scale-95 dark:border-gray-700 dark:text-gray-300"
+        >
           Log out
         </button>
       </div>
@@ -337,15 +339,6 @@ function Settings() {
             </button>
           </div>
         )}
-      </Section>
-
-      <Section title="Legal">
-        <Link href="/about" className="block text-sm font-medium underline underline-offset-2">
-          About GlavBox
-        </Link>
-        <Link href="/privacy" className="block text-sm font-medium underline underline-offset-2">
-          Privacy &amp; Security
-        </Link>
       </Section>
 
       <ConfirmDialog

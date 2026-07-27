@@ -83,7 +83,7 @@ export async function api(path, { method = "GET", body, isForm = false } = {}) {
   if (response.status === 401 && tokens?.refresh) {
     const newAccess = await refreshAccessToken();
     if (!newAccess) {
-      if (typeof window !== "undefined") window.location.href = "/";
+      if (typeof window !== "undefined") window.location.href = "/login";
       throw new Error("Session expired");
     }
     response = await doFetch(newAccess);
