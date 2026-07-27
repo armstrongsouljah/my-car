@@ -4,7 +4,7 @@ import { TelemetryProvider } from "@/components/TelemetryProvider";
 import { THEME_KEY } from "@/lib/theme";
 
 export const metadata = {
-  title: "My Car",
+  title: "GlavBox",
   description: "Track your cars — service history, reminders and expenses.",
 };
 

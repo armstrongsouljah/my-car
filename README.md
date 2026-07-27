@@ -1,6 +1,8 @@
-# My Car 🚗
+# GlavBox 🚗
 
-A monolith repository for **My Car** — a mobile-first app where car owners register and track as many cars as they like, log service history with smart interval reminders, record general inspections, and track car-related expenses with month-on-month analytics.
+A monolith repository for **GlavBox** — a mobile-first app where car owners register and track as many cars as they like, log service history with smart interval reminders, record general inspections, and track car-related expenses with month-on-month analytics.
+
+> The product was renamed from "My Car" to GlavBox. Infrastructure identifiers created under the old name (the `mycar-gke` cluster, the `my-car/` repo path, the `admin@mycar.com` / `noreply@mycar.com` fallback addresses) are retained as-is — renaming them is a live-infra change, not a text rename, so it's tracked separately rather than done silently here.
 
 ## Stack
 

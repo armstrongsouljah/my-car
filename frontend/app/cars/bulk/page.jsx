@@ -181,7 +181,7 @@ function BulkAddCars() {
                 />
               </div>
               <div>
-                <label className="label">Plate No.</label>
+                <label className="label">Plate No. (optional)</label>
                 <input className="input" value={row.registration_number} onChange={(e) => updateRow(index, "registration_number", e.target.value)} />
               </div>
             </div>

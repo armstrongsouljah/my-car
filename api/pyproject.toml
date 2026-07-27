@@ -1,7 +1,7 @@
 [project]
 name = "my-car-api"
 version = "0.1.0"
-description = "My Car — vehicle service history, expense tracking and reminders API"
+description = "GlavBox — vehicle service history, expense tracking and reminders API"
 requires-python = ">=3.12"
 dependencies = [
     "django>=5.1,<6.0",

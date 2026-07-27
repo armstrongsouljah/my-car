@@ -26,14 +26,14 @@ def send_otp_email(email: str, otp: str, first_name: str = ""):
     name = _display_name(email, first_name)
     expiry_minutes = getattr(settings, "OTP_EXPIRY_MINUTES", 10)
 
-    subject = "Your My Car verification code"
+    subject = "Your GlavBox verification code"
     context = {"otp": otp, "name": name, "expiry_minutes": expiry_minutes}
 
     text_body = (
         f"Hi {name},\n\n"
-        f"Your My Car verification code is: {otp}\n\n"
+        f"Your GlavBox verification code is: {otp}\n\n"
         f"This code expires in {expiry_minutes} minutes.\n\n"
-        f"If you didn't sign up for My Car, you can safely ignore this email."
+        f"If you didn't sign up for GlavBox, you can safely ignore this email."
     )
     html_body = render_to_string("emails/otp_verification.html", context)
 
@@ -49,12 +49,12 @@ def send_welcome_email(email: str, first_name: str = ""):
     name = _display_name(email, first_name)
     app_url = getattr(settings, "FRONTEND_URL", "http://localhost:3000")
 
-    subject = "Welcome to My Car!"
+    subject = "Welcome to GlavBox!"
     context = {"name": name, "app_url": app_url}
 
     text_body = (
         f"Hi {name},\n\n"
-        f"Welcome to My Car! Your email has been verified and your garage is ready.\n\n"
+        f"Welcome to GlavBox! Your email has been verified and your garage is ready.\n\n"
         f"Head over to {app_url} to add your first car.\n\n"
         f"If you have any questions, just reply to this email — we're always happy to help."
     )

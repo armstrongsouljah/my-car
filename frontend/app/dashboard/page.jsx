@@ -74,7 +74,12 @@ function Dashboard() {
                   {car.make} {car.model} {car.year ? `(${car.year})` : ""}
                 </p>
                 <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
-                  {car.registration_number || "No plate"} · {Number(car.current_odometer_km).toLocaleString()} km
+                  {car.registration_number ? (
+                    <span className="select-none blur-[3px]">{car.registration_number}</span>
+                  ) : (
+                    "No plate"
+                  )}{" "}
+                  · {Number(car.current_odometer_km).toLocaleString()} km
                 </p>
               </div>
               <span className="text-gray-300 dark:text-gray-600">›</span>

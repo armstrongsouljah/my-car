@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Dancing_Script } from "next/font/google";
 import { api, setTokens, setUser, isLoggedIn } from "@/lib/api";
@@ -330,6 +331,14 @@ export default function AuthPage() {
             </button>
           </p>
         )}
+
+        <p className="mt-4 text-center text-[12px] text-white/50">
+          New here? <Link href="/about" className="underline underline-offset-2">See what GlavBox does</Link>.
+        </p>
+        <p className="mt-1 text-center text-[12px] text-white/50">
+          By continuing, you agree to our{" "}
+          <Link href="/privacy" className="underline underline-offset-2">Privacy &amp; Security</Link> policy.
+        </p>
       </div>
     </main>
   );

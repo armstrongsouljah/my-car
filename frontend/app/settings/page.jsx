@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api, getTokens, clearSession, setUser } from "@/lib/api";
 import AuthGuard from "@/components/AuthGuard";
@@ -213,9 +214,22 @@ function Settings() {
         <button onClick={logout} className="btn-secondary">Log out</button>
       </Section>
 
+      <Section title="Legal">
+        <Link href="/about" className="block text-sm font-medium underline underline-offset-2">
+          About GlavBox
+        </Link>
+        <Link href="/privacy" className="block text-sm font-medium underline underline-offset-2">
+          Privacy &amp; Security
+        </Link>
+      </Section>
+
       <Section title="Danger zone">
+        {/* "60 days" mirrors Constants.ACCOUNT_DELETION_GRACE_DAYS (api/utils/Constants.py) —
+            keep in sync with that value and the ConfirmDialog message below. */}
         <p className="text-sm text-gray-500 dark:text-gray-400">
-          Deactivating your account signs you out everywhere and disables logins. Your data is kept and support can reactivate you.
+          Deactivating your account signs you out everywhere and disables logins right away. Your data is kept for
+          60 days in case you change your mind — support can reactivate you within that window. After 60 days it&apos;s
+          permanently deleted.
         </p>
         <div className="space-y-3">
           <div>
@@ -237,7 +251,7 @@ function Settings() {
         destructive
         loading={deactivating}
         title="Deactivate your account?"
-        message="You'll be signed out everywhere and won't be able to log back in. Your data is kept and support can reactivate you."
+        message="You'll be signed out everywhere and won't be able to log back in. Your data is kept for 60 days in case you change your mind — after that it's permanently deleted."
         confirmLabel="Deactivate"
         cancelLabel="Keep my account"
         onConfirm={deactivate}
