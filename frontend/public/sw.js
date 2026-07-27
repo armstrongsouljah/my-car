@@ -22,16 +22,34 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   const { request } = event;
-  if (request.method !== "GET") return;
+  // Only handle top-level document navigations, not every sub-resource —
+  // Next's app router fetches same-origin RSC/data payloads on client-side
+  // transitions, and falling back to the cached "/" shell for one of those
+  // (instead of a real page navigation) would hand the client JS runtime a
+  // full HTML document where it expects RSC/JSON, breaking the render.
+  if (request.method !== "GET" || request.mode !== "navigate") return;
+
+  const url = new URL(request.url);
   // Only handle same-origin requests (the Next.js app shell) — API calls
-  // typically go to a different origin and must never be served from cache.
-  if (new URL(request.url).origin !== self.location.origin) return;
+  // typically go to a different origin and must never be served from cache,
+  // and this excludes any future same-origin /api/* proxy route too.
+  if (url.origin !== self.location.origin) return;
+  if (url.pathname === "/api" || url.pathname.startsWith("/api/")) return;
 
   event.respondWith(
     fetch(request)
       .then((response) => {
-        const copy = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+        if (response.ok) {
+          // Keep the worker alive until the cache write actually finishes —
+          // otherwise the browser can tear it down right after respondWith()
+          // resolves, leaving the write incomplete.
+          event.waitUntil(
+            caches
+              .open(CACHE_NAME)
+              .then((cache) => cache.put(request, response.clone()))
+              .catch(() => {})
+          );
+        }
         return response;
       })
       .catch(() => caches.match(request).then((cached) => cached || caches.match("/")))
