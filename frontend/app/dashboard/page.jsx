@@ -6,6 +6,7 @@ import { api, getUser, mediaUrl } from "@/lib/api";
 import AssistantChat from "@/components/AssistantChat";
 import AuthGuard from "@/components/AuthGuard";
 import BottomNav from "@/components/BottomNav";
+import Spinner from "@/components/Spinner";
 import StatusChip from "@/components/StatusChip";
 
 const STATUS_PRIORITY = { overdue: 0, due_soon: 1, ok: 2 };
@@ -47,7 +48,7 @@ function Dashboard() {
 
       {error && <p className="mb-4 rounded-xl bg-red-50 dark:bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-400">{error}</p>}
 
-      {cars === null && !error && <p className="text-sm text-gray-400 dark:text-gray-500">Loading…</p>}
+      {cars === null && !error && <div className="flex justify-center py-6"><Spinner /></div>}
 
       {cars?.length === 0 && (
         <div className="card text-center">
@@ -96,7 +97,7 @@ function Dashboard() {
           </div>
 
           {reminders === null && !remindersError ? (
-            <p className="text-sm text-gray-400 dark:text-gray-500">Loading…</p>
+            <div className="flex justify-center py-4"><Spinner /></div>
           ) : remindersError ? (
             <p className="card text-center text-sm text-gray-500 dark:text-gray-400">Couldn&apos;t load reminders right now.</p>
           ) : upcoming.length === 0 ? (
@@ -126,7 +127,9 @@ function Dashboard() {
         </div>
       )}
 
-      <div className="pointer-events-none fixed inset-x-0 bottom-20 z-30 mx-auto flex w-full max-w-lg justify-end px-4">
+      {/* bottom-24 is sized to clear BottomNav's floating pill (bottom-4 + its own
+          height) — if that nav's height or offset changes, update this too. */}
+      <div className="pointer-events-none fixed inset-x-0 bottom-24 z-30 mx-auto flex w-full max-w-lg justify-end px-4">
         <Link
           href="/cars/new"
           aria-label="Add a car"

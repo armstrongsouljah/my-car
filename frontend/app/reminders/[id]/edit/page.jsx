@@ -7,6 +7,7 @@ import AuthGuard from "@/components/AuthGuard";
 import BottomNav from "@/components/BottomNav";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import ReminderDetailsForm from "@/components/ReminderDetailsForm";
+import Spinner from "@/components/Spinner";
 
 function EditReminder() {
   const { id } = useParams();
@@ -42,7 +43,7 @@ function EditReminder() {
   }
 
   if (error) return <main className="p-6"><p className="rounded-xl bg-red-50 dark:bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-400">{error}</p></main>;
-  if (!reminder || !car) return <main className="p-6 text-sm text-gray-400 dark:text-gray-500">Loading…</main>;
+  if (!reminder || !car) return <main className="flex justify-center p-10"><Spinner /></main>;
 
   return (
     <main className="px-4 pb-24 pt-6">

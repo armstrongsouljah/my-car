@@ -2,6 +2,7 @@ import TelemetryDeck from "@telemetrydeck/sdk";
 import { getUser } from "@/lib/api";
 
 const APP_ID = process.env.NEXT_PUBLIC_TELEMETRYDECK_APP_ID;
+const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION;
 const ANONYMOUS_ID_KEY = "mycar_telemetry_anonymous_id";
 
 let client = null;
@@ -36,7 +37,7 @@ function getClient() {
 
 export function trackSignal(type, payload) {
   try {
-    return Promise.resolve(getClient()?.signal(type, payload)).catch(() => {});
+    return Promise.resolve(getClient()?.signal(type, { ...payload, appVersion: APP_VERSION })).catch(() => {});
   } catch {
     return Promise.resolve();
   }

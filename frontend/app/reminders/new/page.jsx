@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import AuthGuard from "@/components/AuthGuard";
 import BottomNav from "@/components/BottomNav";
 import FilterChips from "@/components/FilterChips";
+import Spinner from "@/components/Spinner";
 import TrackingMethodPicker from "@/components/TrackingMethodPicker";
 import ReminderDetailsForm from "@/components/ReminderDetailsForm";
 
@@ -81,7 +82,7 @@ function AddReminder() {
     return <main className="p-6 text-sm text-gray-400 dark:text-gray-500">No car selected.</main>;
   }
   if (error) return <main className="p-6"><p className="rounded-xl bg-red-50 dark:bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-400">{error}</p></main>;
-  if (!car || !catalog) return <main className="p-6 text-sm text-gray-400 dark:text-gray-500">Loading…</main>;
+  if (!car || !catalog) return <main className="flex justify-center p-10"><Spinner /></main>;
 
   return (
     <main className="px-4 pb-24 pt-6">
@@ -158,7 +159,7 @@ function AddReminder() {
 export default function Page() {
   return (
     <AuthGuard>
-      <Suspense fallback={<main className="p-6 text-sm text-gray-400 dark:text-gray-500">Loading…</main>}>
+      <Suspense fallback={<main className="flex justify-center p-10"><Spinner /></main>}>
         <AddReminder />
       </Suspense>
     </AuthGuard>

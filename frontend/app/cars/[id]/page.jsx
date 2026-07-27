@@ -7,6 +7,7 @@ import { api, mediaUrl } from "@/lib/api";
 import AuthGuard from "@/components/AuthGuard";
 import BottomNav from "@/components/BottomNav";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import Spinner from "@/components/Spinner";
 import StatusChip from "@/components/StatusChip";
 
 const SERVICE_TYPES = [
@@ -246,7 +247,7 @@ function CarDetail() {
   }
 
   if (error) return <main className="p-6"><p className="rounded-xl bg-red-50 dark:bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-400">{error}</p></main>;
-  if (!car) return <main className="p-6 text-sm text-gray-400 dark:text-gray-500">Loading…</main>;
+  if (!car) return <main className="flex justify-center p-10"><Spinner /></main>;
 
   return (
     <main className="px-4 pb-24 pt-6">
