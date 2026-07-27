@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { api, getUser, mediaUrl } from "@/lib/api";
+import { api, mediaUrl } from "@/lib/api";
 import AssistantChat from "@/components/AssistantChat";
 import AuthGuard from "@/components/AuthGuard";
 import BottomNav from "@/components/BottomNav";
@@ -17,7 +17,6 @@ function Dashboard() {
   const [reminders, setReminders] = useState(null);
   const [remindersError, setRemindersError] = useState(false);
   const [error, setError] = useState("");
-  const user = getUser();
 
   useEffect(() => {
     api("/cars/")
@@ -36,7 +35,6 @@ function Dashboard() {
   return (
     <main className="px-4 pb-24 pt-6">
       <header className="mb-6">
-        <p className="text-sm text-gray-500 dark:text-gray-400">Welcome back{user?.first_name ? `, ${user.first_name}` : ""} 👋</p>
         <h1 className="text-2xl font-bold">Your Garage</h1>
       </header>
 

@@ -5,9 +5,14 @@ import Link from "next/link";
 import { api } from "@/lib/api";
 import AuthGuard from "@/components/AuthGuard";
 import BottomNav from "@/components/BottomNav";
+import ProgressBar from "@/components/ProgressBar";
 import Spinner from "@/components/Spinner";
 import StatusChip from "@/components/StatusChip";
 import ReminderCard from "@/components/ReminderCard";
+
+function carLabel(entry) {
+  return `${entry.make} ${entry.model}${entry.year ? ` (${entry.year})` : ""}`;
+}
 
 function Reminders() {
   const [data, setData] = useState(null);
@@ -46,18 +51,32 @@ function Reminders() {
         {data?.map((entry) => (
           <div key={entry.car_id} className="card">
             <Link href={`/cars/${entry.car_id}`} className="flex items-center justify-between">
-              <p className="font-semibold">{entry.car}</p>
+              <p className="font-semibold">{carLabel(entry)}</p>
               <span className="text-gray-300 dark:text-gray-600">›</span>
             </Link>
-            <p className="mt-0.5 text-[13px] text-gray-400 dark:text-gray-500">{Number(entry.current_odometer_km).toLocaleString()} km</p>
-            <div className="mt-3 space-y-2">
-              {entry.reminders.map((reminder) => (
-                <div key={reminder.kind} className="flex items-center justify-between gap-3 rounded-xl bg-gray-50 dark:bg-gray-800/60 p-3">
-                  <p className="text-[13px] text-gray-600 dark:text-gray-300">{reminder.message}</p>
-                  <StatusChip status={reminder.status} />
-                </div>
-              ))}
-            </div>
+            <p className="mt-0.5 text-[13px] text-gray-400 dark:text-gray-500">
+              {entry.registration_number ? (
+                <span className="select-none blur-[3px]">{entry.registration_number}</span>
+              ) : (
+                "No plate"
+              )}{" "}
+              · {Number(entry.current_odometer_km).toLocaleString()} km
+            </p>
+            {entry.reminders.length > 0 && (
+              <div className="mt-3 space-y-2">
+                {entry.reminders.map((reminder) => (
+                  <div key={reminder.kind} className="rounded-xl bg-gray-50 dark:bg-gray-800/60 p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-[13px] text-gray-600 dark:text-gray-300">{reminder.message}</p>
+                      <StatusChip status={reminder.status} />
+                    </div>
+                    <div className="mt-2">
+                      <ProgressBar percent={reminder.progress_percent} status={reminder.status} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {reminders[entry.car_id]?.length > 0 && (
               <div className="mt-3 space-y-2">

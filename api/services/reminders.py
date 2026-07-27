@@ -47,6 +47,28 @@ def _within_new_car_grace_period(car, today):
     return (today - car.created_at.date()).days < Constants.REMINDER_NEW_CAR_GRACE_DAYS
 
 
+def _progress_percent(baseline_km, next_km, current_km, baseline_date, next_date, today):
+    """% of the way from baseline to next-due — mirrors reminders/engine.py's
+    version (each app keeps its own copy rather than sharing one, matching
+    this module's existing self-contained-per-model convention)."""
+    percentages = []
+
+    if baseline_km is not None and next_km is not None:
+        span = next_km - baseline_km
+        if span > 0:
+            percentages.append((current_km - baseline_km) / span * 100)
+
+    if baseline_date is not None and next_date is not None:
+        span = (next_date - baseline_date).days
+        if span > 0:
+            percentages.append((today - baseline_date).days / span * 100)
+
+    if not percentages:
+        return 0
+
+    return max(0, min(100, round(max(percentages))))
+
+
 def build_service_reminder(car, today=None):
     """Reminder payload for the car's next service, from its latest service record."""
     today = today or timezone.localdate()
@@ -60,6 +82,7 @@ def build_service_reminder(car, today=None):
                 "message": "No service logged yet — log your last service to start tracking intervals.",
                 "next_due_odometer_km": None,
                 "next_due_date": None,
+                "progress_percent": 0,
             }
         return {
             "kind": "service",
@@ -67,6 +90,7 @@ def build_service_reminder(car, today=None):
             "message": "No service has been logged for this car yet — log your last service to start tracking intervals.",
             "next_due_odometer_km": None,
             "next_due_date": None,
+            "progress_percent": 0,
         }
 
     if record.next_due_odometer_km is None and record.next_due_date is None:
@@ -76,6 +100,7 @@ def build_service_reminder(car, today=None):
             "message": "No interval set on the last service.",
             "next_due_odometer_km": None,
             "next_due_date": None,
+            "progress_percent": 0,
         }
 
     status, reason = _service_status(car, record, today)
@@ -85,12 +110,18 @@ def build_service_reminder(car, today=None):
     else:
         message = f"{car.make} {car.model}: {reason}."
 
+    progress_percent = _progress_percent(
+        record.odometer_km, record.next_due_odometer_km, car.current_odometer_km,
+        record.service_date, record.next_due_date, today,
+    )
+
     return {
         "kind": "service",
         "status": status,
         "message": message,
         "next_due_odometer_km": record.next_due_odometer_km,
         "next_due_date": record.next_due_date.isoformat() if record.next_due_date else None,
+        "progress_percent": progress_percent,
     }
 
 
@@ -110,12 +141,14 @@ def build_inspection_reminder(car, today=None):
                 "status": Constants.REMINDER_STATUS_OK,
                 "message": "No general inspection on record yet — book one to know the state of your vehicle.",
                 "next_due_date": None,
+                "progress_percent": 0,
             }
         return {
             "kind": "inspection",
             "status": Constants.REMINDER_STATUS_DUE_SOON,
             "message": "No general inspection on record — book one to know the state of your vehicle.",
             "next_due_date": None,
+            "progress_percent": 0,
         }
 
     next_due = inspection.next_inspection_date or (
@@ -133,11 +166,16 @@ def build_inspection_reminder(car, today=None):
         status = Constants.REMINDER_STATUS_OK
         message = "Next general inspection not due yet."
 
+    progress_percent = _progress_percent(
+        None, None, None, inspection.inspection_date, next_due, today,
+    )
+
     return {
         "kind": "inspection",
         "status": status,
         "message": message,
         "next_due_date": next_due.isoformat(),
+        "progress_percent": progress_percent,
     }
 
 
