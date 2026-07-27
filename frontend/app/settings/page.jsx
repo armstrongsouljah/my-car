@@ -76,6 +76,7 @@ function ToggleRow({ label, danger, open, onClick }) {
     <button
       type="button"
       onClick={onClick}
+      aria-expanded={open}
       className={`flex w-full items-center justify-between py-2 text-[15px] font-medium ${
         danger ? "text-red-600 dark:text-red-400" : ""
       }`}
@@ -327,8 +328,10 @@ function Settings() {
                 onChange={(e) => setDeactivatePassword(e.target.value)} />
             </div>
             <button
+              type="button"
+              disabled={!deactivatePassword}
               onClick={() => setConfirmDeactivate(true)}
-              className="w-full rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[15px] font-semibold text-red-600 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400"
+              className="w-full rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[15px] font-semibold text-red-600 disabled:opacity-50 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400"
             >
               Deactivate account
             </button>

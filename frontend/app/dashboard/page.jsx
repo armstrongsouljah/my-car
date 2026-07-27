@@ -127,6 +127,8 @@ function Dashboard() {
         </div>
       )}
 
+      {/* bottom-24 is sized to clear BottomNav's floating pill (bottom-4 + its own
+          height) — if that nav's height or offset changes, update this too. */}
       <div className="pointer-events-none fixed inset-x-0 bottom-24 z-30 mx-auto flex w-full max-w-lg justify-end px-4">
         <Link
           href="/cars/new"

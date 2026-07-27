@@ -4,12 +4,18 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { MdOutlineDirectionsCar, MdOutlineNotifications, MdOutlineReceiptLong, MdOutlineSettings } from "react-icons/md";
 
+// `match` covers nested routes that belong to this tab (e.g. /cars/:id or
+// /reminders/new) so they still highlight the right tab instead of none.
 const ITEMS = [
-  ["/dashboard", "Garage", MdOutlineDirectionsCar],
-  ["/reminders", "Reminders", MdOutlineNotifications],
-  ["/expenses", "Expenses", MdOutlineReceiptLong],
-  ["/settings", "Settings", MdOutlineSettings],
+  { href: "/dashboard", label: "Garage", Icon: MdOutlineDirectionsCar, match: ["/dashboard", "/cars"] },
+  { href: "/reminders", label: "Reminders", Icon: MdOutlineNotifications, match: ["/reminders"] },
+  { href: "/expenses", label: "Expenses", Icon: MdOutlineReceiptLong, match: ["/expenses"] },
+  { href: "/settings", label: "Settings", Icon: MdOutlineSettings, match: ["/settings"] },
 ];
+
+function isActive(pathname, prefixes) {
+  return prefixes.some((prefix) => pathname === prefix || pathname?.startsWith(`${prefix}/`));
+}
 
 export default function BottomNav() {
   const pathname = usePathname();
@@ -17,8 +23,8 @@ export default function BottomNav() {
   return (
     <div className="fixed inset-x-0 bottom-4 z-20 mx-auto max-w-lg px-4">
       <nav className="flex items-center justify-between gap-1 rounded-full border border-gray-200 bg-white/90 px-2 py-2 shadow-lg shadow-black/5 backdrop-blur dark:border-white/10 dark:bg-gray-900/90 dark:shadow-black/40">
-        {ITEMS.map(([href, label, Icon]) => {
-          const active = pathname === href;
+        {ITEMS.map(({ href, label, Icon, match }) => {
+          const active = isActive(pathname, match);
           return (
             <Link
               key={href}
