@@ -5,6 +5,7 @@ import Link from "next/link";
 import { api } from "@/lib/api";
 import AuthGuard from "@/components/AuthGuard";
 import BottomNav from "@/components/BottomNav";
+import Spinner from "@/components/Spinner";
 import StatusChip from "@/components/StatusChip";
 import ReminderCard from "@/components/ReminderCard";
 
@@ -36,7 +37,7 @@ function Reminders() {
       <h1 className="mb-6 text-2xl font-bold">Reminders</h1>
 
       {error && <p className="mb-4 rounded-xl bg-red-50 dark:bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-400">{error}</p>}
-      {data === null && !error && <p className="text-sm text-gray-400 dark:text-gray-500">Loading…</p>}
+      {data === null && !error && <div className="flex justify-center py-6"><Spinner /></div>}
       {data?.length === 0 && (
         <div className="card text-center text-sm text-gray-500 dark:text-gray-400">Add a car to start getting service and inspection reminders.</div>
       )}

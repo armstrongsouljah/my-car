@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { trackSignal } from "@/lib/telemetry";
+import Spinner from "@/components/Spinner";
 
 const LAST_CAR_KEY = "mycar_assistant_car";
 

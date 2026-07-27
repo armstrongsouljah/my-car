@@ -2,28 +2,40 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { MdOutlineDirectionsCar, MdOutlineNotifications, MdOutlineReceiptLong, MdOutlineSettings } from "react-icons/md";
+
+const ITEMS = [
+  ["/dashboard", "Garage", MdOutlineDirectionsCar],
+  ["/reminders", "Reminders", MdOutlineNotifications],
+  ["/expenses", "Expenses", MdOutlineReceiptLong],
+  ["/settings", "Settings", MdOutlineSettings],
+];
 
 export default function BottomNav() {
   const pathname = usePathname();
 
-  const item = (href, label, icon) => (
-    <Link
-      href={href}
-      className={`flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] font-medium ${
-        pathname === href ? "text-gray-900 dark:text-white" : "text-gray-400 dark:text-gray-400"
-      }`}
-    >
-      <span className="text-xl leading-none">{icon}</span>
-      {label}
-    </Link>
-  );
-
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-20 mx-auto flex w-full max-w-lg border-t border-gray-200 bg-white/95 backdrop-blur dark:border-gray-800 dark:bg-gray-950/95">
-      {item("/dashboard", "Garage", "🚗")}
-      {item("/reminders", "Reminders", "🔔")}
-      {item("/expenses", "Expenses", "💸")}
-      {item("/settings", "Settings", "⚙️")}
-    </nav>
+    <div className="fixed inset-x-0 bottom-4 z-20 mx-auto max-w-lg px-4">
+      <nav className="flex items-center justify-between gap-1 rounded-full border border-gray-200 bg-white/90 px-2 py-2 shadow-lg shadow-black/5 backdrop-blur dark:border-white/10 dark:bg-gray-900/90 dark:shadow-black/40">
+        {ITEMS.map(([href, label, Icon]) => {
+          const active = pathname === href;
+          return (
+            <Link
+              key={href}
+              href={href}
+              aria-label={label}
+              className={`flex flex-1 items-center justify-center gap-1.5 rounded-full py-2.5 text-[12px] font-medium transition-all ${
+                active
+                  ? "bg-gray-900 text-white dark:bg-white dark:text-gray-900"
+                  : "text-gray-400 dark:text-gray-500"
+              }`}
+            >
+              <Icon size={19} />
+              {active && <span>{label}</span>}
+            </Link>
+          );
+        })}
+      </nav>
+    </div>
   );
 }
