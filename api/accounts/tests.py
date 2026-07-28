@@ -362,23 +362,24 @@ class TestAccountDeletionReminder:
 
     def test_does_not_redispatch_while_the_claim_lease_is_still_fresh(self, owner, monkeypatch):
         """A second sweep run shortly after a failed send shouldn't pile on another attempt."""
-        from django.core import mail
-
         from tasks import send_account_deletion_reminder_task
 
         owner.deactivate()
         User.objects.filter(pk=owner.pk).update(
             deactivated_at=timezone.now() - timedelta(days=Constants.ACCOUNT_DELETION_REMINDER_DAYS)
         )
-        monkeypatch.setattr(
-            "utils.Email.send_deletion_reminder_email",
-            lambda **kwargs: (_ for _ in ()).throw(RuntimeError("smtp down")),
-        )
+        calls = []
+
+        def failing_send(**kwargs):
+            calls.append(1)
+            raise RuntimeError("smtp down")
+
+        monkeypatch.setattr("utils.Email.send_deletion_reminder_email", failing_send)
         send_account_deletion_reminder_task()
 
         send_account_deletion_reminder_task()
 
-        assert len(mail.outbox) == 0
+        assert len(calls) == 1
 
     def test_retries_once_the_claim_lease_goes_stale(self, owner):
         from django.core import mail
@@ -531,19 +532,20 @@ class TestMileageReminders:
         assert due_owner.mileage_reminder_queued_at is not None
 
     def test_does_not_redispatch_while_the_claim_lease_is_still_fresh(self, due_owner, monkeypatch):
-        from django.core import mail
-
         from tasks import send_mileage_reminders_task
 
-        monkeypatch.setattr(
-            "utils.Email.send_mileage_reminder_email",
-            lambda **kwargs: (_ for _ in ()).throw(RuntimeError("smtp down")),
-        )
+        calls = []
+
+        def failing_send(**kwargs):
+            calls.append(1)
+            raise RuntimeError("smtp down")
+
+        monkeypatch.setattr("utils.Email.send_mileage_reminder_email", failing_send)
         send_mileage_reminders_task()
 
         send_mileage_reminders_task()
 
-        assert len(mail.outbox) == 0
+        assert len(calls) == 1
 
     def test_retries_once_the_claim_lease_goes_stale(self, due_owner):
         from django.core import mail
@@ -559,6 +561,44 @@ class TestMileageReminders:
         due_owner.refresh_from_db()
         assert len(mail.outbox) == 1
         assert due_owner.last_mileage_reminder_at is not None
+
+    def test_send_task_does_not_redeliver_once_already_confirmed(self, due_owner):
+        """
+        Guards against Celery's at-least-once delivery: a redelivered message
+        (or a stale-lease reclaim racing a slow-but-eventually-successful
+        send) for a user already confirmed sent this cycle must not
+        double-send.
+        """
+        from django.core import mail
+
+        from tasks import send_mileage_reminder_email_task
+
+        User.objects.filter(pk=due_owner.pk).update(last_mileage_reminder_at=timezone.now())
+
+        send_mileage_reminder_email_task(user_id=due_owner.pk, cars=[])
+
+        assert len(mail.outbox) == 0
+
+    def test_send_task_skips_a_user_who_turned_reminders_off_after_being_claimed(self, due_owner):
+        from django.core import mail
+
+        from tasks import send_mileage_reminder_email_task
+
+        User.objects.filter(pk=due_owner.pk).update(mileage_reminder_frequency=Constants.MILEAGE_REMINDER_OFF)
+
+        send_mileage_reminder_email_task(user_id=due_owner.pk, cars=[])
+
+        assert len(mail.outbox) == 0
+
+    def test_send_task_clears_the_lease_on_success(self, due_owner):
+        from tasks import send_mileage_reminder_email_task
+
+        User.objects.filter(pk=due_owner.pk).update(mileage_reminder_queued_at=timezone.now())
+
+        send_mileage_reminder_email_task(user_id=due_owner.pk, cars=[])
+
+        due_owner.refresh_from_db()
+        assert due_owner.mileage_reminder_queued_at is None
 
 
 @pytest.mark.django_db

@@ -67,10 +67,22 @@ def send_mileage_reminder_email_task(user_id, cars):
     from django.utils import timezone
 
     from accounts.models import User
+    from utils import Constants
     from utils.Email import send_mileage_reminder_email
 
     user = User.objects.filter(pk=user_id, is_active=True).first()
     if user is None:
+        return
+
+    # Re-asserts eligibility at send time, not just at claim time: Celery
+    # delivers at-least-once, so a redelivered message (or a stale-lease
+    # reclaim racing a slow-but-eventually-successful send) must not
+    # double-send, and a user who turned reminders off after being claimed
+    # shouldn't get mailed anyway.
+    interval_days = Constants.MILEAGE_REMINDER_INTERVAL_DAYS.get(user.mileage_reminder_frequency)
+    if not interval_days:
+        return
+    if user.last_mileage_reminder_at and (timezone.now() - user.last_mileage_reminder_at).days < interval_days:
         return
 
     try:
@@ -81,7 +93,11 @@ def send_mileage_reminder_email_task(user_id, cars):
         )
         return
 
-    User.objects.filter(pk=user_id).update(last_mileage_reminder_at=timezone.now(), updated_at=timezone.now())
+    User.objects.filter(pk=user_id).update(
+        last_mileage_reminder_at=timezone.now(),
+        mileage_reminder_queued_at=None,
+        updated_at=timezone.now(),
+    )
 
 
 @shared_task(name="tasks.send_mileage_reminders_task")
