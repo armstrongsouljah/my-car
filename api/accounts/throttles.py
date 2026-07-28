@@ -48,3 +48,11 @@ class VerifyOTPRateThrottle(EmailScopedThrottle):
 
 class ResendOTPRateThrottle(EmailScopedThrottle):
     scope = "auth_resend_otp"
+
+
+class PasswordResetRequestRateThrottle(EmailScopedThrottle):
+    scope = "auth_password_reset_request"
+
+
+class PasswordResetConfirmRateThrottle(EmailScopedThrottle):
+    scope = "auth_password_reset_confirm"

@@ -8,6 +8,13 @@ def send_otp_email_task(email, otp, first_name=""):
     send_otp_email(email=email, otp=otp, first_name=first_name)
 
 
+@shared_task(name="tasks.send_password_reset_email_task")
+def send_password_reset_email_task(email, otp, first_name=""):
+    from utils.Email import send_password_reset_email
+
+    send_password_reset_email(email=email, otp=otp, first_name=first_name)
+
+
 @shared_task(name="tasks.send_welcome_email_task")
 def send_welcome_email_task(email, first_name=""):
     from utils.Email import send_welcome_email

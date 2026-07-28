@@ -198,6 +198,8 @@ REST_FRAMEWORK = {
         "auth_register": config("AUTH_REGISTER_THROTTLE", default="10/hour"),
         "auth_verify_otp": config("AUTH_VERIFY_OTP_THROTTLE", default="10/hour"),
         "auth_resend_otp": config("AUTH_RESEND_OTP_THROTTLE", default="5/hour"),
+        "auth_password_reset_request": config("AUTH_PASSWORD_RESET_REQUEST_THROTTLE", default="5/hour"),
+        "auth_password_reset_confirm": config("AUTH_PASSWORD_RESET_CONFIRM_THROTTLE", default="10/hour"),
     },
     # Client IP is read from X-Forwarded-For, which the caller can spoof unless
     # we know how many proxies sit in front of us. Behind the GKE Gateway the

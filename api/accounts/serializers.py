@@ -8,7 +8,7 @@ from rest_framework import serializers, status
 from utils.Exception import CustomValidation
 from utils.Serializers import CreateModelSerializer, EditModelSerializer, BaseModelSerializer, ListModelSerializer
 
-from accounts.models import User, EmailVerificationOTP
+from accounts.models import User, EmailVerificationOTP, PasswordResetOTP
 
 
 # ---------------------------------------------------------------------------
@@ -210,6 +210,89 @@ class ChangePasswordSerializer(serializers.Serializer):
 
     def save(self, **kwargs):
         user = self.context["request"].user
+        user.set_password(self.validated_data["new_password"])
+        user.save(update_fields=["password", "updated_at"])
+        return user
+
+
+# ---------------------------------------------------------------------------
+# Password reset — request
+# ---------------------------------------------------------------------------
+
+class RequestPasswordResetSerializer(serializers.Serializer):
+    """
+    Resolves the target account without ever reporting whether it exists —
+    like ResendOTPSerializer, `user` comes back None for an unknown or
+    deactivated address and the view returns the same response regardless.
+    """
+    email = serializers.EmailField()
+
+    def validate(self, attrs):
+        email = attrs["email"].lower()
+        attrs["user"] = User.objects.filter(email=email, is_active=True).first()
+        return attrs
+
+
+# ---------------------------------------------------------------------------
+# Password reset — confirm
+# ---------------------------------------------------------------------------
+
+class ResetPasswordSerializer(serializers.Serializer):
+    """
+    Every failure path returns the same message — see VerifyEmailSerializer's
+    docstring; the same account-existence oracle risk applies here.
+    """
+    email = serializers.EmailField()
+    otp = serializers.CharField(max_length=6, min_length=6)
+    new_password = serializers.CharField(write_only=True, min_length=8)
+    confirm_new_password = serializers.CharField(write_only=True)
+
+    INVALID = "That code is invalid or has expired. Please request a new one."
+
+    def _reject(self):
+        raise CustomValidation(self.INVALID, field="otp", status_code=status.HTTP_400_BAD_REQUEST)
+
+    def validate(self, attrs):
+        email = attrs["email"].lower()
+        raw_otp = attrs["otp"]
+
+        user = User.objects.filter(email=email, is_active=True).first()
+        if user is None:
+            self._reject()
+
+        otp_instance = (
+            PasswordResetOTP.objects
+            .filter(user=user, is_used=False)
+            .order_by("-created_at")
+            .first()
+        )
+
+        if not otp_instance or otp_instance.is_expired():
+            self._reject()
+
+        if not otp_instance.verify(raw_otp):
+            otp_instance.register_failed_attempt()
+            self._reject()
+
+        if attrs["new_password"] != attrs["confirm_new_password"]:
+            raise CustomValidation(
+                "New passwords do not match.",
+                field="confirm_new_password",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+        validate_password(attrs["new_password"], user)
+
+        attrs["user"] = user
+        attrs["otp_instance"] = otp_instance
+        return attrs
+
+    def save(self, **kwargs):
+        user = self.validated_data["user"]
+        otp_instance = self.validated_data["otp_instance"]
+
+        otp_instance.is_used = True
+        otp_instance.save(update_fields=["is_used"])
+
         user.set_password(self.validated_data["new_password"])
         user.save(update_fields=["password", "updated_at"])
         return user

@@ -44,6 +44,33 @@ def send_otp_email(email: str, otp: str, first_name: str = ""):
     msg.send()
 
 
+def send_password_reset_email(email: str, otp: str, first_name: str = ""):
+    """
+    Sends an HTML email containing the password-reset OTP code.
+    Called from the Celery task — kept import-safe (no app-startup side effects).
+    """
+    from django.conf import settings
+
+    name = _display_name(email, first_name)
+    expiry_minutes = getattr(settings, "OTP_EXPIRY_MINUTES", 10)
+
+    subject = "Your GlavBox password reset code"
+    context = {"otp": otp, "name": name, "expiry_minutes": expiry_minutes}
+
+    text_body = (
+        f"Hi {name},\n\n"
+        f"Your GlavBox password reset code is: {otp}\n\n"
+        f"This code expires in {expiry_minutes} minutes.\n\n"
+        f"If you didn't request a password reset, you can safely ignore this email — "
+        f"your password hasn't changed."
+    )
+    html_body = render_to_string("emails/password_reset.html", context)
+
+    msg = EmailMultiAlternatives(subject=subject, body=text_body, to=[email])
+    msg.attach_alternative(html_body, "text/html")
+    msg.send()
+
+
 def send_duplicate_signup_email(email: str, first_name: str = ""):
     """
     Sent when someone submits the signup form with an address that already has

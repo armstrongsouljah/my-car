@@ -149,3 +149,57 @@ class EmailVerificationOTP(models.Model):
         )
         # The raw code is returned once, for the email, and never stored.
         return instance, raw_otp
+
+
+class PasswordResetOTP(models.Model):
+    """
+    Mirrors EmailVerificationOTP's mechanics (HMAC storage, expiry, capped
+    wrong guesses) but is a distinct model with its own HMAC label — a leaked
+    verification-OTP hash for a user shouldn't double as a valid
+    password-reset hash for the same user.
+    """
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="password_reset_otps")
+    otp = models.CharField(max_length=64)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    is_used = models.BooleanField(default=False)
+    failed_attempts = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "Password Reset OTP"
+
+    def is_expired(self):
+        return timezone.now() > self.expires_at
+
+    @staticmethod
+    def hash_otp(raw_otp):
+        return salted_hmac("accounts.PasswordResetOTP", str(raw_otp), algorithm="sha256").hexdigest()
+
+    def verify(self, raw_otp):
+        return secrets.compare_digest(self.otp, self.hash_otp(raw_otp))
+
+    def register_failed_attempt(self):
+        type(self).objects.filter(pk=self.pk).update(failed_attempts=models.F("failed_attempts") + 1)
+        self.refresh_from_db(fields=["failed_attempts"])
+        exhausted = self.failed_attempts >= Constants.OTP_MAX_FAILED_ATTEMPTS
+        if exhausted and not self.is_used:
+            self.is_used = True
+            self.save(update_fields=["is_used"])
+        return exhausted
+
+    @classmethod
+    def create_for_user(cls, user):
+        from utils.Email import generate_otp
+
+        expiry_minutes = getattr(settings, "OTP_EXPIRY_MINUTES", 10)
+
+        cls.objects.filter(user=user, is_used=False).update(is_used=True)
+
+        raw_otp = generate_otp()
+        instance = cls.objects.create(
+            user=user,
+            otp=cls.hash_otp(raw_otp),
+            expires_at=timezone.now() + timezone.timedelta(minutes=expiry_minutes),
+        )
+        return instance, raw_otp

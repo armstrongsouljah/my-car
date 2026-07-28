@@ -39,5 +39,7 @@ REST_FRAMEWORK = {  # noqa: F405
         "auth_register": None,
         "auth_verify_otp": None,
         "auth_resend_otp": None,
+        "auth_password_reset_request": None,
+        "auth_password_reset_confirm": None,
     },
 }
