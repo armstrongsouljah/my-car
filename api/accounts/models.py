@@ -1,3 +1,4 @@
+import secrets
 import uuid
 
 from django.conf import settings
@@ -86,6 +87,9 @@ class EmailVerificationOTP(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField()
     is_used = models.BooleanField(default=False)
+    # A 6-digit code is only 10^6 wide — without a cap on wrong guesses the
+    # whole space is walkable inside the expiry window.
+    failed_attempts = models.PositiveSmallIntegerField(default=0)
 
     class Meta:
         ordering = ["-created_at"]
@@ -95,7 +99,20 @@ class EmailVerificationOTP(models.Model):
         return timezone.now() > self.expires_at
 
     def verify(self, raw_otp):
-        return self.otp == raw_otp
+        # Constant-time compare so a wrong code can't be narrowed down by timing.
+        return secrets.compare_digest(self.otp, str(raw_otp))
+
+    def register_failed_attempt(self):
+        """
+        Count a wrong guess and burn the code once the cap is hit, so the owner
+        has to request a fresh one. Returns True if the code is now spent.
+        """
+        self.failed_attempts += 1
+        exhausted = self.failed_attempts >= Constants.OTP_MAX_FAILED_ATTEMPTS
+        if exhausted:
+            self.is_used = True
+        self.save(update_fields=["failed_attempts", "is_used"])
+        return exhausted
 
     @classmethod
     def create_for_user(cls, user):

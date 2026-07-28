@@ -92,6 +92,12 @@ class VerifyEmailSerializer(serializers.Serializer):
             )
 
         if not otp_instance.verify(raw_otp):
+            if otp_instance.register_failed_attempt():
+                raise CustomValidation(
+                    "Too many incorrect attempts. Please request a new verification code.",
+                    field="otp",
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                )
             raise CustomValidation(
                 "Invalid OTP.",
                 field="otp",

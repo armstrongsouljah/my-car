@@ -1,3 +1,4 @@
+from django.core.exceptions import ImproperlyConfigured
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -238,14 +239,19 @@ class SmartDetailView(SmartAPIView):
     def patch(self, request, **kwargs):
         request_data = request.data
 
-        queryset = self.queryset(**kwargs)
-        instance = queryset.first()
+        if not self.has_permission("PATCH"):
+            return self.get_permission_denied_response(request, "PATCH")
 
-        self.has_object_permission(request, instance, "PATCH")
-        self.check_object_permissions(request, instance)
+        queryset = self.queryset(**kwargs)
+        queryset = self.add_filters(queryset)
+        instance = queryset.first()
 
         if not instance:
             return self.get_instance_not_found_response()
+
+        if not self.has_object_permission(request, instance, "PATCH"):
+            return self.get_permission_denied_response(request, "PATCH")
+        self.check_object_permissions(request, instance)
 
         serializer = self.edit_serializer(instance, data=request_data, partial=True)
         serializer.is_valid(raise_exception=True)
@@ -254,12 +260,20 @@ class SmartDetailView(SmartAPIView):
         return self.patch_response(instance, data)
 
     def delete(self, request, *args, **kwargs):
+        if not self.has_permission("DELETE"):
+            return self.get_permission_denied_response(request, "DELETE")
+
         queryset = self.queryset(**kwargs)
         queryset = self.add_filters(queryset)
         model_instance = queryset.first()
 
         if not model_instance:
             return self.get_instance_not_found_response()
+
+        if not self.has_object_permission(request, model_instance, "DELETE"):
+            return self.get_permission_denied_response(request, "DELETE")
+        self.check_object_permissions(request, model_instance)
+
         handle_delete = self.handle_delete(model_instance)
 
         if isinstance(handle_delete, Response):
@@ -274,21 +288,31 @@ class SmartDetailView(SmartAPIView):
         model_instance.delete()
 
     def queryset(self, **kwargs):
-        qs = self.model.objects.filter(**kwargs)
-        return qs
+        # Without a lookup this would filter on nothing and match every row in
+        # the table, so a subclass that forgets to scope itself must fail loudly
+        # rather than quietly hand back (or delete) another user's records.
+        if not kwargs:
+            raise ImproperlyConfigured(
+                f"{type(self).__name__} called the default queryset() with no lookup kwargs. "
+                f"Override queryset() to scope the lookup to the requesting user."
+            )
+        return self.model.objects.filter(**kwargs)
 
     def add_filters(self, queryset):
         return queryset
 
     def has_permission(self, method):
         if not self.deletable and method == "DELETE":
-            return Response(Message.create("Delete not permitted on this route."), status.HTTP_403_FORBIDDEN)
+            return False
         return True
 
     def get_permission_denied_response(self, request, action):
-        return self.respond_with(
-            Message.create("You do not have permission to access this endpoint."),
-            status_code=status.HTTP_403_FORBIDDEN)
+        message = (
+            "Delete not permitted on this route."
+            if action == "DELETE"
+            else "You do not have permission to access this endpoint."
+        )
+        return self.respond_with(message, key="detail", status_code=status.HTTP_403_FORBIDDEN)
 
     def get_instance_not_found_response(self):
         return self.respond_with(

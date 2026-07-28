@@ -1,4 +1,4 @@
-import random
+import secrets
 import string
 
 from django.core.mail import EmailMultiAlternatives
@@ -6,7 +6,9 @@ from django.template.loader import render_to_string
 
 
 def generate_otp(length=6):
-    return "".join(random.choices(string.digits, k=length))
+    # secrets, not random — `random` is a Mersenne Twister, so observing enough
+    # issued codes lets an attacker predict the next one.
+    return "".join(secrets.choice(string.digits) for _ in range(length))
 
 
 def _display_name(email: str, first_name: str = "") -> str:

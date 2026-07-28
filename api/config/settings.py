@@ -8,7 +8,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = config("SECRET_KEY")
 
-DEBUG = config("DEBUG", default=True, cast=bool)
+# Defaults to False: a missing/misspelled DEBUG in a deployed environment must
+# fail closed, not serve tracebacks and settings values to the internet.
+DEBUG = config("DEBUG", default=False, cast=bool)
 
 ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1", cast=Csv())
 
@@ -148,13 +150,33 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 20,
+    # A baseline ceiling on every route. Individual views layer tighter,
+    # purpose-built scopes on top (see DEFAULT_THROTTLE_RATES below).
+    "DEFAULT_THROTTLE_CLASSES": (
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ),
     "DEFAULT_THROTTLE_RATES": {
+        "anon": config("ANON_THROTTLE", default="60/min"),
+        "user": config("USER_THROTTLE", default="240/min"),
         # Caps AI assistant message sends per user — each one costs LLM tokens.
         "assistant_chat": config("ASSISTANT_CHAT_THROTTLE", default="30/min"),
         # The contact form is AllowAny (visitors included) — cap submissions
         # per user/IP so bots can't flood the support inbox or storage.
         "support_request": config("SUPPORT_REQUEST_THROTTLE", default="5/hour"),
+        # Auth endpoints are AllowAny and cheap to script against. Login and
+        # register key on IP; the OTP scopes key on the target email so a
+        # distributed attacker can't grind one account from many addresses.
+        "auth_login": config("AUTH_LOGIN_THROTTLE", default="10/min"),
+        "auth_register": config("AUTH_REGISTER_THROTTLE", default="10/hour"),
+        "auth_verify_otp": config("AUTH_VERIFY_OTP_THROTTLE", default="10/hour"),
+        "auth_resend_otp": config("AUTH_RESEND_OTP_THROTTLE", default="5/hour"),
     },
+    # Client IP is read from X-Forwarded-For, which the caller can spoof unless
+    # we know how many proxies sit in front of us. Behind the GKE Gateway the
+    # header is "<client>, <gclb>", so NUM_PROXIES=2 picks the real client.
+    # Left unset for local runs, where there is no proxy at all.
+    "NUM_PROXIES": config("NUM_PROXIES", default=None, cast=lambda v: int(v) if v not in (None, "") else None),
 }
 
 # ---------------------------------------------------------------------------

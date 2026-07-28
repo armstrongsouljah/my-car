@@ -121,3 +121,183 @@ class TestPurgeDeactivatedAccounts:
         purge_deactivated_accounts_task()
 
         assert User.objects.filter(pk=owner.pk).exists()
+
+
+@pytest.fixture
+def throttled_rates(monkeypatch):
+    """
+    Turns throttling back on for a single test.
+
+    The auth rates are disabled suite-wide in test_settings (counters live in
+    the cache and would otherwise leak between tests). `THROTTLE_RATES` is read
+    onto the class at import time, so overriding the setting at runtime has no
+    effect — the class attribute is what has to be patched.
+    """
+    from django.core.cache import cache
+    from rest_framework.throttling import SimpleRateThrottle
+
+    def _apply(**rates):
+        monkeypatch.setattr(
+            SimpleRateThrottle, "THROTTLE_RATES", {**SimpleRateThrottle.THROTTLE_RATES, **rates}
+        )
+        cache.clear()
+
+    yield _apply
+    cache.clear()
+
+
+@pytest.mark.django_db
+class TestProfileEndpointScoping:
+    """
+    Regression: SmartDetailView.delete() ignored `deletable`, and ProfileView
+    never scoped queryset(), so DELETE /auth/profile/ resolved to
+    User.objects.filter() -> every user, and .first() (ordering -date_joined)
+    deleted whoever signed up most recently.
+    """
+
+    def test_delete_on_profile_is_rejected(self, client, owner):
+        victim = User.objects.create_user(email="victim@example.com", password="str0ng-pass-123")
+
+        client.force_authenticate(owner)
+        response = client.delete(reverse("auth-profile"))
+
+        assert response.status_code == 403
+        assert User.objects.filter(pk=victim.pk).exists()
+        assert User.objects.filter(pk=owner.pk).exists()
+
+    def test_patch_only_ever_touches_the_caller(self, client, owner):
+        victim = User.objects.create_user(
+            email="victim@example.com", password="str0ng-pass-123", first_name="Victim"
+        )
+
+        client.force_authenticate(owner)
+        response = client.patch(reverse("auth-profile"), {"first_name": "Renamed"})
+
+        assert response.status_code == 200
+        victim.refresh_from_db()
+        owner.refresh_from_db()
+        assert victim.first_name == "Victim"
+        assert owner.first_name == "Renamed"
+
+    def test_get_returns_the_callers_own_profile(self, client, owner):
+        User.objects.create_user(email="victim@example.com", password="str0ng-pass-123")
+
+        client.force_authenticate(owner)
+        response = client.get(reverse("auth-profile"))
+
+        assert response.status_code == 200
+        assert response.data["email"] == "owner@example.com"
+
+
+@pytest.mark.django_db
+class TestUnscopedDetailViewFailsLoudly:
+    """The base queryset() must refuse to match the whole table."""
+
+    def test_default_queryset_without_kwargs_raises(self):
+        from django.core.exceptions import ImproperlyConfigured
+        from utils.Views import SmartDetailView
+
+        view = SmartDetailView()
+        view.model = User
+
+        with pytest.raises(ImproperlyConfigured):
+            view.queryset()
+
+
+@pytest.mark.django_db
+class TestOTPBruteForce:
+
+    def test_otp_is_burned_after_repeated_wrong_guesses(self, client):
+        user = User.objects.create_user(email="brute@example.com", password="str0ng-pass-123")
+        otp_instance, raw_otp = EmailVerificationOTP.create_for_user(user)
+        wrong = "000000" if raw_otp != "000000" else "111111"
+
+        for _ in range(Constants.OTP_MAX_FAILED_ATTEMPTS - 1):
+            response = client.post(reverse("auth-verify-email"), {"email": "brute@example.com", "otp": wrong})
+            assert response.status_code == 400
+
+        # The attempt that hits the cap burns the code.
+        response = client.post(reverse("auth-verify-email"), {"email": "brute@example.com", "otp": wrong})
+        assert response.status_code == 429
+
+        otp_instance.refresh_from_db()
+        assert otp_instance.is_used is True
+
+        # Even the correct code is now dead — the owner must request a new one.
+        response = client.post(reverse("auth-verify-email"), {"email": "brute@example.com", "otp": raw_otp})
+        assert response.status_code == 400
+        user.refresh_from_db()
+        assert user.is_email_verified is False
+
+    def test_correct_otp_still_verifies_within_the_attempt_budget(self, client):
+        user = User.objects.create_user(email="ok@example.com", password="str0ng-pass-123")
+        _, raw_otp = EmailVerificationOTP.create_for_user(user)
+        wrong = "000000" if raw_otp != "000000" else "111111"
+
+        client.post(reverse("auth-verify-email"), {"email": "ok@example.com", "otp": wrong})
+        response = client.post(reverse("auth-verify-email"), {"email": "ok@example.com", "otp": raw_otp})
+
+        assert response.status_code == 200
+        user.refresh_from_db()
+        assert user.is_email_verified is True
+
+    def test_a_fresh_otp_resets_the_attempt_budget(self, client):
+        user = User.objects.create_user(email="reset@example.com", password="str0ng-pass-123")
+        EmailVerificationOTP.create_for_user(user)
+        for _ in range(Constants.OTP_MAX_FAILED_ATTEMPTS):
+            client.post(reverse("auth-verify-email"), {"email": "reset@example.com", "otp": "000000"})
+
+        _, raw_otp = EmailVerificationOTP.create_for_user(user)
+        response = client.post(reverse("auth-verify-email"), {"email": "reset@example.com", "otp": raw_otp})
+
+        assert response.status_code == 200
+
+
+@pytest.mark.django_db
+class TestAuthThrottling:
+
+    def test_login_is_throttled(self, client, owner, throttled_rates):
+        throttled_rates(auth_login="3/min")
+
+        statuses = [
+            client.post(reverse("auth-login"), {"email": "owner@example.com", "password": "wrong"}).status_code
+            for _ in range(4)
+        ]
+
+        assert statuses[:3] == [401, 401, 401]
+        assert statuses[3] == 429
+
+    def test_otp_verification_is_throttled_per_email(self, client, throttled_rates):
+        throttled_rates(auth_verify_otp="2/min")
+        User.objects.create_user(email="a@example.com", password="str0ng-pass-123")
+        User.objects.create_user(email="b@example.com", password="str0ng-pass-123")
+        EmailVerificationOTP.create_for_user(User.objects.get(email="a@example.com"))
+        EmailVerificationOTP.create_for_user(User.objects.get(email="b@example.com"))
+
+        for _ in range(2):
+            client.post(reverse("auth-verify-email"), {"email": "a@example.com", "otp": "000000"})
+        blocked = client.post(reverse("auth-verify-email"), {"email": "a@example.com", "otp": "000000"})
+
+        # A different target account is unaffected — the bucket is per email.
+        other = client.post(reverse("auth-verify-email"), {"email": "b@example.com", "otp": "000000"})
+
+        assert blocked.status_code == 429
+        assert other.status_code == 400
+
+
+class TestOTPGeneration:
+
+    def test_otp_uses_the_csprng(self):
+        import inspect
+
+        from utils import Email as EmailUtil
+
+        source = inspect.getsource(EmailUtil.generate_otp)
+        assert "secrets." in source
+        assert "random." not in source
+
+    def test_otp_is_six_digits(self):
+        from utils.Email import generate_otp
+
+        otp = generate_otp()
+        assert len(otp) == 6 and otp.isdigit()

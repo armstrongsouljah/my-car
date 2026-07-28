@@ -8,6 +8,12 @@ from utils.Views import SmartAPIView, SmartDetailView, SmartPaginationAPIView
 from utils.Permissions import IsAdminPermission
 
 from accounts.models import User, EmailVerificationOTP
+from accounts.throttles import (
+    LoginRateThrottle,
+    RegisterRateThrottle,
+    ResendOTPRateThrottle,
+    VerifyOTPRateThrottle,
+)
 from accounts.serializers import (
     RegisterSerializer,
     LoginSerializer,
@@ -48,6 +54,7 @@ def _dispatch_otp(user):
 
 class RegisterView(SmartAPIView):
     permission_classes = [AllowAny]
+    throttle_classes = [RegisterRateThrottle]
 
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
@@ -66,6 +73,7 @@ class RegisterView(SmartAPIView):
 
 class VerifyEmailView(SmartAPIView):
     permission_classes = [AllowAny]
+    throttle_classes = [VerifyOTPRateThrottle]
 
     def post(self, request):
         serializer = VerifyEmailSerializer(data=request.data)
@@ -96,6 +104,7 @@ class VerifyEmailView(SmartAPIView):
 
 class ResendOTPView(SmartAPIView):
     permission_classes = [AllowAny]
+    throttle_classes = [ResendOTPRateThrottle]
 
     def post(self, request):
         serializer = ResendOTPSerializer(data=request.data)
@@ -113,6 +122,7 @@ class ResendOTPView(SmartAPIView):
 
 class LoginView(SmartAPIView):
     permission_classes = [AllowAny]
+    throttle_classes = [LoginRateThrottle]
 
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
@@ -150,6 +160,8 @@ class LogoutView(SmartAPIView):
 
 class GoogleAuthView(SmartAPIView):
     permission_classes = [AllowAny]
+    # Every call fans out to Google's tokeninfo endpoint — cap it like login.
+    throttle_classes = [LoginRateThrottle]
 
     def post(self, request):
         serializer = GoogleAuthSerializer(data=request.data)
@@ -171,6 +183,13 @@ class ProfileView(SmartDetailView):
     model = User
     detail_serializer = UserProfileSerializer
     edit_serializer = UpdateProfileSerializer
+    # Accounts are removed through the deactivate endpoint, never through here.
+    deletable = False
+
+    def queryset(self, **kwargs):
+        # This route has no pk in the URL, so the lookup must come from the
+        # token — never from the (empty) URL kwargs.
+        return User.objects.filter(pk=self.request.user.pk)
 
     def get(self, request, *args, **kwargs):
         data = self.detail_serializer(request.user).data

@@ -191,3 +191,10 @@ SUPPORT_SUBJECTS = [
 
 SUPPORT_MAX_ATTACHMENTS = 5
 SUPPORT_MAX_ATTACHMENT_SIZE_MB = 10
+
+# ---------------------------------------------------------------------------
+# Email verification OTP
+# ---------------------------------------------------------------------------
+# Wrong guesses allowed against a single code before it is burned and the owner
+# has to request a new one.
+OTP_MAX_FAILED_ATTEMPTS = 5
