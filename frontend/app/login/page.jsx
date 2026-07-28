@@ -162,7 +162,17 @@ function AuthPage() {
         router.replace("/dashboard");
       }
     } catch (err) {
-      setError(err.message);
+      if (mode === "login" && err.status === 403 && /verify your email/i.test(err.message)) {
+        try {
+          await api("/auth/resend-otp/", { method: "POST", body: { email: form.email } });
+          setInfo("A new code has been sent to your email. Didn't get it after 2 minutes? Hit \"Resend code\" below.");
+        } catch {
+          setInfo(`Enter the code we sent to ${form.email}, or resend one below.`);
+        }
+        setMode("verify");
+      } else {
+        setError(err.message);
+      }
     } finally {
       setLoading(false);
     }
