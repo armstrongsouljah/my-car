@@ -37,8 +37,9 @@ cd "$(dirname "$0")/.."
 : "${EMAIL_USE_TLS:=True}"
 : "${EMAIL_HOST_USER:=}"
 : "${EMAIL_HOST_PASSWORD:=}"
-: "${DEFAULT_FROM_EMAIL:=noreply@mycar.com}"
+: "${DEFAULT_FROM_EMAIL:?set DEFAULT_FROM_EMAIL to a real sender address you control (mycar.com is not our domain)}"
 : "${OTP_EXPIRY_MINUTES:=10}"
+: "${SUPPORT_REQUEST_THROTTLE:=5/hour}"
 
 # Only default to SMTP if credentials were actually provided — otherwise keep
 # settings.py's own console-backend fallback (writing an empty-credential SMTP
@@ -153,6 +154,7 @@ stringData:
   EMAIL_HOST_PASSWORD: "${EMAIL_HOST_PASSWORD}"
   DEFAULT_FROM_EMAIL: "${DEFAULT_FROM_EMAIL}"
   OTP_EXPIRY_MINUTES: "${OTP_EXPIRY_MINUTES}"
+  SUPPORT_REQUEST_THROTTLE: "${SUPPORT_REQUEST_THROTTLE}"
 YAML
 
 # ── 9. Deploy workloads (substitute image placeholders) ───────────────────────
