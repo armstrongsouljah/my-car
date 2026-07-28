@@ -6,6 +6,9 @@ metadata:
   labels: { app: frontend }
 spec:
   replicas: 2
+  # See k8s/20-api.yaml: GKE Gateway/NEG backend-attachment can outlast the
+  # 600s default progress deadline even on a healthy rollout.
+  progressDeadlineSeconds: 1200
   selector:
     matchLabels: { app: frontend }
   template:
