@@ -51,6 +51,7 @@ LOCAL_APPS = [
     "expenses",
     "reminders",
     "assistant",
+    "support",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -150,6 +151,9 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         # Caps AI assistant message sends per user — each one costs LLM tokens.
         "assistant_chat": config("ASSISTANT_CHAT_THROTTLE", default="30/min"),
+        # The contact form is AllowAny (visitors included) — cap submissions
+        # per user/IP so bots can't flood the support inbox or storage.
+        "support_request": config("SUPPORT_REQUEST_THROTTLE", default="5/hour"),
     },
 }
 
@@ -205,7 +209,7 @@ EMAIL_PORT = config("EMAIL_PORT", default=587, cast=int)
 EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=True, cast=bool)
 EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")
 EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
-DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default=EMAIL_HOST_USER or "noreply@mycar.com")
+DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL")
 
 OTP_EXPIRY_MINUTES = config("OTP_EXPIRY_MINUTES", default=10, cast=int)
 

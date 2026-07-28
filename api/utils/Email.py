@@ -95,6 +95,52 @@ def send_mileage_reminder_email(email: str, first_name: str, cars: list):
     msg.send()
 
 
+def send_support_request_email(support_request):
+    """
+    Notifies the support inbox (DEFAULT_FROM_EMAIL) of a contact-us
+    submission. Reply-To is the submitter's own address so support can just
+    hit reply, and any uploaded files are attached to the email itself.
+    """
+    from django.conf import settings
+
+    attachments = list(support_request.attachments.all())
+    subject = f"[GlavBox Support] {support_request.display_subject}"
+    submitted_by = "a registered user" if support_request.user_id else "a visitor"
+
+    text_body = (
+        f"New support request from {submitted_by}.\n\n"
+        f"Name: {support_request.name}\n"
+        f"Email: {support_request.email}\n"
+        f"Subject: {support_request.display_subject}\n\n"
+        f"Message:\n{support_request.message}\n"
+    )
+    html_body = render_to_string("emails/support_request.html", {
+        "name": support_request.name,
+        "email": support_request.email,
+        "subject": support_request.display_subject,
+        "message": support_request.message,
+        "submitted_by": submitted_by,
+        "attachment_count": len(attachments),
+    })
+
+    msg = EmailMultiAlternatives(
+        subject=subject,
+        body=text_body,
+        to=[settings.DEFAULT_FROM_EMAIL],
+        reply_to=[support_request.email],
+    )
+    msg.attach_alternative(html_body, "text/html")
+
+    for attachment in attachments:
+        attachment.file.open("rb")
+        try:
+            msg.attach(attachment.file.name.rsplit("/", 1)[-1], attachment.file.read())
+        finally:
+            attachment.file.close()
+
+    msg.send()
+
+
 def send_reminder_email(email: str, first_name: str, car_label: str, reminders: list):
     """
     Sends a service/inspection reminder digest for a single car.

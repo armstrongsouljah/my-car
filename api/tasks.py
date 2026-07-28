@@ -15,6 +15,15 @@ def send_welcome_email_task(email, first_name=""):
     send_welcome_email(email=email, first_name=first_name)
 
 
+@shared_task(name="tasks.send_support_request_email_task")
+def send_support_request_email_task(support_request_id):
+    from support.models import SupportRequest
+    from utils.Email import send_support_request_email
+
+    support_request = SupportRequest.objects.prefetch_related("attachments").get(pk=support_request_id)
+    send_support_request_email(support_request)
+
+
 @shared_task(name="tasks.send_mileage_reminders_task")
 def send_mileage_reminders_task():
     """

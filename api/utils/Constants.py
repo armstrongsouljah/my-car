@@ -173,3 +173,21 @@ ASSISTANT_ROLES = [
     (ASSISTANT_ROLE_MODEL, "Assistant"),
     (ASSISTANT_ROLE_TOOL, "Tool"),
 ]
+
+# ---------------------------------------------------------------------------
+# Support — contact-us subjects
+# ---------------------------------------------------------------------------
+SUPPORT_SUBJECT_GENERAL_ACCOUNT = "general_account"
+SUPPORT_SUBJECT_APP_INQUIRY = "app_inquiry"
+SUPPORT_SUBJECT_FEATURE_SUGGESTION = "feature_suggestion"
+SUPPORT_SUBJECT_OTHER = "other"
+
+SUPPORT_SUBJECTS = [
+    (SUPPORT_SUBJECT_GENERAL_ACCOUNT, "General Account"),
+    (SUPPORT_SUBJECT_APP_INQUIRY, "App Inquiry"),
+    (SUPPORT_SUBJECT_FEATURE_SUGGESTION, "Feature Suggestions"),
+    (SUPPORT_SUBJECT_OTHER, "Other"),
+]
+
+SUPPORT_MAX_ATTACHMENTS = 5
+SUPPORT_MAX_ATTACHMENT_SIZE_MB = 10

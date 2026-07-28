@@ -21,6 +21,7 @@ urlpatterns = [
     path(f"{API_PREFIX}reminders/", include("reminders.urls")),
     path(f"{API_PREFIX}expenses/", include("expenses.urls")),
     path(f"{API_PREFIX}assistant/", include("assistant.urls")),
+    path(f"{API_PREFIX}support/", include("support.urls")),
 ]
 
 # Serve media files in development
