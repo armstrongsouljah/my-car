@@ -8,12 +8,14 @@ from rest_framework_simplejwt.exceptions import TokenError
 from utils.Views import SmartAPIView, SmartDetailView, SmartPaginationAPIView
 from utils.Permissions import IsAdminPermission
 
-from accounts.models import User, EmailVerificationOTP
+from accounts.models import User, EmailVerificationOTP, PasswordResetOTP
 from accounts.throttles import (
     LoginRateThrottle,
     RegisterRateThrottle,
     ResendOTPRateThrottle,
     VerifyOTPRateThrottle,
+    PasswordResetRequestRateThrottle,
+    PasswordResetConfirmRateThrottle,
 )
 from accounts.serializers import (
     RegisterSerializer,
@@ -26,6 +28,8 @@ from accounts.serializers import (
     GoogleAuthSerializer,
     DeactivateAccountSerializer,
     UserListSerializer,
+    RequestPasswordResetSerializer,
+    ResetPasswordSerializer,
 )
 
 
@@ -43,6 +47,18 @@ def _dispatch_otp(user):
 
     _, raw_otp = EmailVerificationOTP.create_for_user(user)
     send_otp_email_task.delay(
+        email=user.email,
+        otp=raw_otp,
+        first_name=user.first_name,
+    )
+
+
+def _dispatch_password_reset_otp(user):
+    """Create a password-reset OTP record and fire the Celery email task."""
+    from tasks import send_password_reset_email_task
+
+    _, raw_otp = PasswordResetOTP.create_for_user(user)
+    send_password_reset_email_task.delay(
         email=user.email,
         otp=raw_otp,
         first_name=user.first_name,
@@ -162,6 +178,50 @@ class ResendOTPView(SmartAPIView):
         email = serializer.validated_data["email"].lower()
         return self.respond_with(
             f"If {email} needs verifying, a new code is on its way to it."
+        )
+
+
+# ---------------------------------------------------------------------------
+# Password reset — request a code
+# ---------------------------------------------------------------------------
+
+class RequestPasswordResetView(SmartAPIView):
+    permission_classes = [AllowAny]
+    throttle_classes = [PasswordResetRequestRateThrottle]
+
+    def post(self, request):
+        serializer = RequestPasswordResetSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.validated_data["user"]
+
+        # `user` is None for an unknown or deactivated address. Nothing is
+        # sent in that case, but the response is identical either way.
+        if user is not None:
+            _dispatch_password_reset_otp(user)
+
+        email = serializer.validated_data["email"].lower()
+        return self.respond_with(
+            f"If {email} has an account, a reset code is on its way to it."
+        )
+
+
+# ---------------------------------------------------------------------------
+# Password reset — confirm the code and set a new password
+# ---------------------------------------------------------------------------
+
+class ResetPasswordView(SmartAPIView):
+    permission_classes = [AllowAny]
+    throttle_classes = [PasswordResetConfirmRateThrottle]
+
+    def post(self, request):
+        serializer = ResetPasswordSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+
+        tokens = _get_tokens(user)
+        return Response(
+            {"user": UserProfileSerializer(user).data, "tokens": tokens},
+            status=status.HTTP_200_OK,
         )
 
 

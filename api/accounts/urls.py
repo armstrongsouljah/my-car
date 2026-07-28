@@ -12,6 +12,8 @@ from accounts.views import (
     GoogleAuthView,
     DeactivateAccountView,
     UserListView,
+    RequestPasswordResetView,
+    ResetPasswordView,
 )
 
 urlpatterns = [
@@ -24,6 +26,8 @@ urlpatterns = [
     path("google/", GoogleAuthView.as_view(), name="auth-google"),
     path("profile/", ProfileView.as_view(), name="auth-profile"),
     path("password/change/", ChangePasswordView.as_view(), name="auth-password-change"),
+    path("password/reset/request/", RequestPasswordResetView.as_view(), name="auth-password-reset-request"),
+    path("password/reset/confirm/", ResetPasswordView.as_view(), name="auth-password-reset-confirm"),
     path("account/deactivate/", DeactivateAccountView.as_view(), name="auth-deactivate"),
     path("users/", UserListView.as_view(), name="auth-users"),
 ]

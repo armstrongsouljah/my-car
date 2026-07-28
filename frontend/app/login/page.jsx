@@ -55,8 +55,11 @@ function AuthPage() {
   const searchParams = useSearchParams();
   // Landing page CTAs can link straight to the signup tab via ?mode=signup —
   // anyone else (the hero's "Sign in" link, a bare /login visit) gets login.
-  const [mode, setMode] = useState(searchParams.get("mode") === "signup" ? "signup" : "login"); // login | signup | verify
-  const [form, setForm] = useState({ email: "", password: "", first_name: "", last_name: "", otp: "" });
+  const [mode, setMode] = useState(searchParams.get("mode") === "signup" ? "signup" : "login"); // login | signup | verify | forgot | reset
+  const [form, setForm] = useState({
+    email: "", password: "", first_name: "", last_name: "", otp: "",
+    new_password: "", confirm_new_password: "",
+  });
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
@@ -71,8 +74,10 @@ function AuthPage() {
   // GIS must only be initialize()d once per page (repeat calls reset its
   // global state) — the button itself does need re-rendering on mode change
   // since its container unmounts while mode === "verify".
+  const showAccountSwitches = mode === "login" || mode === "signup";
+
   useEffect(() => {
-    if (!GOOGLE_CLIENT_ID || mode === "verify") return;
+    if (!GOOGLE_CLIENT_ID || !showAccountSwitches) return;
 
     const renderButton = () => {
       if (!googleButtonRef.current) return;
@@ -168,6 +173,28 @@ function AuthPage() {
         setTokens(data.tokens);
         setUser(data.user);
         router.replace("/dashboard");
+      } else if (mode === "forgot") {
+        await api("/auth/password/reset/request/", {
+          method: "POST",
+          body: { email: form.email },
+        });
+        // Same response whether or not the address has an account — the copy
+        // has to stay generic either way.
+        setInfo(`If ${form.email} has an account, we've sent a 6-digit reset code to it.`);
+        setMode("reset");
+      } else if (mode === "reset") {
+        const data = await api("/auth/password/reset/confirm/", {
+          method: "POST",
+          body: {
+            email: form.email,
+            otp: form.otp,
+            new_password: form.new_password,
+            confirm_new_password: form.confirm_new_password,
+          },
+        });
+        setTokens(data.tokens);
+        setUser(data.user);
+        router.replace("/dashboard");
       }
     } catch (err) {
       if (mode === "login" && err.status === 403 && /verify your email/i.test(err.message)) {
@@ -189,7 +216,8 @@ function AuthPage() {
   async function resendOtp() {
     setError("");
     try {
-      await api("/auth/resend-otp/", { method: "POST", body: { email: form.email } });
+      const path = mode === "reset" ? "/auth/password/reset/request/" : "/auth/resend-otp/";
+      await api(path, { method: "POST", body: { email: form.email } });
       setInfo(`A new code was sent to ${form.email}.`);
     } catch (err) {
       setError(err.message);
@@ -197,7 +225,10 @@ function AuthPage() {
   }
 
   const tagline =
-    mode === "signup" ? "Your garage starts here" : mode === "verify" ? "Check your inbox for the code" : "Welcome back to your garage";
+    mode === "signup" ? "Your garage starts here"
+    : mode === "verify" || mode === "reset" ? "Check your inbox for the code"
+    : mode === "forgot" ? "Let's get you back in"
+    : "Welcome back to your garage";
 
   return (
     <main className="flex min-h-screen flex-col bg-[#04120c] text-white">
@@ -224,7 +255,7 @@ function AuthPage() {
 
       {/* Form sheet */}
       <div className="relative flex-1 rounded-t-[32px] bg-[#0a1a14] px-6 pb-10 pt-8 shadow-[0_-20px_60px_rgba(0,0,0,0.5)]">
-        {mode !== "verify" && (
+        {showAccountSwitches && (
           <div className="mb-6 grid grid-cols-2 rounded-full bg-white/5 p-1 text-sm font-semibold">
             <button
               type="button"
@@ -260,57 +291,67 @@ function AuthPage() {
             </div>
           )}
 
-          {mode !== "verify" && (
-            <>
-              <div>
-                <label className="auth-label" htmlFor="email">Email address</label>
-                <div className="relative">
-                  <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-white/40">
-                    <MailIcon />
-                  </span>
-                  <input
-                    id="email"
-                    className="auth-input pl-11"
-                    type="email"
-                    required
-                    autoComplete="email"
-                    placeholder="you@example.com"
-                    value={form.email}
-                    onChange={update("email")}
-                  />
-                </div>
+          {(mode === "login" || mode === "signup" || mode === "forgot") && (
+            <div>
+              <label className="auth-label" htmlFor="email">Email address</label>
+              <div className="relative">
+                <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-white/40">
+                  <MailIcon />
+                </span>
+                <input
+                  id="email"
+                  className="auth-input pl-11"
+                  type="email"
+                  required
+                  autoComplete="email"
+                  placeholder="you@example.com"
+                  value={form.email}
+                  onChange={update("email")}
+                />
               </div>
-              <div>
-                <label className="auth-label" htmlFor="password">Password</label>
-                <div className="relative">
-                  <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-white/40">
-                    <LockIcon />
-                  </span>
-                  <input
-                    id="password"
-                    className="auth-input pl-11 pr-11"
-                    type={showPassword ? "text" : "password"}
-                    required
-                    minLength={8}
-                    autoComplete={mode === "login" ? "current-password" : "new-password"}
-                    placeholder="Enter password"
-                    value={form.password}
-                    onChange={update("password")}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword((v) => !v)}
-                    aria-label={showPassword ? "Hide password" : "Show password"}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70"
-                  >
-                    <EyeIcon open={showPassword} />
-                  </button>
-                </div>
-              </div>
-            </>
+            </div>
           )}
 
-          {mode === "verify" && (
+          {(mode === "login" || mode === "signup") && (
+            <div>
+              <label className="auth-label" htmlFor="password">Password</label>
+              <div className="relative">
+                <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-white/40">
+                  <LockIcon />
+                </span>
+                <input
+                  id="password"
+                  className="auth-input pl-11 pr-11"
+                  type={showPassword ? "text" : "password"}
+                  required
+                  minLength={8}
+                  autoComplete={mode === "login" ? "current-password" : "new-password"}
+                  placeholder="Enter password"
+                  value={form.password}
+                  onChange={update("password")}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70"
+                >
+                  <EyeIcon open={showPassword} />
+                </button>
+              </div>
+              {mode === "login" && (
+                <button
+                  type="button"
+                  onClick={() => { setError(""); setInfo(""); setMode("forgot"); }}
+                  className="mt-2 text-sm font-medium text-emerald-400 underline underline-offset-2"
+                >
+                  Forgot password?
+                </button>
+              )}
+            </div>
+          )}
+
+          {(mode === "verify" || mode === "reset") && (
             <div>
               <label className="auth-label" htmlFor="otp">Verification code</label>
               <input
@@ -328,15 +369,66 @@ function AuthPage() {
             </div>
           )}
 
+          {mode === "reset" && (
+            <>
+              <div>
+                <label className="auth-label" htmlFor="new_password">New password</label>
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-white/40">
+                    <LockIcon />
+                  </span>
+                  <input
+                    id="new_password"
+                    className="auth-input pl-11 pr-11"
+                    type={showPassword ? "text" : "password"}
+                    required
+                    minLength={8}
+                    autoComplete="new-password"
+                    placeholder="Enter new password"
+                    value={form.new_password}
+                    onChange={update("new_password")}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70"
+                  >
+                    <EyeIcon open={showPassword} />
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label className="auth-label" htmlFor="confirm_new_password">Confirm new password</label>
+                <input
+                  id="confirm_new_password"
+                  className="auth-input"
+                  type={showPassword ? "text" : "password"}
+                  required
+                  minLength={8}
+                  autoComplete="new-password"
+                  placeholder="Re-enter new password"
+                  value={form.confirm_new_password}
+                  onChange={update("confirm_new_password")}
+                />
+              </div>
+            </>
+          )}
+
           <button
             className="w-full rounded-full bg-gradient-to-r from-emerald-400 to-green-500 px-4 py-3.5 text-[15px] font-bold text-[#04120c] shadow-[0_8px_24px_rgba(52,211,153,0.35)] transition active:scale-[0.99] disabled:opacity-50"
             disabled={loading}
           >
-            {loading ? "Please wait…" : mode === "login" ? "Sign in" : mode === "signup" ? "Sign up" : "Verify & continue"}
+            {loading ? "Please wait…"
+              : mode === "login" ? "Sign in"
+              : mode === "signup" ? "Sign up"
+              : mode === "forgot" ? "Send reset code"
+              : mode === "reset" ? "Reset password"
+              : "Verify & continue"}
           </button>
         </form>
 
-        {mode !== "verify" && GOOGLE_CLIENT_ID && (
+        {showAccountSwitches && GOOGLE_CLIENT_ID && (
           <>
             <div className="my-6 flex items-center gap-3 text-xs text-white/30">
               <div className="h-px flex-1 bg-white/10" /> or continue with <div className="h-px flex-1 bg-white/10" />
@@ -345,7 +437,7 @@ function AuthPage() {
           </>
         )}
 
-        {mode !== "verify" && (
+        {showAccountSwitches && (
           <p className="mt-6 text-center text-sm text-white/50">
             {mode === "login" ? "Don't have an account? " : "Already have an account? "}
             <button
@@ -354,6 +446,18 @@ function AuthPage() {
               className="font-semibold text-emerald-400"
             >
               {mode === "login" ? "Sign up" : "Sign in"}
+            </button>
+          </p>
+        )}
+
+        {(mode === "verify" || mode === "forgot" || mode === "reset") && (
+          <p className="mt-6 text-center text-sm text-white/50">
+            <button
+              type="button"
+              onClick={() => { setError(""); setInfo(""); setMode("login"); }}
+              className="font-semibold text-emerald-400"
+            >
+              Back to log in
             </button>
           </p>
         )}

@@ -6,7 +6,7 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from accounts.models import User, EmailVerificationOTP
+from accounts.models import User, EmailVerificationOTP, PasswordResetOTP
 from utils import Constants
 
 
@@ -483,6 +483,128 @@ class TestAccountEnumeration:
         }
         assert list(bodies) == [400], "failure modes are distinguishable by status code"
         assert unknown_account.data == wrong_code.data == already_verified.data
+
+
+@pytest.mark.django_db
+class TestPasswordReset:
+
+    def test_request_reset_issues_an_otp_for_a_known_account(self, client, owner):
+        response = client.post(reverse("auth-password-reset-request"), {"email": "owner@example.com"})
+        assert response.status_code == 200
+        assert PasswordResetOTP.objects.filter(user=owner, is_used=False).exists()
+
+    def test_request_reset_looks_the_same_for_an_unknown_address(self, client, owner):
+        hit = client.post(reverse("auth-password-reset-request"), {"email": "owner@example.com"})
+        miss = client.post(reverse("auth-password-reset-request"), {"email": "nobody@example.com"})
+
+        assert hit.status_code == miss.status_code == 200
+        assert hit.data["detail"].replace("owner@example.com", "") == \
+            miss.data["detail"].replace("nobody@example.com", "")
+
+    def test_request_reset_does_not_issue_a_code_for_a_deactivated_account(self, client, owner):
+        owner.deactivate()
+        client.post(reverse("auth-password-reset-request"), {"email": "owner@example.com"})
+        assert not PasswordResetOTP.objects.filter(user=owner, is_used=False).exists()
+
+    def test_confirm_reset_sets_new_password_and_returns_tokens(self, client, owner):
+        _, raw_otp = PasswordResetOTP.create_for_user(owner)
+        response = client.post(reverse("auth-password-reset-confirm"), {
+            "email": "owner@example.com",
+            "otp": raw_otp,
+            "new_password": "brand-new-pass-123",
+            "confirm_new_password": "brand-new-pass-123",
+        })
+
+        assert response.status_code == 200
+        assert "tokens" in response.data
+        owner.refresh_from_db()
+        assert owner.check_password("brand-new-pass-123") is True
+        assert owner.check_password("str0ng-pass-123") is False
+
+    def test_confirm_reset_rejects_mismatched_passwords(self, client, owner):
+        _, raw_otp = PasswordResetOTP.create_for_user(owner)
+        response = client.post(reverse("auth-password-reset-confirm"), {
+            "email": "owner@example.com",
+            "otp": raw_otp,
+            "new_password": "brand-new-pass-123",
+            "confirm_new_password": "does-not-match-456",
+        })
+
+        assert response.status_code == 400
+        owner.refresh_from_db()
+        assert owner.check_password("str0ng-pass-123") is True
+
+    def test_confirm_reset_rejects_wrong_code(self, client, owner):
+        _, raw_otp = PasswordResetOTP.create_for_user(owner)
+        wrong = "000000" if raw_otp != "000000" else "111111"
+        response = client.post(reverse("auth-password-reset-confirm"), {
+            "email": "owner@example.com",
+            "otp": wrong,
+            "new_password": "brand-new-pass-123",
+            "confirm_new_password": "brand-new-pass-123",
+        })
+
+        assert response.status_code == 400
+        owner.refresh_from_db()
+        assert owner.check_password("str0ng-pass-123") is True
+
+    def test_confirm_reset_looks_the_same_for_every_failure(self, client, owner):
+        PasswordResetOTP.create_for_user(owner)
+
+        unknown_account = client.post(reverse("auth-password-reset-confirm"), {
+            "email": "nobody@example.com", "otp": "000000",
+            "new_password": "brand-new-pass-123", "confirm_new_password": "brand-new-pass-123",
+        })
+        wrong_code = client.post(reverse("auth-password-reset-confirm"), {
+            "email": "owner@example.com", "otp": "000000",
+            "new_password": "brand-new-pass-123", "confirm_new_password": "brand-new-pass-123",
+        })
+
+        assert unknown_account.status_code == wrong_code.status_code == 400
+        assert unknown_account.data == wrong_code.data
+
+    def test_otp_is_burned_after_repeated_wrong_guesses(self, client, owner):
+        otp_instance, raw_otp = PasswordResetOTP.create_for_user(owner)
+        wrong = "000000" if raw_otp != "000000" else "111111"
+
+        for _ in range(Constants.OTP_MAX_FAILED_ATTEMPTS):
+            client.post(reverse("auth-password-reset-confirm"), {
+                "email": "owner@example.com", "otp": wrong,
+                "new_password": "brand-new-pass-123", "confirm_new_password": "brand-new-pass-123",
+            })
+
+        otp_instance.refresh_from_db()
+        assert otp_instance.is_used is True
+
+        response = client.post(reverse("auth-password-reset-confirm"), {
+            "email": "owner@example.com", "otp": raw_otp,
+            "new_password": "brand-new-pass-123", "confirm_new_password": "brand-new-pass-123",
+        })
+        assert response.status_code == 400
+        owner.refresh_from_db()
+        assert owner.check_password("str0ng-pass-123") is True
+
+    def test_a_fresh_reset_otp_invalidates_the_previous_one(self, client, owner):
+        first_otp, _ = PasswordResetOTP.create_for_user(owner)
+        _, second_raw = PasswordResetOTP.create_for_user(owner)
+
+        first_otp.refresh_from_db()
+        assert first_otp.is_used is True
+
+        response = client.post(reverse("auth-password-reset-confirm"), {
+            "email": "owner@example.com", "otp": second_raw,
+            "new_password": "brand-new-pass-123", "confirm_new_password": "brand-new-pass-123",
+        })
+        assert response.status_code == 200
+
+    def test_password_reset_request_is_throttled_per_email(self, client, owner, throttled_rates):
+        throttled_rates(auth_password_reset_request="2/min")
+
+        for _ in range(2):
+            client.post(reverse("auth-password-reset-request"), {"email": "owner@example.com"})
+        blocked = client.post(reverse("auth-password-reset-request"), {"email": "owner@example.com"})
+
+        assert blocked.status_code == 429
 
 
 @pytest.mark.django_db
