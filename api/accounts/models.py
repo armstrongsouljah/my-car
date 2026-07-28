@@ -105,7 +105,10 @@ class EmailVerificationOTP(models.Model):
 
     @staticmethod
     def hash_otp(raw_otp):
-        return salted_hmac("accounts.EmailVerificationOTP", str(raw_otp)).hexdigest()
+        # Pinned explicitly: salted_hmac()'s default digest is SHA1 today but
+        # is set to become SHA256 in Django 7.0, which would silently
+        # invalidate every pending OTP stored under the old default.
+        return salted_hmac("accounts.EmailVerificationOTP", str(raw_otp), algorithm="sha256").hexdigest()
 
     def verify(self, raw_otp):
         # Constant-time compare so a wrong code can't be narrowed down by timing.

@@ -93,10 +93,14 @@ class RegisterView(SmartAPIView):
                 # Lost a race with a concurrent signup for this address (e.g. a
                 # double-clicked submit): the DB's unique constraint is the
                 # only backstop left now that the pre-save UniqueValidator is
-                # gone — it was itself an enumeration oracle. Treat it the
-                # same as if the check above had found the row, rather than
-                # letting this surface as a 500.
-                _notify_existing_account(User.objects.get(email=email))
+                # gone — it was itself an enumeration oracle. Only treat this
+                # as that race if the email row genuinely exists now; a
+                # collision on some other unique field wouldn't have one, and
+                # swallowing that would hide a real error behind a 201.
+                winner = User.objects.filter(email=email).first()
+                if winner is None:
+                    raise
+                _notify_existing_account(winner)
             else:
                 _dispatch_otp(new_user)
 

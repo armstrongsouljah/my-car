@@ -428,6 +428,28 @@ class TestAccountEnumeration:
         winner.refresh_from_db()
         assert winner.check_password("whoever-won-123") is True
 
+    def test_register_reraises_an_integrity_error_unrelated_to_email(self, client, monkeypatch):
+        """
+        An IntegrityError from some other unique constraint has no "winner"
+        row at this email to fall back to — that must surface as a real
+        error, not get silently swallowed into a fake 201.
+        """
+        from django.db import IntegrityError
+
+        from accounts.serializers import RegisterSerializer
+
+        def unrelated_integrity_error(self, *args, **kwargs):
+            raise IntegrityError("unique constraint on some other field")
+
+        monkeypatch.setattr(RegisterSerializer, "save", unrelated_integrity_error)
+
+        with pytest.raises(IntegrityError):
+            client.post(reverse("auth-register"), {
+                "email": "nobody-yet@example.com", "password": "str0ng-pass-123",
+            })
+
+        assert not User.objects.filter(email="nobody-yet@example.com").exists()
+
     def test_resend_otp_looks_the_same_for_an_unknown_address(self, client):
         known = User.objects.create_user(email="unverified@example.com", password="str0ng-pass-123")
 
