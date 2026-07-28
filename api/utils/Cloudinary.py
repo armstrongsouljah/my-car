@@ -68,22 +68,28 @@ def _destroy(cloud_name: str, api_key: str, api_secret: str, public_id: str) -> 
     import time
 
     timestamp = str(int(time.time()))
-    # Cloudinary's signing scheme: sort every non-file param, join as
-    # "key=value&...", append the API secret, then SHA1 it.
-    signature = hashlib.sha1(f"public_id={public_id}&timestamp={timestamp}{api_secret}".encode()).hexdigest()
+    # `invalidate` defaults to false server-side — without it, cached copies
+    # (including transformed variants) of a "deleted" photo can keep being
+    # served from Cloudinary's CDN edge. It has to be in the signed payload
+    # too, or Cloudinary rejects the request as tampered.
+    signing_params = {"invalidate": "true", "public_id": public_id, "timestamp": timestamp}
+    payload = "&".join(f"{key}={value}" for key, value in sorted(signing_params.items()))
+    signature = hashlib.sha1(f"{payload}{api_secret}".encode()).hexdigest()
 
     try:
         response = requests.post(
             f"https://api.cloudinary.com/v1_1/{cloud_name}/image/destroy",
             data={
-                "public_id": public_id,
-                "timestamp": timestamp,
+                **signing_params,
                 "api_key": api_key,
                 "signature": signature,
             },
             timeout=DESTROY_TIMEOUT_SECONDS,
         )
         if not response.ok:
-            logger.warning("Cloudinary destroy failed for %s: %s %s", public_id, response.status_code, response.text)
+            # error, not warning: the DB row this photo belonged to may be
+            # gone by the time anyone reads this, so the log is the only
+            # remaining record of an orphaned Cloudinary asset.
+            logger.error("Cloudinary destroy failed for %s: %s %s", public_id, response.status_code, response.text)
     except requests.RequestException:
-        logger.warning("Cloudinary destroy request errored for %s", public_id, exc_info=True)
+        logger.error("Cloudinary destroy request errored for %s", public_id, exc_info=True)

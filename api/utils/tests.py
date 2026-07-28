@@ -80,3 +80,30 @@ class TestDeletePhotos:
         assert url == "https://api.cloudinary.com/v1_1/soultech/image/destroy"
         assert data["public_id"] == "car_photos/u1/abc"
         assert data["api_key"] == "key"
+        assert data["invalidate"] == "true"
+
+    def test_logs_but_does_not_raise_on_a_failed_destroy(self, settings, monkeypatch):
+        settings.CLOUDINARY_URL = "cloudinary://key:secret@soultech"
+
+        class FakeResponse:
+            ok = False
+            status_code = 500
+            text = "internal error"
+
+        monkeypatch.setattr("utils.Cloudinary.requests.post", lambda *a, **k: FakeResponse())
+
+        # Best-effort by design: a Cloudinary-side failure shouldn't raise and
+        # block the account deletion this cleanup is part of.
+        delete_photos(["https://res.cloudinary.com/soultech/image/upload/v1/abc.jpg"])
+
+    def test_logs_but_does_not_raise_on_a_request_error(self, settings, monkeypatch):
+        import requests
+
+        settings.CLOUDINARY_URL = "cloudinary://key:secret@soultech"
+
+        def raise_error(*args, **kwargs):
+            raise requests.ConnectionError("boom")
+
+        monkeypatch.setattr("utils.Cloudinary.requests.post", raise_error)
+
+        delete_photos(["https://res.cloudinary.com/soultech/image/upload/v1/abc.jpg"])

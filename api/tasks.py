@@ -162,7 +162,14 @@ def send_account_deletion_reminder_task():
     from utils import Constants
     from utils.Email import send_deletion_reminder_email
 
-    cutoff = timezone.now() - timezone.timedelta(days=Constants.ACCOUNT_DELETION_REMINDER_DAYS)
+    now = timezone.now()
+    cutoff = now - timezone.timedelta(days=Constants.ACCOUNT_DELETION_REMINDER_DAYS)
+    # Excludes accounts already eligible for the purge sweep: this task and
+    # purge_deactivated_accounts_task both run daily with no ordering
+    # guarantee, so without this an account sitting past the 30-day cutoff
+    # (e.g. a previous run of this task never claimed it) could get a
+    # misleading "15 days left" email right as, or after, it's deleted.
+    purge_cutoff = now - timezone.timedelta(days=Constants.ACCOUNT_DELETION_GRACE_DAYS)
     days_remaining = Constants.ACCOUNT_DELETION_GRACE_DAYS - Constants.ACCOUNT_DELETION_REMINDER_DAYS
 
     queryset = User.objects.filter(
@@ -170,6 +177,7 @@ def send_account_deletion_reminder_task():
         is_email_verified=True,
         deactivated_at__isnull=False,
         deactivated_at__lte=cutoff,
+        deactivated_at__gt=purge_cutoff,
         deletion_reminder_sent_at__isnull=True,
     )
 
@@ -209,6 +217,7 @@ def purge_deactivated_accounts_task():
     cutoff = timezone.now() - timezone.timedelta(days=Constants.ACCOUNT_DELETION_GRACE_DAYS)
     queryset = User.objects.filter(
         is_active=False,
+        is_email_verified=True,
         deactivated_at__isnull=False,
         deactivated_at__lte=cutoff,
     ).prefetch_related("cars")

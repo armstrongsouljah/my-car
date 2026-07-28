@@ -104,6 +104,22 @@ class TestAuthFlow:
         assert mail.outbox[0].to == [owner.email]
         assert str(Constants.ACCOUNT_DELETION_GRACE_DAYS) in mail.outbox[0].body
 
+    def test_deactivate_resets_a_previously_sent_deletion_reminder(self, owner):
+        """
+        A user reactivated by support, then deactivated again, is on a fresh
+        30-day lifecycle — the old reminder timestamp shouldn't survive and
+        suppress this lifecycle's own 15-day reminder.
+        """
+        owner.deactivate()
+        User.objects.filter(pk=owner.pk).update(deletion_reminder_sent_at=timezone.now())
+
+        User.objects.filter(pk=owner.pk).update(is_active=True, deactivated_at=None)  # support reactivates
+        owner.refresh_from_db()
+
+        owner.deactivate()
+
+        assert owner.deletion_reminder_sent_at is None
+
 
 @pytest.mark.django_db
 class TestPurgeDeactivatedAccounts:
@@ -147,6 +163,27 @@ class TestPurgeDeactivatedAccounts:
 
     def test_keeps_active_accounts(self, owner):
         from tasks import purge_deactivated_accounts_task
+
+        purge_deactivated_accounts_task()
+
+        assert User.objects.filter(pk=owner.pk).exists()
+
+    def test_keeps_never_verified_accounts_even_if_flagged_inactive(self, owner):
+        """
+        deactivate() is only ever reachable by an authenticated (and so
+        already-verified) user, but this guards the purge query directly
+        against the lifecycle's own definition rather than relying on that
+        being true forever — e.g. a future admin action or #23's unverified-
+        signup sweep setting is_active/deactivated_at without also touching
+        is_email_verified shouldn't make this task eligible for it.
+        """
+        from tasks import purge_deactivated_accounts_task
+
+        User.objects.filter(pk=owner.pk).update(
+            is_active=False,
+            is_email_verified=False,
+            deactivated_at=timezone.now() - timedelta(days=Constants.ACCOUNT_DELETION_GRACE_DAYS),
+        )
 
         purge_deactivated_accounts_task()
 
@@ -254,6 +291,29 @@ class TestAccountDeletionReminder:
         send_account_deletion_reminder_task()
 
         assert len(mail.outbox) == 0
+
+    def test_does_not_send_once_past_the_purge_cutoff(self, owner):
+        """
+        Guards against send_account_deletion_reminder_task and
+        purge_deactivated_accounts_task running out of order on the same day
+        (or a prior run of this task never having claimed the row): an
+        account already eligible for purge shouldn't get a misleading
+        "N days left" email right as, or after, it's deleted.
+        """
+        from django.core import mail
+
+        from tasks import send_account_deletion_reminder_task
+
+        owner.deactivate()
+        User.objects.filter(pk=owner.pk).update(
+            deactivated_at=timezone.now() - timedelta(days=Constants.ACCOUNT_DELETION_GRACE_DAYS)
+        )
+
+        send_account_deletion_reminder_task()
+
+        owner.refresh_from_db()
+        assert len(mail.outbox) == 0
+        assert owner.deletion_reminder_sent_at is None
 
     def test_skips_active_accounts(self, owner):
         from django.core import mail
