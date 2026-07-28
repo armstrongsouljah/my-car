@@ -265,14 +265,13 @@ DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL")
 OTP_EXPIRY_MINUTES = config("OTP_EXPIRY_MINUTES", default=10, cast=int)
 
 # ---------------------------------------------------------------------------
-# Cloudinary (server-side) — separate from the frontend's public
-# NEXT_PUBLIC_CLOUDINARY_* build args used for unsigned browser uploads. Only
-# needed so the account-purge sweep can delete a deleted owner's car photos;
-# left blank, utils.Cloudinary.delete_photos() just skips cleanup.
+# Cloudinary (server-side) — standard cloudinary://<key>:<secret>@<cloud_name>
+# form, separate from the frontend's public NEXT_PUBLIC_CLOUDINARY_* build
+# args used for unsigned browser uploads. Only needed so the account-purge
+# sweep can delete a deleted owner's car photos; left blank,
+# utils.Cloudinary.delete_photos() just skips cleanup.
 # ---------------------------------------------------------------------------
-CLOUDINARY_CLOUD_NAME = config("CLOUDINARY_CLOUD_NAME", default="")
-CLOUDINARY_API_KEY = config("CLOUDINARY_API_KEY", default="")
-CLOUDINARY_API_SECRET = config("CLOUDINARY_API_SECRET", default="")
+CLOUDINARY_URL = config("CLOUDINARY_URL", default="")
 
 # ---------------------------------------------------------------------------
 # Seeded super admin

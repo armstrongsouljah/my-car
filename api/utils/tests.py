@@ -1,6 +1,21 @@
 import pytest
 
-from utils.Cloudinary import _public_id_from_url, delete_photos
+from utils.Cloudinary import _credentials_from_settings, _public_id_from_url, delete_photos
+
+
+class TestCredentialsFromSettings:
+
+    def test_parses_the_standard_cloudinary_url_form(self, settings):
+        settings.CLOUDINARY_URL = "cloudinary://mykey:mysecret@soultech"
+        assert _credentials_from_settings() == ("soultech", "mykey", "mysecret")
+
+    def test_returns_none_when_unset(self, settings):
+        settings.CLOUDINARY_URL = ""
+        assert _credentials_from_settings() is None
+
+    def test_returns_none_for_a_malformed_url(self, settings):
+        settings.CLOUDINARY_URL = "not-a-cloudinary-url"
+        assert _credentials_from_settings() is None
 
 
 class TestPublicIdFromUrl:
@@ -25,9 +40,7 @@ class TestPublicIdFromUrl:
 class TestDeletePhotos:
 
     def test_skips_when_credentials_not_configured(self, settings, monkeypatch):
-        settings.CLOUDINARY_CLOUD_NAME = ""
-        settings.CLOUDINARY_API_KEY = ""
-        settings.CLOUDINARY_API_SECRET = ""
+        settings.CLOUDINARY_URL = ""
 
         called = []
         monkeypatch.setattr("utils.Cloudinary.requests.post", lambda *a, **k: called.append(1))
@@ -37,9 +50,7 @@ class TestDeletePhotos:
         assert called == []
 
     def test_skips_blank_urls(self, settings, monkeypatch):
-        settings.CLOUDINARY_CLOUD_NAME = "soultech"
-        settings.CLOUDINARY_API_KEY = "key"
-        settings.CLOUDINARY_API_SECRET = "secret"
+        settings.CLOUDINARY_URL = "cloudinary://key:secret@soultech"
 
         called = []
         monkeypatch.setattr("utils.Cloudinary.requests.post", lambda *a, **k: called.append(1))
@@ -49,9 +60,7 @@ class TestDeletePhotos:
         assert called == []
 
     def test_calls_destroy_for_each_configured_photo(self, settings, monkeypatch):
-        settings.CLOUDINARY_CLOUD_NAME = "soultech"
-        settings.CLOUDINARY_API_KEY = "key"
-        settings.CLOUDINARY_API_SECRET = "secret"
+        settings.CLOUDINARY_URL = "cloudinary://key:secret@soultech"
 
         calls = []
 

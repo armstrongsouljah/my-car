@@ -1,6 +1,7 @@
 import hashlib
 import logging
 import re
+from urllib.parse import urlparse
 
 import requests
 from django.conf import settings
@@ -21,26 +22,39 @@ def _public_id_from_url(url: str) -> str | None:
     return match.group("public_id") if match else None
 
 
+def _credentials_from_settings() -> tuple[str, str, str] | None:
+    """
+    Parses the standard `cloudinary://<api_key>:<api_secret>@<cloud_name>`
+    format (CLOUDINARY_URL) that Cloudinary's own SDKs read — matches what's
+    already in local dev .env files, so no separate credential shape to keep
+    in sync. Returns None if unset or unparseable.
+    """
+    raw = getattr(settings, "CLOUDINARY_URL", "")
+    if not raw:
+        return None
+
+    parsed = urlparse(raw)
+    if parsed.scheme != "cloudinary" or not (parsed.username and parsed.password and parsed.hostname):
+        return None
+    return parsed.hostname, parsed.username, parsed.password
+
+
 def delete_photos(urls: list[str]) -> None:
     """
     Best-effort delete of Cloudinary-hosted photos by their delivery URL.
-    No-ops (with a warning) if server-side Cloudinary credentials aren't
-    configured, and never raises — a failed cleanup shouldn't block the
-    account deletion it's part of.
+    No-ops (with a warning) if CLOUDINARY_URL isn't configured, and never
+    raises — a failed cleanup shouldn't block the account deletion it's part
+    of.
     """
-    cloud_name = getattr(settings, "CLOUDINARY_CLOUD_NAME", "")
-    api_key = getattr(settings, "CLOUDINARY_API_KEY", "")
-    api_secret = getattr(settings, "CLOUDINARY_API_SECRET", "")
-
     urls = [u for u in urls if u]
     if not urls:
         return
 
-    if not (cloud_name and api_key and api_secret):
-        logger.warning(
-            "Skipping Cloudinary cleanup for %d photo(s): server-side credentials not configured", len(urls)
-        )
+    credentials = _credentials_from_settings()
+    if credentials is None:
+        logger.warning("Skipping Cloudinary cleanup for %d photo(s): CLOUDINARY_URL not configured", len(urls))
         return
+    cloud_name, api_key, api_secret = credentials
 
     for url in urls:
         public_id = _public_id_from_url(url)
