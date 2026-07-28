@@ -6,6 +6,10 @@ metadata:
   labels: { app: api }
 spec:
   replicas: 2
+  # GKE Gateway/NEG backend-attachment can take longer than the 600s default
+  # to confirm a new pod healthy, causing `kubectl rollout status` to report
+  # ProgressDeadlineExceeded even though the rollout goes on to succeed.
+  progressDeadlineSeconds: 1200
   selector:
     matchLabels: { app: api }
   template:

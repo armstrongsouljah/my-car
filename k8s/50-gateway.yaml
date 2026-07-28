@@ -98,7 +98,10 @@ spec:
     config:
       type: HTTP
       httpHealthCheck:
-        # /admin/ itself 302s to this when unauthenticated — GCP health checks
-        # don't follow redirects, so point straight at the 200.
-        requestPath: /admin/login/
+        # config/urls.py's health() view is exempt from SECURE_SSL_REDIRECT
+        # (settings.py SECURE_REDIRECT_EXEMPT) specifically so this plain-HTTP
+        # check gets a 200 instead of a 301 the LB won't follow. /admin/login/
+        # used to work here but stopped being exempt once SECURE_SSL_REDIRECT
+        # was turned on for prod.
+        requestPath: /health/
         host: api
