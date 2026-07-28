@@ -9,6 +9,14 @@ from .settings import *  # noqa: E402,F401,F403
 
 DEBUG = False
 
+# The test client talks plain HTTP and never sets X-Forwarded-Proto, so the
+# transport-security defaults in settings.py (which key off `not DEBUG`, not
+# the DEBUG reassignment above since they're computed at import time) would
+# otherwise 301-redirect every single request to itself over HTTPS.
+SECURE_SSL_REDIRECT = False
+SESSION_COOKIE_SECURE = False
+CSRF_COOKIE_SECURE = False
+
 PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
 
 EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
