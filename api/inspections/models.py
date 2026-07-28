@@ -4,6 +4,7 @@ from django.db import models
 from django.utils import timezone
 
 from utils import Constants
+from utils.Uploads import validate_upload_type
 
 from cars.models import Car
 
@@ -25,7 +26,9 @@ class Inspection(models.Model):
     status = models.CharField(max_length=20, choices=Constants.INSPECTION_STATUSES, default=Constants.INSPECTION_STATUS_PASSED)
     inspector_name = models.CharField(max_length=150, blank=True)
     notes = models.TextField(blank=True)
-    report = models.FileField(upload_to=inspection_report_path, null=True, blank=True)
+    report = models.FileField(
+        upload_to=inspection_report_path, null=True, blank=True, validators=[validate_upload_type]
+    )
 
     # When the next inspection should happen; defaults to
     # INSPECTION_DEFAULT_INTERVAL_MONTHS after inspection_date when omitted.

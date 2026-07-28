@@ -7,6 +7,11 @@ from utils import Constants
 
 
 def support_attachment_path(instance, filename):
+    """
+    Dead code, kept only because migration 0001_initial still references it by
+    import path. Attachments are no longer written to storage — see migration
+    0002_drop_attachment_storage.
+    """
     return f"support_attachments/{instance.support_request_id}/{filename}"
 
 
@@ -27,6 +32,11 @@ class SupportRequest(models.Model):
     custom_subject = models.CharField(max_length=150, blank=True)
     message = models.TextField()
 
+    # Attachment *contents* are never stored — they go out on the notification
+    # email and are then dropped. Only the filenames are kept, so the support
+    # inbox thread and this record can be matched up later.
+    attachment_names = models.JSONField(default=list, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -40,13 +50,3 @@ class SupportRequest(models.Model):
         if self.subject == Constants.SUPPORT_SUBJECT_OTHER and self.custom_subject:
             return self.custom_subject
         return self.get_subject_display()
-
-
-class SupportAttachment(models.Model):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    support_request = models.ForeignKey(SupportRequest, on_delete=models.CASCADE, related_name="attachments")
-    file = models.FileField(upload_to=support_attachment_path)
-    uploaded_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return self.file.name

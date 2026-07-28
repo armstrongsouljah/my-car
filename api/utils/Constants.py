@@ -191,6 +191,27 @@ SUPPORT_SUBJECTS = [
 
 SUPPORT_MAX_ATTACHMENTS = 5
 SUPPORT_MAX_ATTACHMENT_SIZE_MB = 10
+# Attachments are never written to disk — they ride along on the notification
+# email and are then dropped. That means the whole batch is base64-encoded into
+# the Celery message, so the combined size needs its own (smaller) ceiling.
+SUPPORT_MAX_ATTACHMENT_TOTAL_MB = 10
+
+# ---------------------------------------------------------------------------
+# Upload types
+# ---------------------------------------------------------------------------
+# Support attachments and inspection reports are screenshots, photos and
+# scanned documents. Anything else gets rejected rather than mailed on to the
+# support inbox or parked in storage.
+ALLOWED_UPLOAD_EXTENSIONS = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".heic", ".pdf")
+ALLOWED_UPLOAD_CONTENT_TYPES = (
+    "image/png",
+    "image/jpeg",
+    "image/gif",
+    "image/webp",
+    "image/heic",
+    "image/heif",
+    "application/pdf",
+)
 
 # ---------------------------------------------------------------------------
 # Email verification OTP

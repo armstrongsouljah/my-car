@@ -4,6 +4,8 @@
 
 Findings marked **[verified]** were reproduced against a live test database using the real URLconf, views and permission classes.
 
+> **Status:** findings 1–5 and 9 are fixed on `fix/security-hardening`. Findings 6, 7, 8, 10 and 11 are still open. Fixing 9 also resolved a separate production bug: support requests with attachments were never delivered at all — see the note under that finding.
+
 ---
 
 ## Summary
@@ -88,7 +90,17 @@ Both default `ADMIN_PASSWORD` to the literal `change-me-admin-password`, and `se
 
 Neither `SupportAttachment.file` nor `Inspection.report` validates extension or content type. Support attachments are read back and attached to outbound email to the support inbox (`utils/Email.py`), so the endpoint can be used to mail arbitrary binaries to your team — throttled at 5/hour, and size/count are capped (5 files, 10MB). Django's `FileField` sanitizes the filename, so there's no path traversal.
 
-**Fix:** allowlist extensions and content types on both fields.
+**Fixed:** both surfaces now allowlist images and PDFs by extension *and* content type (`utils/Uploads.py`).
+
+### Related production bug found while fixing this — support attachments were never delivered
+
+Attachments were written to `MEDIA_ROOT` during the request and re-read by `send_support_request_email_task`. That task runs in the **worker** pod, which has its own empty `/app/media` — no volume is defined in any k8s manifest, and the API deployment runs 2 replicas besides. The worker hit `FileNotFoundError`, the task died, and *no* email went out: not the attachments, not even the message text. Requests without attachments never touch the filesystem, which is why only those arrived. `docker-compose.yml` shares a `media_data` volume between `api` and `worker`, so it worked locally and only broke in production.
+
+**[verified]** Reproduced by wiping `MEDIA_ROOT` between the request and the task: `FileNotFoundError`, zero emails sent, support request row stranded in the database.
+
+**Fixed:** attachment bytes now travel in the Celery task payload and are never written to storage, so there is no shared-filesystem requirement. The `SupportAttachment` model is dropped; `SupportRequest.attachment_names` keeps the filenames so an admin record can be matched to the email thread. A combined 10MB cap across the batch keeps the broker message bounded.
+
+**Still open:** `Inspection.report` has the same root cause. Reports are written to the API pod's ephemeral disk, so they're lost on restart, invisible to the other replica, and `report_url` points at `/media/...`, which isn't routed at all when `DEBUG=False`. Uploads there are effectively write-only today. That needs real object storage (GCS) rather than the payload trick, since reports are meant to be read back later.
 
 ## 10. Low — user enumeration
 

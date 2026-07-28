@@ -97,15 +97,19 @@ def send_mileage_reminder_email(email: str, first_name: str, cars: list):
     msg.send()
 
 
-def send_support_request_email(support_request):
+def send_support_request_email(support_request, attachments=None):
     """
     Notifies the support inbox (DEFAULT_FROM_EMAIL) of a contact-us
     submission. Reply-To is the submitter's own address so support can just
-    hit reply, and any uploaded files are attached to the email itself.
+    hit reply.
+
+    `attachments` is a list of (filename, bytes, content_type) handed straight
+    through from the request — the files are never written to storage, so this
+    email is the only copy.
     """
     from django.conf import settings
 
-    attachments = list(support_request.attachments.all())
+    attachments = attachments or []
     subject = f"[GlavBox Support] {support_request.display_subject}"
     submitted_by = "a registered user" if support_request.user_id else "a visitor"
 
@@ -133,12 +137,8 @@ def send_support_request_email(support_request):
     )
     msg.attach_alternative(html_body, "text/html")
 
-    for attachment in attachments:
-        attachment.file.open("rb")
-        try:
-            msg.attach(attachment.file.name.rsplit("/", 1)[-1], attachment.file.read())
-        finally:
-            attachment.file.close()
+    for filename, content, content_type in attachments:
+        msg.attach(filename, content, content_type)
 
     msg.send()
 

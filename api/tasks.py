@@ -16,12 +16,24 @@ def send_welcome_email_task(email, first_name=""):
 
 
 @shared_task(name="tasks.send_support_request_email_task")
-def send_support_request_email_task(support_request_id):
+def send_support_request_email_task(support_request_id, attachments=None):
+    """
+    `attachments` is a list of {"name", "content_type", "content_b64"} carried
+    in the task payload. They are deliberately not read from storage: this task
+    runs in the worker pod, which does not share a filesystem with the API pod
+    that handled the upload.
+    """
+    from base64 import b64decode
+
     from support.models import SupportRequest
     from utils.Email import send_support_request_email
 
-    support_request = SupportRequest.objects.prefetch_related("attachments").get(pk=support_request_id)
-    send_support_request_email(support_request)
+    support_request = SupportRequest.objects.get(pk=support_request_id)
+    decoded = [
+        (item["name"], b64decode(item["content_b64"]), item.get("content_type"))
+        for item in (attachments or [])
+    ]
+    send_support_request_email(support_request, attachments=decoded)
 
 
 @shared_task(name="tasks.send_mileage_reminders_task")
