@@ -115,12 +115,18 @@ class EmailVerificationOTP(models.Model):
         """
         Count a wrong guess and burn the code once the cap is hit, so the owner
         has to request a fresh one. Returns True if the code is now spent.
+
+        Uses an atomic F() update rather than `self.failed_attempts += 1` —
+        two verify requests racing the same OTP would otherwise both read the
+        same stale count and one increment would be lost, letting an attacker
+        get more than OTP_MAX_FAILED_ATTEMPTS guesses by parallelizing.
         """
-        self.failed_attempts += 1
+        type(self).objects.filter(pk=self.pk).update(failed_attempts=models.F("failed_attempts") + 1)
+        self.refresh_from_db(fields=["failed_attempts"])
         exhausted = self.failed_attempts >= Constants.OTP_MAX_FAILED_ATTEMPTS
-        if exhausted:
+        if exhausted and not self.is_used:
             self.is_used = True
-        self.save(update_fields=["failed_attempts", "is_used"])
+            self.save(update_fields=["is_used"])
         return exhausted
 
     @classmethod

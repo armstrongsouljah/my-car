@@ -1,3 +1,4 @@
+from django.db import IntegrityError, transaction
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -48,6 +49,26 @@ def _dispatch_otp(user):
     )
 
 
+def _notify_existing_account(existing):
+    """
+    Called when a register request targets an address that already has an
+    account. Same response either way, so telling the caller which branch ran
+    would recreate the enumeration oracle — only the address owner is told.
+    """
+    if existing.is_email_verified:
+        # The owner can act on this directly, so point them at login.
+        from tasks import send_duplicate_signup_email_task
+
+        send_duplicate_signup_email_task.delay(email=existing.email, first_name=existing.first_name)
+    else:
+        # Never verified the first time around — most likely they lost the
+        # original code and are retrying the signup form. A "sign in instead"
+        # email would be a dead end since login rejects unverified accounts,
+        # so just re-issue a code the same way a fresh signup would.
+        # create_for_user() invalidates the old one.
+        _dispatch_otp(existing)
+
+
 # ---------------------------------------------------------------------------
 # Register — creates account, sends OTP; no tokens until verified
 # ---------------------------------------------------------------------------
@@ -63,15 +84,21 @@ class RegisterView(SmartAPIView):
 
         existing = User.objects.filter(email=email).first()
         if existing is not None:
-            # Same response as a fresh signup — telling the caller the address
-            # is taken would confirm an account exists. The owner of the
-            # address is told instead, which is also the only party who can act
-            # on it.
-            from tasks import send_duplicate_signup_email_task
-
-            send_duplicate_signup_email_task.delay(email=existing.email, first_name=existing.first_name)
+            _notify_existing_account(existing)
         else:
-            _dispatch_otp(serializer.save())
+            try:
+                with transaction.atomic():
+                    new_user = serializer.save()
+            except IntegrityError:
+                # Lost a race with a concurrent signup for this address (e.g. a
+                # double-clicked submit): the DB's unique constraint is the
+                # only backstop left now that the pre-save UniqueValidator is
+                # gone — it was itself an enumeration oracle. Treat it the
+                # same as if the check above had found the row, rather than
+                # letting this surface as a 500.
+                _notify_existing_account(User.objects.get(email=email))
+            else:
+                _dispatch_otp(new_user)
 
         return self.respond_with(
             f"Check your inbox — we've sent a message to {email}.",

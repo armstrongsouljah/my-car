@@ -268,6 +268,25 @@ class TestOTPBruteForce:
 
         assert response.status_code == 200
 
+    def test_failed_attempt_counter_does_not_lose_a_racing_update(self):
+        """
+        Two verify requests can each load the same OTP row before either
+        writes back. A naive `self.failed_attempts += 1; self.save()` would
+        have both start from the same stale count and one increment would be
+        lost — this pins the atomic F() update instead.
+        """
+        user = User.objects.create_user(email="racer3@example.com", password="str0ng-pass-123")
+        otp, _ = EmailVerificationOTP.create_for_user(user)
+
+        stale_a = EmailVerificationOTP.objects.get(pk=otp.pk)
+        stale_b = EmailVerificationOTP.objects.get(pk=otp.pk)
+
+        stale_a.register_failed_attempt()
+        stale_b.register_failed_attempt()
+
+        otp.refresh_from_db()
+        assert otp.failed_attempts == 2
+
 
 @pytest.mark.django_db
 class TestAuthThrottling:
@@ -349,6 +368,65 @@ class TestAccountEnumeration:
         # The address owner is told, since they're the only one who can act.
         assert mail.outbox[-1].to == ["owner@example.com"]
         assert "already have" in mail.outbox[-1].subject.lower()
+
+    def test_register_reissues_a_code_for_an_unverified_retry(self, client):
+        from django.core import mail
+
+        unverified = User.objects.create_user(email="unverified@example.com", password="first-pass-123")
+        first_otp, _ = EmailVerificationOTP.create_for_user(unverified)
+
+        retry = client.post(reverse("auth-register"), {
+            "email": "unverified@example.com", "password": "second-pass-456",
+        })
+
+        assert retry.status_code == 201
+        # No second account, and the original password is untouched.
+        assert User.objects.filter(email="unverified@example.com").count() == 1
+        unverified.refresh_from_db()
+        assert unverified.check_password("first-pass-123") is True
+
+        # A fresh code went out — not the "you already have an account" email,
+        # since that would just send them to a login that rejects them for
+        # being unverified.
+        assert mail.outbox[-1].to == ["unverified@example.com"]
+        assert "already have" not in mail.outbox[-1].subject.lower()
+
+        first_otp.refresh_from_db()
+        assert first_otp.is_used is True
+        assert EmailVerificationOTP.objects.filter(user=unverified, is_used=False).count() == 1
+
+    def test_register_survives_a_race_on_email_uniqueness(self, client, monkeypatch):
+        """
+        The pre-save UniqueValidator was removed from RegisterSerializer since
+        it was itself an enumeration oracle, so the DB's unique constraint is
+        now the only thing standing between two concurrent registrations for
+        the same brand-new address (e.g. a double-clicked submit button).
+
+        Simulates the race by making the existence check miss a row that's
+        already there — the same outcome as another request's insert landing
+        in the gap between our check and our own save() — and lets the real
+        DB raise the real IntegrityError rather than faking one.
+        """
+        winner = User.objects.create_user(email="racer@example.com", password="whoever-won-123")
+
+        real_filter = User.objects.filter
+        calls = {"n": 0}
+
+        def miss_the_row_once(*args, **kwargs):
+            calls["n"] += 1
+            return User.objects.none() if calls["n"] == 1 else real_filter(*args, **kwargs)
+
+        monkeypatch.setattr(User.objects, "filter", miss_the_row_once)
+
+        response = client.post(reverse("auth-register"), {
+            "email": "racer@example.com", "password": "str0ng-pass-123",
+        })
+
+        assert response.status_code == 201
+        assert User.objects.filter(email="racer@example.com").count() == 1
+        # The account that actually won the race is untouched.
+        winner.refresh_from_db()
+        assert winner.check_password("whoever-won-123") is True
 
     def test_resend_otp_looks_the_same_for_an_unknown_address(self, client):
         known = User.objects.create_user(email="unverified@example.com", password="str0ng-pass-123")
