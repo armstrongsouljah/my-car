@@ -22,6 +22,33 @@ SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 CSRF_TRUSTED_ORIGINS = config("CSRF_TRUSTED_ORIGINS", default="", cast=Csv())
 
+# ---------------------------------------------------------------------------
+# Transport security
+# ---------------------------------------------------------------------------
+# All default to "on unless DEBUG", so local HTTP development keeps working
+# while any deployed environment is hardened without needing extra env vars.
+#
+# The Gateway already redirects HTTP->HTTPS at the edge; SECURE_SSL_REDIRECT is
+# the backstop for anything that reaches the pod over plain HTTP anyway, and it
+# reads the proxy header set above to avoid a redirect loop.
+SECURE_SSL_REDIRECT = config("SECURE_SSL_REDIRECT", default=not DEBUG, cast=bool)
+# Kubernetes probes hit the pod directly over HTTP and must not be redirected.
+SECURE_REDIRECT_EXEMPT = [r"^health/$"]
+
+SESSION_COOKIE_SECURE = config("SESSION_COOKIE_SECURE", default=not DEBUG, cast=bool)
+CSRF_COOKIE_SECURE = config("CSRF_COOKIE_SECURE", default=not DEBUG, cast=bool)
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_SAMESITE = "Lax"
+
+# One year. Without HSTS the very first request of a session can still be
+# downgraded to HTTP before the redirect fires.
+SECURE_HSTS_SECONDS = config("SECURE_HSTS_SECONDS", default=0 if DEBUG else 31536000, cast=int)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = config("SECURE_HSTS_INCLUDE_SUBDOMAINS", default=not DEBUG, cast=bool)
+# Preload is deliberately opt-in: submitting to the browser preload list is
+# hard to reverse, so it should be a conscious decision rather than a default.
+SECURE_HSTS_PRELOAD = config("SECURE_HSTS_PRELOAD", default=False, cast=bool)
+
 # Base URL of the my-car frontend, used to build public-facing links in emails.
 FRONTEND_URL = config("FRONTEND_URL", default="http://localhost:3000").rstrip("/")
 
@@ -255,7 +282,15 @@ CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = TIME_ZONE
 
 if CELERY_BROKER_URL.startswith("rediss://"):
-    _ssl_opts = {"ssl_cert_reqs": _ssl.CERT_NONE}
+    # Verify the broker's certificate. CERT_NONE encrypts the connection but
+    # accepts any certificate, which leaves it open to an undetected MITM —
+    # the encryption is then only as good as the network you're trusting.
+    # CELERY_BROKER_SSL_CA_CERTS points at a CA bundle when the broker uses a
+    # private CA (Memorystore does; leave unset for a publicly-trusted cert).
+    _ssl_opts = {"ssl_cert_reqs": _ssl.CERT_REQUIRED}
+    _ssl_ca_certs = config("CELERY_BROKER_SSL_CA_CERTS", default="")
+    if _ssl_ca_certs:
+        _ssl_opts["ssl_ca_certs"] = _ssl_ca_certs
     CELERY_BROKER_USE_SSL = _ssl_opts
     CELERY_REDIS_BACKEND_USE_SSL = _ssl_opts
 

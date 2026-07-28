@@ -59,10 +59,22 @@ class RegisterView(SmartAPIView):
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        user = serializer.save()
-        _dispatch_otp(user)
+        email = serializer.validated_data["email"]
+
+        existing = User.objects.filter(email=email).first()
+        if existing is not None:
+            # Same response as a fresh signup — telling the caller the address
+            # is taken would confirm an account exists. The owner of the
+            # address is told instead, which is also the only party who can act
+            # on it.
+            from tasks import send_duplicate_signup_email_task
+
+            send_duplicate_signup_email_task.delay(email=existing.email, first_name=existing.first_name)
+        else:
+            _dispatch_otp(serializer.save())
+
         return self.respond_with(
-            f"Account created. A verification code has been sent to {user.email}.",
+            f"Check your inbox — we've sent a message to {email}.",
             status_code=status.HTTP_201_CREATED,
         )
 
@@ -110,9 +122,15 @@ class ResendOTPView(SmartAPIView):
         serializer = ResendOTPSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.validated_data["user"]
-        _dispatch_otp(user)
+
+        # `user` is None for an unknown or already-verified address. Nothing is
+        # sent in that case, but the response is identical either way.
+        if user is not None:
+            _dispatch_otp(user)
+
+        email = serializer.validated_data["email"].lower()
         return self.respond_with(
-            f"A new verification code has been sent to {user.email}."
+            f"If {email} needs verifying, a new code is on its way to it."
         )
 
 

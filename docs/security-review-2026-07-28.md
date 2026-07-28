@@ -4,7 +4,9 @@
 
 Findings marked **[verified]** were reproduced against a live test database using the real URLconf, views and permission classes.
 
-> **Status:** findings 1–5 and 9 are fixed on `fix/security-hardening`. Findings 6, 7, 8, 10 and 11 are still open. Fixing 9 also resolved a separate production bug: support requests with attachments were never delivered at all — see the note under that finding.
+> **Status:** findings 1–5 and 7–11 are fixed on `fix/security-hardening`. **Finding 6 (JWTs in `localStorage`) is the only one left open** — it needs an auth-flow design decision rather than a patch, so it hasn't been touched. Fixing 9 also resolved a separate production bug: support requests with attachments were never delivered at all — see the note under that finding.
+>
+> `manage.py check --deploy` went from `W004, W008, W012, W016` to clean (only `W021`, HSTS preload, which is deliberately opt-in).
 
 ---
 
@@ -38,7 +40,7 @@ Net effect: any authenticated user sending `DELETE /api/v1/auth/profile/` delete
 
 **[verified]** One attacker token: victim deleted (attacker's own account untouched); repeated calls took the table from 5 users to 1; victim's cars went 1 → 0.
 
-**Fix:** override `queryset()` on `ProfileView` to return `User.objects.filter(pk=self.request.user.pk)`, *and* fix the base class so `delete()` actually honours `has_permission` — the dead guard is the root cause and the next `SmartDetailView` subclass will hit it too. Consider making `SmartDetailView.queryset()` raise rather than silently returning everything when no kwargs are supplied.
+**Fixed:** `ProfileView.queryset()` now scopes to `self.request.user.pk`; `delete()` and `patch()` honour `has_permission`/`has_object_permission`; and the base `queryset()` raises `ImproperlyConfigured` rather than silently matching the whole table when given no lookup kwargs, so the next subclass that forgets to scope itself fails loudly.
 
 ## 2. High — OTP brute force → account takeover
 
@@ -48,7 +50,7 @@ Net effect: any authenticated user sending `DELETE /api/v1/auth/profile/` delete
 
 **[verified]** Six consecutive wrong codes all returned 400, no `429`, and the OTP remained valid; the correct code then returned 200 with `tokens` in the body.
 
-**Fix:** cap attempts per OTP record (3–5, then invalidate), add a scoped throttle to both verify and resend, and consider an 8-digit code.
+**Fixed:** a `failed_attempts` counter burns the code after 5 wrong guesses, `verify()` uses a constant-time compare, and both verify and resend carry their own throttle scope keyed on the target email. The code is still 6 digits — the attempt cap, not the width, is what closes the brute force.
 
 ## 3. High — deployment defaults ship a known super-admin password
 
@@ -56,7 +58,7 @@ Net effect: any authenticated user sending `DELETE /api/v1/auth/profile/` delete
 
 Both default `ADMIN_PASSWORD` to the literal `change-me-admin-password`, and `seed_admin` runs on every boot creating a `is_superuser` account at the well-known address `admin@mycar.com`. Django admin is served at `/admin/` on the same public hostname as the API. If the template value ever reaches production unchanged, that's full admin over every user's data. `docker-compose.yml:26` similarly defaults `SECRET_KEY` to `dev-secret-key`, which would make forged session cookies and signed tokens trivial.
 
-**Fix:** drop the fallbacks — make both variables required (`${ADMIN_PASSWORD:?set this}`) so a misconfigured deploy fails loudly instead of booting with a guessable admin. `seed_admin` already generates a random password when the variable is empty, which is the better default.
+**Fixed:** the `change-me-admin-password` fallbacks are gone from both Compose and the k8s template — empty now means `seed_admin` generates a random password and logs it once. `SECRET_KEY` is required in Compose (`${SECRET_KEY:?...}`).
 
 ## 4. Medium — no throttling on authentication endpoints
 
@@ -64,13 +66,15 @@ Both default `ADMIN_PASSWORD` to the literal `change-me-admin-password`, and `se
 
 **[verified]** 15 consecutive failed logins, all 401, no `429`.
 
-**Fix:** add `anon`/`user` scoped throttles globally, plus a tighter scope on the auth endpoints. Note that per-IP throttling behind the GKE L7 load balancer needs `X-Forwarded-For` handled correctly or every request looks like it comes from the LB.
+**Fixed:** baseline `anon`/`user` throttle classes plus per-endpoint scopes for login, register and the two OTP routes. The OTP scopes key on the target email rather than IP, so a distributed attacker can't grind one account from a pool of addresses.
+
+**Action needed on deploy:** set `NUM_PROXIES=2` in the k8s secret. DRF otherwise reads the whole `X-Forwarded-For`, which the caller can spoof; behind the Gateway the header is `<client>, <gclb>`, so 2 hops back is the real client.
 
 ## 5. Medium — `DEBUG` defaults to `True`
 
 `api/config/settings.py:11` and `docker-compose.yml:27` both default DEBUG on; `.env.example:3` ships `DEBUG=True`. A missing env var in production means stack traces with settings values, and `MEDIA_ROOT` served directly (`config/urls.py:28`). The k8s secret sets it to `False` explicitly, so this is a latent trap rather than a live exposure — but it's the wrong default to have.
 
-**Fix:** `default=False`.
+**Fixed:** `default=False`, so a deployed environment missing the variable fails closed.
 
 ## 6. Medium — JWTs in `localStorage`
 
@@ -80,11 +84,13 @@ Both default `ADMIN_PASSWORD` to the literal `change-me-admin-password`, and `se
 
 `SECURE_HSTS_SECONDS`, `SECURE_SSL_REDIRECT`, `SESSION_COOKIE_SECURE` and `CSRF_COOKIE_SECURE` are all unset/false. `SECURE_PROXY_SSL_HEADER` is configured correctly and the Gateway redirects HTTP→HTTPS, so this is partly covered at the edge — but the admin session cookie has no `Secure` flag and there's no HSTS to stop a first-request downgrade. `X-Frame-Options: DENY`, `nosniff` and `Referrer-Policy` are all present and correct.
 
+**Fixed:** all four now default to on-unless-`DEBUG`, so local HTTP development is unaffected and deployments are hardened without extra env vars. HSTS is one year with `includeSubDomains`; preload stays opt-in because submitting to the browser preload list is hard to reverse. `/health/` is exempt from the SSL redirect so k8s probes still work.
+
 ## 8. Low — Celery broker TLS verification disabled
 
 `api/config/settings.py:236` sets `ssl_cert_reqs: CERT_NONE` for `rediss://`, so the encrypted broker connection accepts any certificate — MITM on that link is undetected. Fine on a private VPC to Memorystore; wrong if the broker is ever reachable over an untrusted path.
 
-**Fix:** `CERT_REQUIRED` with the appropriate CA bundle.
+**Fixed:** now `CERT_REQUIRED`, with `CELERY_BROKER_SSL_CA_CERTS` for brokers behind a private CA.
 
 ## 9. Low — unrestricted upload file types
 
@@ -106,22 +112,26 @@ Attachments were written to `MEDIA_ROOT` during the request and re-read by `send
 
 **[verified]** `POST /auth/register/` returns 400 `"User with this email already exists."` vs 201; `POST /auth/resend-otp/` returns 404 `"No account found with this email."` vs 200. Login itself is correctly generic. Low impact on its own, but it pairs with finding 2 to let an attacker locate unverified accounts to target.
 
+**Fixed:** all three routes now return identical status and body regardless of whether the address exists. Registering with a taken address returns the same 201 and emails the actual account holder a "you already have an account" notice instead of creating anything; `verify-email` collapses every failure to one message. DRF's auto-generated `UniqueValidator` on the email field had to be disabled explicitly — it was answering "already exists" before the view was ever reached.
+
+**UX trade-off:** the signup form can no longer say "that email is taken." The frontend copy now covers both cases and the notice email points the user to sign in. Say the word if you'd rather have the clearer error back — it's a small revert.
+
 ## 11. Low — OTP generation and storage
 
 `utils/Email.py:8` uses `random.choices`, which is a Mersenne Twister, not a CSPRNG — predictable given enough observed output. OTPs are also stored in plaintext and exposed in Django admin (`accounts/admin.py:14`).
 
-**Fix:** `secrets.choice`; hash the stored OTP; drop the admin registration.
+**Fixed:** `secrets.choice` for generation; codes are stored as an HMAC keyed on `SECRET_KEY` (a plain hash is useless here — the whole 6-digit space hashes in under a second, but a database-only leak doesn't include `SECRET_KEY`); the admin registration is gone. The user-facing code is still 6 digits — only the stored column changed.
 
 ---
 
-## Suggested order
+## What's left
 
-1. Finding 1 — one-line fix, currently exploitable by any logged-in user
-2. Findings 2 and 4 together — one throttle configuration pass
-3. Finding 3 — remove the default before the next deploy
-4. Finding 5 — flip the default
-5. Findings 7–11 — hardening backlog
-6. Finding 6 — needs an auth-flow design decision
+**Finding 6 (JWTs in `localStorage`)** is the only numbered finding still open. Moving to `httpOnly` cookies removes the token-theft class entirely, but it needs CSRF handling and touches every API call in the frontend — a design decision rather than a patch.
+
+Two items outside the numbered findings:
+
+- **`Inspection.report` has the same shared-storage problem** that broke support attachments. Reports go to the API pod's ephemeral disk, so they're lost on restart, invisible to the second replica, and `report_url` points at `/media/...`, which isn't routed when `DEBUG=False`. Those uploads are effectively write-only today. The payload approach used for support attachments doesn't transfer, since reports are meant to be read back later — this one needs object storage.
+- **`--timeout 0` on gunicorn** (in both `entrypoint.sh` and `k8s/20-api.yaml`) means a hung request occupies a thread forever. With `--workers 1 --threads 8`, eight of those take the pod down.
 
 ## Notes on infrastructure
 

@@ -25,15 +25,17 @@ class RegisterSerializer(CreateModelSerializer):
             "first_name": {"required": False, "default": ""},
             "last_name": {"required": False, "default": ""},
             "phone": {"required": False, "default": ""},
+            # DRF derives a UniqueValidator from the model's unique=True, which
+            # would answer "already exists" and reintroduce the enumeration
+            # oracle. RegisterView does the duplicate check itself.
+            "email": {"validators": []},
         }
 
     def validate_email(self, value):
-        if User.objects.filter(email=value.lower()).exists():
-            raise CustomValidation(
-                "An account with this email already exists.",
-                field="email",
-                status_code=status.HTTP_409_CONFLICT,
-            )
+        # Deliberately no "already registered" check here — that answer is an
+        # account-existence oracle. RegisterView handles the duplicate case by
+        # returning the same response either way and emailing the address that
+        # already owns the account.
         return value.lower()
 
     def validate(self, attrs):
@@ -49,27 +51,27 @@ class RegisterSerializer(CreateModelSerializer):
 # ---------------------------------------------------------------------------
 
 class VerifyEmailSerializer(serializers.Serializer):
+    """
+    Every failure path returns the same message. Distinguishing "no such
+    account" from "already verified" from "wrong code" would turn this endpoint
+    into an account-existence oracle, and the remedy the caller needs is
+    identical in each case: request a fresh code.
+    """
     email = serializers.EmailField()
     otp = serializers.CharField(max_length=6, min_length=6)
+
+    INVALID = "That code is invalid or has expired. Please request a new one."
+
+    def _reject(self):
+        raise CustomValidation(self.INVALID, field="otp", status_code=status.HTTP_400_BAD_REQUEST)
 
     def validate(self, attrs):
         email = attrs["email"].lower()
         raw_otp = attrs["otp"]
 
-        try:
-            user = User.objects.get(email=email)
-        except User.DoesNotExist:
-            raise CustomValidation(
-                "No account found with this email.",
-                field="email",
-                status_code=status.HTTP_404_NOT_FOUND,
-            )
-
-        if user.is_email_verified:
-            raise CustomValidation(
-                "This account is already verified.",
-                status_code=status.HTTP_400_BAD_REQUEST,
-            )
+        user = User.objects.filter(email=email).first()
+        if user is None or user.is_email_verified:
+            self._reject()
 
         otp_instance = (
             EmailVerificationOTP.objects
@@ -78,31 +80,14 @@ class VerifyEmailSerializer(serializers.Serializer):
             .first()
         )
 
-        if not otp_instance:
-            raise CustomValidation(
-                "No active OTP found. Please request a new one.",
-                status_code=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if otp_instance.is_expired():
-            raise CustomValidation(
-                "OTP has expired. Please request a new one.",
-                field="otp",
-                status_code=status.HTTP_400_BAD_REQUEST,
-            )
+        if not otp_instance or otp_instance.is_expired():
+            self._reject()
 
         if not otp_instance.verify(raw_otp):
-            if otp_instance.register_failed_attempt():
-                raise CustomValidation(
-                    "Too many incorrect attempts. Please request a new verification code.",
-                    field="otp",
-                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                )
-            raise CustomValidation(
-                "Invalid OTP.",
-                field="otp",
-                status_code=status.HTTP_400_BAD_REQUEST,
-            )
+            # Burns the code once the attempt cap is hit; the caller is told to
+            # request a new one either way.
+            otp_instance.register_failed_attempt()
+            self._reject()
 
         attrs["user"] = user
         attrs["otp_instance"] = otp_instance
@@ -114,27 +99,16 @@ class VerifyEmailSerializer(serializers.Serializer):
 # ---------------------------------------------------------------------------
 
 class ResendOTPSerializer(serializers.Serializer):
+    """
+    Resolves the target account without ever reporting whether it exists —
+    `user` comes back as None for an unknown or already-verified address and
+    the view returns the same response regardless.
+    """
     email = serializers.EmailField()
 
     def validate(self, attrs):
         email = attrs["email"].lower()
-
-        try:
-            user = User.objects.get(email=email)
-        except User.DoesNotExist:
-            raise CustomValidation(
-                "No account found with this email.",
-                field="email",
-                status_code=status.HTTP_404_NOT_FOUND,
-            )
-
-        if user.is_email_verified:
-            raise CustomValidation(
-                "This account is already verified.",
-                status_code=status.HTTP_400_BAD_REQUEST,
-            )
-
-        attrs["user"] = user
+        attrs["user"] = User.objects.filter(email=email, is_email_verified=False).first()
         return attrs
 
 

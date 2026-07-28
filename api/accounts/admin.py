@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from accounts.models import User, EmailVerificationOTP
+from accounts.models import User
 
 
 @admin.register(User)
@@ -11,7 +11,6 @@ class UserAdmin(admin.ModelAdmin):
     ordering = ("-date_joined",)
 
 
-@admin.register(EmailVerificationOTP)
-class EmailVerificationOTPAdmin(admin.ModelAdmin):
-    list_display = ("user", "created_at", "expires_at", "is_used")
-    list_filter = ("is_used",)
+# EmailVerificationOTP is deliberately not registered. The codes are stored as
+# HMAC digests now, so there is nothing useful to read here, and an admin
+# listing of live verification codes is not something worth having.

@@ -151,3 +151,10 @@ def purge_deactivated_accounts_task():
     count = queryset.count()
     queryset.delete()
     return f"Purged {count} deactivated account(s) and their data"
+
+
+@shared_task(name="tasks.send_duplicate_signup_email_task")
+def send_duplicate_signup_email_task(email, first_name=""):
+    from utils.Email import send_duplicate_signup_email
+
+    send_duplicate_signup_email(email=email, first_name=first_name)

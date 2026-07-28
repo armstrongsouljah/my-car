@@ -1,3 +1,4 @@
+import re
 from datetime import timedelta
 
 import pytest
@@ -34,6 +35,24 @@ class TestAuthFlow:
         user = User.objects.get(email="new@example.com")
         assert user.is_email_verified is False
         assert EmailVerificationOTP.objects.filter(user=user, is_used=False).exists()
+
+    def test_registration_email_carries_a_six_digit_code(self, client):
+        from django.core import mail
+
+        response = client.post(reverse("auth-register"), {
+            "email": "sixdigit@example.com",
+            "password": "str0ng-pass-123",
+        })
+        assert response.status_code == 201
+
+        body = mail.outbox[-1].body
+        codes = re.findall(r"\b\d{6}\b", body)
+        assert codes, f"no 6-digit code in the email body: {body!r}"
+
+        # The emailed code verifies, and it is not what sits in the database.
+        stored = EmailVerificationOTP.objects.get(user__email="sixdigit@example.com")
+        assert stored.otp != codes[0]
+        assert stored.verify(codes[0]) is True
 
     def test_login_blocked_until_verified(self, client, db):
         User.objects.create_user(email="unverified@example.com", password="str0ng-pass-123")
@@ -212,13 +231,10 @@ class TestOTPBruteForce:
         otp_instance, raw_otp = EmailVerificationOTP.create_for_user(user)
         wrong = "000000" if raw_otp != "000000" else "111111"
 
-        for _ in range(Constants.OTP_MAX_FAILED_ATTEMPTS - 1):
+        for _ in range(Constants.OTP_MAX_FAILED_ATTEMPTS):
             response = client.post(reverse("auth-verify-email"), {"email": "brute@example.com", "otp": wrong})
+            # Same generic rejection every time — see TestAccountEnumeration.
             assert response.status_code == 400
-
-        # The attempt that hits the cap burns the code.
-        response = client.post(reverse("auth-verify-email"), {"email": "brute@example.com", "otp": wrong})
-        assert response.status_code == 429
 
         otp_instance.refresh_from_db()
         assert otp_instance.is_used is True
@@ -301,3 +317,88 @@ class TestOTPGeneration:
 
         otp = generate_otp()
         assert len(otp) == 6 and otp.isdigit()
+
+
+@pytest.mark.django_db
+class TestAccountEnumeration:
+    """
+    Registration, resend-OTP and verify-email must all look identical whether
+    or not the address has an account behind it.
+    """
+
+    def test_register_looks_the_same_for_a_taken_address(self, client, owner):
+        from django.core import mail
+
+        fresh = client.post(reverse("auth-register"), {
+            "email": "brand-new@example.com", "password": "str0ng-pass-123",
+        })
+        taken = client.post(reverse("auth-register"), {
+            "email": "owner@example.com", "password": "str0ng-pass-123",
+        })
+
+        assert fresh.status_code == taken.status_code == 201
+        # Only the caller-supplied address differs; the wording is identical.
+        assert fresh.data["detail"].replace("brand-new@example.com", "") == \
+            taken.data["detail"].replace("owner@example.com", "")
+
+        # No second account, and no password overwrite on the existing one.
+        assert User.objects.filter(email="owner@example.com").count() == 1
+        owner.refresh_from_db()
+        assert owner.check_password("str0ng-pass-123") is True
+
+        # The address owner is told, since they're the only one who can act.
+        assert mail.outbox[-1].to == ["owner@example.com"]
+        assert "already have" in mail.outbox[-1].subject.lower()
+
+    def test_resend_otp_looks_the_same_for_an_unknown_address(self, client):
+        known = User.objects.create_user(email="unverified@example.com", password="str0ng-pass-123")
+
+        hit = client.post(reverse("auth-resend-otp"), {"email": "unverified@example.com"})
+        miss = client.post(reverse("auth-resend-otp"), {"email": "nobody@example.com"})
+
+        assert hit.status_code == miss.status_code == 200
+        assert hit.data["detail"].replace("unverified@example.com", "") == \
+            miss.data["detail"].replace("nobody@example.com", "")
+
+        # A code really was issued for the account that exists, and none for the
+        # address that doesn't.
+        assert EmailVerificationOTP.objects.filter(user=known, is_used=False).exists()
+        assert not User.objects.filter(email="nobody@example.com").exists()
+
+    def test_verify_email_looks_the_same_for_every_failure(self, client):
+        user = User.objects.create_user(email="real@example.com", password="str0ng-pass-123")
+        EmailVerificationOTP.create_for_user(user)
+
+        unknown_account = client.post(
+            reverse("auth-verify-email"), {"email": "nobody@example.com", "otp": "000000"})
+        wrong_code = client.post(
+            reverse("auth-verify-email"), {"email": "real@example.com", "otp": "000000"})
+        already_verified = client.post(
+            reverse("auth-verify-email"), {"email": "owner-verified@example.com", "otp": "000000"})
+
+        bodies = {
+            unknown_account.status_code: unknown_account.data,
+            wrong_code.status_code: wrong_code.data,
+            already_verified.status_code: already_verified.data,
+        }
+        assert list(bodies) == [400], "failure modes are distinguishable by status code"
+        assert unknown_account.data == wrong_code.data == already_verified.data
+
+
+@pytest.mark.django_db
+class TestOTPStorage:
+
+    def test_raw_code_is_never_stored(self):
+        user = User.objects.create_user(email="hash@example.com", password="str0ng-pass-123")
+        instance, raw_otp = EmailVerificationOTP.create_for_user(user)
+
+        assert len(raw_otp) == 6 and raw_otp.isdigit()
+        assert instance.otp != raw_otp
+        assert raw_otp not in instance.otp
+        assert instance.verify(raw_otp) is True
+        assert instance.verify("000000" if raw_otp != "000000" else "111111") is False
+
+    def test_otp_is_not_exposed_in_the_admin(self):
+        from django.contrib import admin
+
+        assert EmailVerificationOTP not in admin.site._registry

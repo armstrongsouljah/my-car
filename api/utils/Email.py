@@ -44,6 +44,37 @@ def send_otp_email(email: str, otp: str, first_name: str = ""):
     msg.send()
 
 
+def send_duplicate_signup_email(email: str, first_name: str = ""):
+    """
+    Sent when someone submits the signup form with an address that already has
+    an account. The signup response itself is identical to a fresh registration
+    (so the form can't be used to test whether an address is registered), so
+    this email is how the actual account holder finds out.
+    """
+    from django.conf import settings
+
+    name = _display_name(email, first_name)
+    app_url = getattr(settings, "FRONTEND_URL", "http://localhost:3000")
+    login_url = f"{app_url}/login"
+
+    subject = "You already have a GlavBox account"
+    context = {"name": name, "app_url": app_url, "login_url": login_url}
+
+    text_body = (
+        f"Hi {name},\n\n"
+        f"Someone just tried to create a GlavBox account with this email address, "
+        f"but you already have one — so we didn't create a second.\n\n"
+        f"If that was you, just sign in instead: {login_url}\n"
+        f"If it wasn't, you can ignore this email. Your account hasn't changed and "
+        f"nobody was told whether this address is registered.\n"
+    )
+    html_body = render_to_string("emails/duplicate_signup.html", context)
+
+    msg = EmailMultiAlternatives(subject=subject, body=text_body, to=[email])
+    msg.attach_alternative(html_body, "text/html")
+    msg.send()
+
+
 def send_welcome_email(email: str, first_name: str = ""):
     """Sends a post-verification welcome email."""
     from django.conf import settings

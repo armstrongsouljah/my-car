@@ -5,6 +5,7 @@ from django.conf import settings
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.db import models
 from django.utils import timezone
+from django.utils.crypto import salted_hmac
 
 from utils import Constants
 
@@ -83,7 +84,11 @@ class User(AbstractBaseUser, PermissionsMixin):
 
 class EmailVerificationOTP(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="otps")
-    otp = models.CharField(max_length=6)
+    # Stores an HMAC of the code, never the code itself. A plain hash would be
+    # pointless here — the whole 6-digit space can be hashed in under a second
+    # — so this is keyed on SECRET_KEY, which a database-only leak doesn't
+    # include. The raw code exists only in the verification email.
+    otp = models.CharField(max_length=64)
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField()
     is_used = models.BooleanField(default=False)
@@ -98,9 +103,13 @@ class EmailVerificationOTP(models.Model):
     def is_expired(self):
         return timezone.now() > self.expires_at
 
+    @staticmethod
+    def hash_otp(raw_otp):
+        return salted_hmac("accounts.EmailVerificationOTP", str(raw_otp)).hexdigest()
+
     def verify(self, raw_otp):
         # Constant-time compare so a wrong code can't be narrowed down by timing.
-        return secrets.compare_digest(self.otp, str(raw_otp))
+        return secrets.compare_digest(self.otp, self.hash_otp(raw_otp))
 
     def register_failed_attempt(self):
         """
@@ -126,7 +135,8 @@ class EmailVerificationOTP(models.Model):
         raw_otp = generate_otp()
         instance = cls.objects.create(
             user=user,
-            otp=raw_otp,
+            otp=cls.hash_otp(raw_otp),
             expires_at=timezone.now() + timezone.timedelta(minutes=expiry_minutes),
         )
+        # The raw code is returned once, for the email, and never stored.
         return instance, raw_otp
