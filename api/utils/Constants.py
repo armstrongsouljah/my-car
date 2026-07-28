@@ -150,6 +150,19 @@ ACCOUNT_DELETION_GRACE_DAYS = 30
 ACCOUNT_DELETION_REMINDER_DAYS = 15
 
 # ---------------------------------------------------------------------------
+# Reminder claim lease (mileage + deletion reminders)
+# ---------------------------------------------------------------------------
+# The daily sweeps for both reminder types claim a user (via a *_queued_at
+# timestamp) before dispatching the actual send as its own task, so one
+# user's send failure can't crash the rest of that day's batch. If the send
+# never confirms (worker crash, lost task, an exception in the send itself),
+# the claim goes stale after this many hours and the next sweep reclaims and
+# retries it. Comfortably longer than how long a single send attempt could
+# plausibly take, short enough that a genuinely stuck claim gets retried
+# same-day rather than waiting a full 24h for the next scheduled run.
+REMINDER_CLAIM_LEASE_HOURS = 6
+
+# ---------------------------------------------------------------------------
 # Fuel types
 # ---------------------------------------------------------------------------
 FUEL_TYPE_PETROL = "petrol"

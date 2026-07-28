@@ -1,4 +1,8 @@
+import logging
+
 from celery import shared_task
+
+logger = logging.getLogger(__name__)
 
 
 @shared_task(name="tasks.send_otp_email_task")
@@ -50,29 +54,66 @@ def send_support_request_email_task(support_request_id, attachments=None):
     send_support_request_email(support_request, attachments=decoded)
 
 
+@shared_task(name="tasks.send_mileage_reminder_email_task")
+def send_mileage_reminder_email_task(user_id, cars):
+    """
+    Sends one user's mileage reminder and, only on success, confirms it by
+    setting last_mileage_reminder_at. Dispatched (never called inline) by
+    send_mileage_reminders_task so one user's failure can't crash the rest of
+    that day's batch — see #27. A failure here is logged and simply left for
+    the next sweep to notice the still-stale claim and retry; there's no
+    other cost to a reminder landing a day late.
+    """
+    from django.utils import timezone
+
+    from accounts.models import User
+    from utils.Email import send_mileage_reminder_email
+
+    user = User.objects.filter(pk=user_id, is_active=True).first()
+    if user is None:
+        return
+
+    try:
+        send_mileage_reminder_email(email=user.email, first_name=user.first_name, cars=cars)
+    except Exception:
+        logger.error("Failed to send mileage reminder to %s; will retry on a later sweep", user.email, exc_info=True)
+        return
+
+    User.objects.filter(pk=user_id).update(last_mileage_reminder_at=timezone.now(), updated_at=timezone.now())
+
+
 @shared_task(name="tasks.send_mileage_reminders_task")
 def send_mileage_reminders_task():
     """
     Daily sweep: emails owners whose chosen mileage-reminder cadence
     (daily/weekly/monthly) has elapsed since the last nudge, asking them to
     update their cars' odometer readings.
+
+    Claims each eligible user via mileage_reminder_queued_at — a lease, not a
+    delivery confirmation — then dispatches the actual send as its own task
+    (send_mileage_reminder_email_task). last_mileage_reminder_at, which the
+    cadence check above reads, is only set by that task once the send
+    actually succeeds. A claim whose send never confirms (crash, lost task,
+    a raised exception) goes stale after Constants.REMINDER_CLAIM_LEASE_HOURS
+    and gets reclaimed by a later sweep. See #27.
     """
-    from django.db.models import Prefetch
+    from django.db.models import Prefetch, Q
     from django.utils import timezone
     from django.utils.timesince import timesince
 
     from accounts.models import User
     from cars.models import Car
     from utils import Constants
-    from utils.Email import send_mileage_reminder_email
 
     now = timezone.now()
-    sent = 0
+    lease_cutoff = now - timezone.timedelta(hours=Constants.REMINDER_CLAIM_LEASE_HOURS)
+    queued = 0
 
     queryset = (
         User.objects
         .filter(is_active=True)
         .exclude(mileage_reminder_frequency=Constants.MILEAGE_REMINDER_OFF)
+        .filter(Q(mileage_reminder_queued_at__isnull=True) | Q(mileage_reminder_queued_at__lt=lease_cutoff))
         .prefetch_related(
             Prefetch("cars", queryset=Car.objects.filter(is_active=True), to_attr="active_cars")
         )
@@ -101,19 +142,21 @@ def send_mileage_reminders_task():
         if not cars:
             continue
 
-        # Atomically claim this send *before* emailing (conditioned on the
-        # last_mileage_reminder_at value read above) so two concurrent
-        # workers that both pass the eligibility check can't double-send.
+        # Atomically claim (conditioned on the queued_at value read above,
+        # which is None for a never-claimed user or a since-gone-stale one)
+        # so two concurrent workers that both pass the eligibility check
+        # can't both dispatch a send.
         claimed = User.objects.filter(
-            pk=user.pk, last_mileage_reminder_at=user.last_mileage_reminder_at,
-        ).update(last_mileage_reminder_at=now, updated_at=now)
+            pk=user.pk,
+            mileage_reminder_queued_at=user.mileage_reminder_queued_at,
+        ).update(mileage_reminder_queued_at=now, updated_at=now)
         if not claimed:
             continue
 
-        send_mileage_reminder_email(email=user.email, first_name=user.first_name, cars=cars)
-        sent += 1
+        send_mileage_reminder_email_task.delay(user_id=user.pk, cars=cars)
+        queued += 1
 
-    return f"Sent {sent} mileage reminder email(s)"
+    return f"Queued {queued} mileage reminder email(s)"
 
 
 @shared_task(name="tasks.send_due_reminders_task")
@@ -145,22 +188,56 @@ def send_due_reminders_task():
     return f"Sent {sent} reminder email(s)"
 
 
+@shared_task(name="tasks.send_deletion_reminder_email_task")
+def send_deletion_reminder_email_task(user_id, days_remaining):
+    """
+    Sends one account's deletion reminder and, only on success, confirms it
+    by setting deletion_reminder_sent_at. Dispatched (never called inline) by
+    send_account_deletion_reminder_task so one account's failure can't crash
+    the rest of that day's batch — see #27. A failure here is logged and
+    simply left for the next sweep to notice the still-stale claim and
+    retry.
+    """
+    from django.utils import timezone
+
+    from accounts.models import User
+    from utils.Email import send_deletion_reminder_email
+
+    # Re-checks is_active/deletion_reminder_sent_at at send time, not just at
+    # claim time: the account may have been reactivated (deactivate() clears
+    # both) since this task was queued.
+    user = User.objects.filter(pk=user_id, is_active=False, deletion_reminder_sent_at__isnull=True).first()
+    if user is None:
+        return
+
+    try:
+        send_deletion_reminder_email(email=user.email, first_name=user.first_name, days_remaining=days_remaining)
+    except Exception:
+        logger.error("Failed to send deletion reminder to %s; will retry on a later sweep", user.email, exc_info=True)
+        return
+
+    User.objects.filter(pk=user_id).update(deletion_reminder_sent_at=timezone.now(), updated_at=timezone.now())
+
+
 @shared_task(name="tasks.send_account_deletion_reminder_task")
 def send_account_deletion_reminder_task():
     """
     Daily sweep: emails owners whose deactivated account has passed
     Constants.ACCOUNT_DELETION_REMINDER_DAYS since deactivation, warning that
-    permanent deletion is coming. Claims each account via
-    deletion_reminder_sent_at *before* sending (same pattern as
-    send_mileage_reminders_task's last_mileage_reminder_at) so this only ever
-    fires once per account, however many days it sits between the reminder
-    and the eventual purge sweep.
+    permanent deletion is coming.
+
+    Claims each account via deletion_reminder_queued_at — a lease, not a
+    delivery confirmation — then dispatches the actual send as its own task
+    (send_deletion_reminder_email_task), which alone sets
+    deletion_reminder_sent_at once the send actually succeeds. A claim whose
+    send never confirms goes stale after Constants.REMINDER_CLAIM_LEASE_HOURS
+    and gets reclaimed by a later sweep. See #27.
     """
+    from django.db.models import Q
     from django.utils import timezone
 
     from accounts.models import User
     from utils import Constants
-    from utils.Email import send_deletion_reminder_email
 
     now = timezone.now()
     cutoff = now - timezone.timedelta(days=Constants.ACCOUNT_DELETION_REMINDER_DAYS)
@@ -170,6 +247,7 @@ def send_account_deletion_reminder_task():
     # (e.g. a previous run of this task never claimed it) could get a
     # misleading "15 days left" email right as, or after, it's deleted.
     purge_cutoff = now - timezone.timedelta(days=Constants.ACCOUNT_DELETION_GRACE_DAYS)
+    lease_cutoff = now - timezone.timedelta(hours=Constants.REMINDER_CLAIM_LEASE_HOURS)
     days_remaining = Constants.ACCOUNT_DELETION_GRACE_DAYS - Constants.ACCOUNT_DELETION_REMINDER_DAYS
 
     queryset = User.objects.filter(
@@ -179,20 +257,21 @@ def send_account_deletion_reminder_task():
         deactivated_at__lte=cutoff,
         deactivated_at__gt=purge_cutoff,
         deletion_reminder_sent_at__isnull=True,
-    )
+    ).filter(Q(deletion_reminder_queued_at__isnull=True) | Q(deletion_reminder_queued_at__lt=lease_cutoff))
 
-    sent = 0
+    queued = 0
     for user in queryset:
-        claimed = User.objects.filter(pk=user.pk, deletion_reminder_sent_at__isnull=True).update(
-            deletion_reminder_sent_at=timezone.now(),
-            updated_at=timezone.now(),
-        )
+        claimed = User.objects.filter(
+            pk=user.pk,
+            deletion_reminder_sent_at__isnull=True,
+            deletion_reminder_queued_at=user.deletion_reminder_queued_at,
+        ).update(deletion_reminder_queued_at=now, updated_at=now)
         if not claimed:
             continue
-        send_deletion_reminder_email(email=user.email, first_name=user.first_name, days_remaining=days_remaining)
-        sent += 1
+        send_deletion_reminder_email_task.delay(user_id=user.pk, days_remaining=days_remaining)
+        queued += 1
 
-    return f"Sent {sent} deletion reminder email(s)"
+    return f"Queued {queued} deletion reminder email(s)"
 
 
 @shared_task(name="tasks.purge_deactivated_accounts_task")
