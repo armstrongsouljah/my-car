@@ -1,5 +1,7 @@
+from django.db import transaction
 from rest_framework.permissions import AllowAny
 from rest_framework import status
+from rest_framework.throttling import UserRateThrottle
 
 from utils.Views import SmartAPIView
 from utils.Exception import CustomValidation
@@ -9,12 +11,18 @@ from support.models import SupportRequest, SupportAttachment
 from support.serializers import SupportRequestSerializer
 
 
+class SupportRequestThrottle(UserRateThrottle):
+    """AllowAny + file uploads is an easy bot target — cap submissions per user/IP."""
+    scope = "support_request"
+
+
 class SupportRequestView(SmartAPIView):
     """
     POST — contact-us submission (multipart/form-data with optional
     `attachments` file fields). Open to visitors as well as logged-in users.
     """
     permission_classes = [AllowAny]
+    throttle_classes = [SupportRequestThrottle]
 
     def post(self, request):
         serializer = SupportRequestSerializer(data=request.data)
@@ -35,20 +43,23 @@ class SupportRequestView(SmartAPIView):
                     field="attachments",
                 )
 
-        support_request = SupportRequest.objects.create(
-            user=request.user if request.user.is_authenticated else None,
-            name=data["name"],
-            email=data["email"],
-            subject=data["subject"],
-            custom_subject=data.get("custom_subject", ""),
-            message=data["message"],
-        )
-        for uploaded_file in files:
-            SupportAttachment.objects.create(support_request=support_request, file=uploaded_file)
+        with transaction.atomic():
+            support_request = SupportRequest.objects.create(
+                user=request.user if request.user.is_authenticated else None,
+                name=data["name"],
+                email=data["email"],
+                subject=data["subject"],
+                custom_subject=data.get("custom_subject", ""),
+                message=data["message"],
+            )
+            for uploaded_file in files:
+                SupportAttachment.objects.create(support_request=support_request, file=uploaded_file)
 
-        from tasks import send_support_request_email_task
+            from tasks import send_support_request_email_task
 
-        send_support_request_email_task.delay(support_request_id=str(support_request.id))
+            transaction.on_commit(
+                lambda: send_support_request_email_task.delay(support_request_id=str(support_request.id))
+            )
 
         return self.respond_with(
             "Thanks — we've got your message and will get back to you soon.",

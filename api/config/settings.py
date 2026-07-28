@@ -151,6 +151,9 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         # Caps AI assistant message sends per user — each one costs LLM tokens.
         "assistant_chat": config("ASSISTANT_CHAT_THROTTLE", default="30/min"),
+        # The contact form is AllowAny (visitors included) — cap submissions
+        # per user/IP so bots can't flood the support inbox or storage.
+        "support_request": config("SUPPORT_REQUEST_THROTTLE", default="5/hour"),
     },
 }
 

@@ -1,6 +1,7 @@
 import pytest
 from django.conf import settings as django_settings
 from django.core import mail
+from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 from rest_framework.test import APIClient
@@ -15,16 +16,26 @@ def client():
     return APIClient()
 
 
+@pytest.fixture(autouse=True)
+def _reset_throttle_cache():
+    # SupportRequestThrottle counts per test client IP — without this, the
+    # 5/hour cap would trip partway through this test class.
+    cache.clear()
+    yield
+    cache.clear()
+
+
 @pytest.mark.django_db
 class TestSupportRequest:
 
-    def test_visitor_can_submit_without_auth(self, client):
-        response = client.post(reverse("support-request"), {
-            "name": "Alex Visitor",
-            "email": "alex@example.com",
-            "subject": Constants.SUPPORT_SUBJECT_GENERAL_ACCOUNT,
-            "message": "I can't activate my account.",
-        })
+    def test_visitor_can_submit_without_auth(self, client, django_capture_on_commit_callbacks):
+        with django_capture_on_commit_callbacks(execute=True):
+            response = client.post(reverse("support-request"), {
+                "name": "Alex Visitor",
+                "email": "alex@example.com",
+                "subject": Constants.SUPPORT_SUBJECT_GENERAL_ACCOUNT,
+                "message": "I can't activate my account.",
+            })
         assert response.status_code == 201
 
         support_request = SupportRequest.objects.get()
@@ -70,15 +81,16 @@ class TestSupportRequest:
         assert response.status_code == 201
         assert SupportRequest.objects.get().display_subject == "Billing question"
 
-    def test_attachments_are_saved_and_emailed(self, client):
+    def test_attachments_are_saved_and_emailed(self, client, django_capture_on_commit_callbacks):
         upload = SimpleUploadedFile("photo.png", b"fake-bytes", content_type="image/png")
-        response = client.post(reverse("support-request"), {
-            "name": "Alex",
-            "email": "alex@example.com",
-            "subject": Constants.SUPPORT_SUBJECT_GENERAL_ACCOUNT,
-            "message": "See attached.",
-            "attachments": [upload],
-        }, format="multipart")
+        with django_capture_on_commit_callbacks(execute=True):
+            response = client.post(reverse("support-request"), {
+                "name": "Alex",
+                "email": "alex@example.com",
+                "subject": Constants.SUPPORT_SUBJECT_GENERAL_ACCOUNT,
+                "message": "See attached.",
+                "attachments": [upload],
+            }, format="multipart")
         assert response.status_code == 201
 
         support_request = SupportRequest.objects.get()
@@ -87,6 +99,26 @@ class TestSupportRequest:
         sent = mail.outbox[0]
         assert len(sent.attachments) == 1
         assert sent.attachments[0][0] == "photo.png"
+
+    def test_throttled_after_rate_limit(self, client):
+        limit = int(django_settings.REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["support_request"].split("/")[0])
+
+        for _ in range(limit):
+            response = client.post(reverse("support-request"), {
+                "name": "Alex",
+                "email": "alex@example.com",
+                "subject": Constants.SUPPORT_SUBJECT_GENERAL_ACCOUNT,
+                "message": "Spam attempt.",
+            })
+            assert response.status_code == 201
+
+        response = client.post(reverse("support-request"), {
+            "name": "Alex",
+            "email": "alex@example.com",
+            "subject": Constants.SUPPORT_SUBJECT_GENERAL_ACCOUNT,
+            "message": "One too many.",
+        })
+        assert response.status_code == 429
 
     def test_too_many_attachments_rejected(self, client):
         uploads = [
