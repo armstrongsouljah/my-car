@@ -48,13 +48,24 @@ class User(AbstractBaseUser, PermissionsMixin):
         default=Constants.MILEAGE_REMINDER_OFF,
     )
     last_mileage_reminder_at = models.DateTimeField(null=True, blank=True)
+    # Claim lease for an in-flight mileage-reminder send, set by the daily
+    # sweep *before* dispatching the actual send task — distinct from
+    # last_mileage_reminder_at, which is only set once the send actually
+    # succeeds. Lets a lost/failed send be retried once the lease goes stale
+    # (Constants.REMINDER_CLAIM_LEASE_HOURS) rather than being silently
+    # dropped forever. See tasks.send_mileage_reminders_task.
+    mileage_reminder_queued_at = models.DateTimeField(null=True, blank=True)
 
     date_joined = models.DateTimeField(default=timezone.now)
     deactivated_at = models.DateTimeField(null=True, blank=True)
     # Set once the day-15 "your account will be deleted soon" reminder has
-    # gone out, so the daily sweep doesn't resend it on every subsequent run
-    # before the purge sweep finally deletes the account.
+    # actually been *sent* (not just claimed), so the daily sweep doesn't
+    # resend it on every subsequent run before the purge sweep finally
+    # deletes the account.
     deletion_reminder_sent_at = models.DateTimeField(null=True, blank=True)
+    # Same claim-lease role as mileage_reminder_queued_at above, for the
+    # deletion reminder. See tasks.send_account_deletion_reminder_task.
+    deletion_reminder_queued_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -85,9 +96,19 @@ class User(AbstractBaseUser, PermissionsMixin):
         self.deactivated_at = timezone.now()
         # Cleared so a user reactivated by support and later deactivated again
         # gets the 15-day reminder on this new lifecycle too, instead of it
-        # being silently skipped because a previous lifecycle already sent one.
+        # being silently skipped because a previous lifecycle already sent
+        # (or merely claimed) one.
         self.deletion_reminder_sent_at = None
-        self.save(update_fields=["is_active", "deactivated_at", "deletion_reminder_sent_at", "updated_at"])
+        self.deletion_reminder_queued_at = None
+        self.save(
+            update_fields=[
+                "is_active",
+                "deactivated_at",
+                "deletion_reminder_sent_at",
+                "deletion_reminder_queued_at",
+                "updated_at",
+            ]
+        )
 
 
 class EmailVerificationOTP(models.Model):
