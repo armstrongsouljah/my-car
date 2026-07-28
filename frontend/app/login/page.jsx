@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Dancing_Script } from "next/font/google";
 import { api, setTokens, setUser, isLoggedIn } from "@/lib/api";
@@ -339,6 +340,13 @@ function AuthPage() {
             </button>
           </p>
         )}
+
+        <p className="mt-4 text-center text-sm text-white/40">
+          Trouble signing in?{" "}
+          <Link href="/contact" className="font-semibold text-emerald-400">
+            Contact support
+          </Link>
+        </p>
       </div>
     </main>
   );

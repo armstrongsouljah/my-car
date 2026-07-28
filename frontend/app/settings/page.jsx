@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api, getTokens, clearSession, setUser } from "@/lib/api";
 import AuthGuard from "@/components/AuthGuard";
@@ -339,6 +340,13 @@ function Settings() {
             </button>
           </div>
         )}
+      </Section>
+
+      <Section title="Support">
+        <Link href="/contact" className="flex w-full items-center justify-between py-2 text-[15px] font-medium">
+          Contact support
+          <span className="text-gray-300 dark:text-gray-600">›</span>
+        </Link>
       </Section>
 
       <ConfirmDialog
