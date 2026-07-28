@@ -29,11 +29,13 @@ COPY --from=builder /venv /venv
 
 COPY . .
 
-# Collect static files at build time with a throw-away secret key.
-# The real SECRET_KEY is injected at runtime via environment variable.
+# Collect static files at build time with throw-away config. The real
+# values (SECRET_KEY, DEFAULT_FROM_EMAIL, etc.) are injected at runtime
+# via environment variable — these are never actually used to send mail.
 RUN SECRET_KEY=build-time-placeholder \
     DATABASE_URL=sqlite:////tmp/build.db \
     REDIS_URL=locmem \
+    DEFAULT_FROM_EMAIL=build@example.com \
     python manage.py collectstatic --noinput
 
 COPY entrypoint.sh /entrypoint.sh
