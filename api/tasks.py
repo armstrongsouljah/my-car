@@ -22,6 +22,13 @@ def send_welcome_email_task(email, first_name=""):
     send_welcome_email(email=email, first_name=first_name)
 
 
+@shared_task(name="tasks.send_account_deactivated_email_task")
+def send_account_deactivated_email_task(email, first_name=""):
+    from utils.Email import send_account_deactivated_email
+
+    send_account_deactivated_email(email=email, first_name=first_name)
+
+
 @shared_task(name="tasks.send_support_request_email_task")
 def send_support_request_email_task(support_request_id, attachments=None):
     """
@@ -138,6 +145,56 @@ def send_due_reminders_task():
     return f"Sent {sent} reminder email(s)"
 
 
+@shared_task(name="tasks.send_account_deletion_reminder_task")
+def send_account_deletion_reminder_task():
+    """
+    Daily sweep: emails owners whose deactivated account has passed
+    Constants.ACCOUNT_DELETION_REMINDER_DAYS since deactivation, warning that
+    permanent deletion is coming. Claims each account via
+    deletion_reminder_sent_at *before* sending (same pattern as
+    send_mileage_reminders_task's last_mileage_reminder_at) so this only ever
+    fires once per account, however many days it sits between the reminder
+    and the eventual purge sweep.
+    """
+    from django.utils import timezone
+
+    from accounts.models import User
+    from utils import Constants
+    from utils.Email import send_deletion_reminder_email
+
+    now = timezone.now()
+    cutoff = now - timezone.timedelta(days=Constants.ACCOUNT_DELETION_REMINDER_DAYS)
+    # Excludes accounts already eligible for the purge sweep: this task and
+    # purge_deactivated_accounts_task both run daily with no ordering
+    # guarantee, so without this an account sitting past the 30-day cutoff
+    # (e.g. a previous run of this task never claimed it) could get a
+    # misleading "15 days left" email right as, or after, it's deleted.
+    purge_cutoff = now - timezone.timedelta(days=Constants.ACCOUNT_DELETION_GRACE_DAYS)
+    days_remaining = Constants.ACCOUNT_DELETION_GRACE_DAYS - Constants.ACCOUNT_DELETION_REMINDER_DAYS
+
+    queryset = User.objects.filter(
+        is_active=False,
+        is_email_verified=True,
+        deactivated_at__isnull=False,
+        deactivated_at__lte=cutoff,
+        deactivated_at__gt=purge_cutoff,
+        deletion_reminder_sent_at__isnull=True,
+    )
+
+    sent = 0
+    for user in queryset:
+        claimed = User.objects.filter(pk=user.pk, deletion_reminder_sent_at__isnull=True).update(
+            deletion_reminder_sent_at=timezone.now(),
+            updated_at=timezone.now(),
+        )
+        if not claimed:
+            continue
+        send_deletion_reminder_email(email=user.email, first_name=user.first_name, days_remaining=days_remaining)
+        sent += 1
+
+    return f"Sent {sent} deletion reminder email(s)"
+
+
 @shared_task(name="tasks.purge_deactivated_accounts_task")
 def purge_deactivated_accounts_task():
     """
@@ -145,18 +202,33 @@ def purge_deactivated_accounts_task():
     longer than Constants.ACCOUNT_DELETION_GRACE_DAYS. Support can reactivate
     a deactivated account any time before this runs; past the grace period
     the deletion is final and cascades to the owner's cars, service history,
-    expenses, reminders and inspections.
+    expenses, reminders and inspections. Each owner's Cloudinary-hosted car
+    photos are removed too (the cascade only touches DB rows, not the actual
+    hosted images), and a final "your data is gone" email goes out first —
+    there's no address left to send to once the row is deleted.
     """
     from django.utils import timezone
 
     from accounts.models import User
     from utils import Constants
+    from utils.Cloudinary import delete_photos
+    from utils.Email import send_account_deleted_email
 
     cutoff = timezone.now() - timezone.timedelta(days=Constants.ACCOUNT_DELETION_GRACE_DAYS)
-    queryset = User.objects.filter(is_active=False, deactivated_at__isnull=False, deactivated_at__lte=cutoff)
+    queryset = User.objects.filter(
+        is_active=False,
+        is_email_verified=True,
+        deactivated_at__isnull=False,
+        deactivated_at__lte=cutoff,
+    ).prefetch_related("cars")
 
-    count = queryset.count()
-    queryset.delete()
+    count = 0
+    for user in queryset:
+        delete_photos([car.photo_url for car in user.cars.all() if car.photo_url])
+        send_account_deleted_email(email=user.email, first_name=user.first_name)
+        user.delete()
+        count += 1
+
     return f"Purged {count} deactivated account(s) and their data"
 
 

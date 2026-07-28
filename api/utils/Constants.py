@@ -138,10 +138,16 @@ MILEAGE_REMINDER_INTERVAL_DAYS = {
 # A deactivated account can be reactivated by support within this window;
 # past it, the daily purge sweep (tasks.purge_deactivated_accounts_task)
 # permanently deletes the account and everything that cascades from it.
-# The "60 days" figure is also hardcoded in frontend copy (Settings' Danger
+# The "30 days" figure is also hardcoded in frontend copy (Settings' Danger
 # zone section + confirm dialog, and the /privacy page) — update those too
 # if this changes.
-ACCOUNT_DELETION_GRACE_DAYS = 60
+ACCOUNT_DELETION_GRACE_DAYS = 30
+
+# How long after deactivation the daily reminder sweep
+# (tasks.send_account_deletion_reminder_task) emails the owner that deletion
+# is coming, so they still have ACCOUNT_DELETION_GRACE_DAYS - this figure
+# days of runway to contact support if they want to reactivate.
+ACCOUNT_DELETION_REMINDER_DAYS = 15
 
 # ---------------------------------------------------------------------------
 # Fuel types

@@ -51,6 +51,10 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     date_joined = models.DateTimeField(default=timezone.now)
     deactivated_at = models.DateTimeField(null=True, blank=True)
+    # Set once the day-15 "your account will be deleted soon" reminder has
+    # gone out, so the daily sweep doesn't resend it on every subsequent run
+    # before the purge sweep finally deletes the account.
+    deletion_reminder_sent_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -79,7 +83,11 @@ class User(AbstractBaseUser, PermissionsMixin):
         """Soft-deactivates the account; the owner can be reactivated by support."""
         self.is_active = False
         self.deactivated_at = timezone.now()
-        self.save(update_fields=["is_active", "deactivated_at", "updated_at"])
+        # Cleared so a user reactivated by support and later deactivated again
+        # gets the 15-day reminder on this new lifecycle too, instead of it
+        # being silently skipped because a previous lifecycle already sent one.
+        self.deletion_reminder_sent_at = None
+        self.save(update_fields=["is_active", "deactivated_at", "deletion_reminder_sent_at", "updated_at"])
 
 
 class EmailVerificationOTP(models.Model):

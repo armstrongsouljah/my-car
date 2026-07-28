@@ -87,9 +87,9 @@ export default function PrivacyPage() {
           logins will be disabled immediately.
         </p>
         <p>
-          For <span className="font-medium text-gray-700 dark:text-gray-300">60 days</span> after deactivation, your
+          For <span className="font-medium text-gray-700 dark:text-gray-300">30 days</span> after deactivation, your
           account is kept on hold in case you change your mind — reply to any email we&apos;ve sent you and we can
-          reactivate it. After 60 days, it&apos;s permanently and irreversibly deleted, along with every car, service
+          reactivate it. After 30 days, it&apos;s permanently and irreversibly deleted, along with every car, service
           record, and expense on it.
         </p>
       </Section>

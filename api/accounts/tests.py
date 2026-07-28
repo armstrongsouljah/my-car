@@ -93,6 +93,33 @@ class TestAuthFlow:
         })
         assert response.status_code in (401, 403)
 
+    def test_deactivate_sends_confirmation_email(self, client, owner):
+        from django.core import mail
+
+        client.force_authenticate(owner)
+        response = client.post(reverse("auth-deactivate"), {"password": "str0ng-pass-123"})
+
+        assert response.status_code == 200
+        assert len(mail.outbox) == 1
+        assert mail.outbox[0].to == [owner.email]
+        assert str(Constants.ACCOUNT_DELETION_GRACE_DAYS) in mail.outbox[0].body
+
+    def test_deactivate_resets_a_previously_sent_deletion_reminder(self, owner):
+        """
+        A user reactivated by support, then deactivated again, is on a fresh
+        30-day lifecycle — the old reminder timestamp shouldn't survive and
+        suppress this lifecycle's own 15-day reminder.
+        """
+        owner.deactivate()
+        User.objects.filter(pk=owner.pk).update(deletion_reminder_sent_at=timezone.now())
+
+        User.objects.filter(pk=owner.pk).update(is_active=True, deactivated_at=None)  # support reactivates
+        owner.refresh_from_db()
+
+        owner.deactivate()
+
+        assert owner.deletion_reminder_sent_at is None
+
 
 @pytest.mark.django_db
 class TestPurgeDeactivatedAccounts:
@@ -140,6 +167,177 @@ class TestPurgeDeactivatedAccounts:
         purge_deactivated_accounts_task()
 
         assert User.objects.filter(pk=owner.pk).exists()
+
+    def test_keeps_never_verified_accounts_even_if_flagged_inactive(self, owner):
+        """
+        deactivate() is only ever reachable by an authenticated (and so
+        already-verified) user, but this guards the purge query directly
+        against the lifecycle's own definition rather than relying on that
+        being true forever — e.g. a future admin action or #23's unverified-
+        signup sweep setting is_active/deactivated_at without also touching
+        is_email_verified shouldn't make this task eligible for it.
+        """
+        from tasks import purge_deactivated_accounts_task
+
+        User.objects.filter(pk=owner.pk).update(
+            is_active=False,
+            is_email_verified=False,
+            deactivated_at=timezone.now() - timedelta(days=Constants.ACCOUNT_DELETION_GRACE_DAYS),
+        )
+
+        purge_deactivated_accounts_task()
+
+        assert User.objects.filter(pk=owner.pk).exists()
+
+    def test_sends_final_email_before_deleting(self, owner):
+        from django.core import mail
+
+        from tasks import purge_deactivated_accounts_task
+
+        owner.deactivate()
+        User.objects.filter(pk=owner.pk).update(
+            deactivated_at=timezone.now() - timedelta(days=Constants.ACCOUNT_DELETION_GRACE_DAYS)
+        )
+
+        purge_deactivated_accounts_task()
+
+        assert len(mail.outbox) == 1
+        assert mail.outbox[0].to == [owner.email]
+
+    def test_cleans_up_cloudinary_photos(self, owner, monkeypatch):
+        from cars.models import Car
+        from tasks import purge_deactivated_accounts_task
+
+        photo_url = "https://res.cloudinary.com/soultech/image/upload/v1/car_photos/u1/abc.jpg"
+        Car.objects.create(owner=owner, make="Toyota", model="Corolla", photo_url=photo_url)
+        owner.deactivate()
+        User.objects.filter(pk=owner.pk).update(
+            deactivated_at=timezone.now() - timedelta(days=Constants.ACCOUNT_DELETION_GRACE_DAYS)
+        )
+
+        cleaned_up = []
+        monkeypatch.setattr("utils.Cloudinary.delete_photos", lambda urls: cleaned_up.extend(urls))
+
+        purge_deactivated_accounts_task()
+
+        assert cleaned_up == [photo_url]
+
+    def test_skips_cloudinary_cleanup_for_cars_without_photos(self, owner, monkeypatch):
+        from cars.models import Car
+        from tasks import purge_deactivated_accounts_task
+
+        Car.objects.create(owner=owner, make="Toyota", model="Corolla")
+        owner.deactivate()
+        User.objects.filter(pk=owner.pk).update(
+            deactivated_at=timezone.now() - timedelta(days=Constants.ACCOUNT_DELETION_GRACE_DAYS)
+        )
+
+        cleaned_up = []
+        monkeypatch.setattr("utils.Cloudinary.delete_photos", lambda urls: cleaned_up.extend(urls))
+
+        purge_deactivated_accounts_task()
+
+        assert cleaned_up == []
+
+
+@pytest.mark.django_db
+class TestAccountDeletionReminder:
+
+    def test_sends_reminder_at_the_configured_day(self, owner):
+        from django.core import mail
+
+        from tasks import send_account_deletion_reminder_task
+
+        owner.deactivate()
+        User.objects.filter(pk=owner.pk).update(
+            deactivated_at=timezone.now() - timedelta(days=Constants.ACCOUNT_DELETION_REMINDER_DAYS)
+        )
+
+        send_account_deletion_reminder_task()
+
+        owner.refresh_from_db()
+        assert len(mail.outbox) == 1
+        assert mail.outbox[0].to == [owner.email]
+        assert owner.deletion_reminder_sent_at is not None
+
+    def test_does_not_send_before_the_configured_day(self, owner):
+        from django.core import mail
+
+        from tasks import send_account_deletion_reminder_task
+
+        owner.deactivate()
+        User.objects.filter(pk=owner.pk).update(
+            deactivated_at=timezone.now() - timedelta(days=Constants.ACCOUNT_DELETION_REMINDER_DAYS - 1)
+        )
+
+        send_account_deletion_reminder_task()
+
+        owner.refresh_from_db()
+        assert len(mail.outbox) == 0
+        assert owner.deletion_reminder_sent_at is None
+
+    def test_does_not_resend(self, owner):
+        from django.core import mail
+
+        from tasks import send_account_deletion_reminder_task
+
+        owner.deactivate()
+        already_sent = timezone.now() - timedelta(days=1)
+        User.objects.filter(pk=owner.pk).update(
+            deactivated_at=timezone.now() - timedelta(days=Constants.ACCOUNT_DELETION_REMINDER_DAYS + 5),
+            deletion_reminder_sent_at=already_sent,
+        )
+
+        send_account_deletion_reminder_task()
+
+        assert len(mail.outbox) == 0
+
+    def test_does_not_send_once_past_the_purge_cutoff(self, owner):
+        """
+        Guards against send_account_deletion_reminder_task and
+        purge_deactivated_accounts_task running out of order on the same day
+        (or a prior run of this task never having claimed the row): an
+        account already eligible for purge shouldn't get a misleading
+        "N days left" email right as, or after, it's deleted.
+        """
+        from django.core import mail
+
+        from tasks import send_account_deletion_reminder_task
+
+        owner.deactivate()
+        User.objects.filter(pk=owner.pk).update(
+            deactivated_at=timezone.now() - timedelta(days=Constants.ACCOUNT_DELETION_GRACE_DAYS)
+        )
+
+        send_account_deletion_reminder_task()
+
+        owner.refresh_from_db()
+        assert len(mail.outbox) == 0
+        assert owner.deletion_reminder_sent_at is None
+
+    def test_skips_active_accounts(self, owner):
+        from django.core import mail
+
+        from tasks import send_account_deletion_reminder_task
+
+        send_account_deletion_reminder_task()
+
+        assert len(mail.outbox) == 0
+
+    def test_skips_never_verified_accounts(self, owner):
+        from django.core import mail
+
+        from tasks import send_account_deletion_reminder_task
+
+        User.objects.filter(pk=owner.pk).update(
+            is_active=False,
+            is_email_verified=False,
+            deactivated_at=timezone.now() - timedelta(days=Constants.ACCOUNT_DELETION_REMINDER_DAYS),
+        )
+
+        send_account_deletion_reminder_task()
+
+        assert len(mail.outbox) == 0
 
 
 @pytest.fixture
