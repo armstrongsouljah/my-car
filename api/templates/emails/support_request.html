@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<body style="margin:0;padding:0;background:#f4f4f7;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:24px 12px;">
+    <tr><td align="center">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:#ffffff;border-radius:12px;padding:32px;">
+        <tr><td style="padding-bottom:16px;">
+          <span style="display:inline-block;background:#ecfdf5;color:#059669;font-size:12px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;border-radius:999px;padding:4px 12px;">New support request</span>
+        </td></tr>
+        <tr><td style="font-size:20px;font-weight:700;color:#111827;padding-bottom:4px;">{{ subject }}</td></tr>
+        <tr><td style="font-size:13px;color:#6b7280;padding-bottom:20px;">Submitted by {{ submitted_by }}</td></tr>
+
+        <tr><td style="border-radius:8px;background:#f9fafb;padding:16px;margin-bottom:20px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+              <td style="font-size:13px;color:#6b7280;padding-bottom:6px;width:64px;">Name</td>
+              <td style="font-size:13px;color:#111827;font-weight:600;padding-bottom:6px;">{{ name }}</td>
+            </tr>
+            <tr>
+              <td style="font-size:13px;color:#6b7280;width:64px;">Email</td>
+              <td style="font-size:13px;padding-bottom:0;">
+                <a href="mailto:{{ email }}" style="color:#059669;font-weight:600;text-decoration:none;">{{ email }}</a>
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+
+        <tr><td style="height:20px;line-height:20px;font-size:0;">&nbsp;</td></tr>
+
+        <tr><td style="font-size:15px;color:#374151;line-height:1.6;white-space:pre-line;padding-bottom:20px;">{{ message }}</td></tr>
+
+        {% if attachment_count %}
+        <tr><td style="font-size:13px;color:#6b7280;padding-bottom:20px;">
+          📎 {{ attachment_count }} attachment{{ attachment_count|pluralize }} on this email.
+        </td></tr>
+        {% endif %}
+
+        <tr><td style="border-top:1px solid #e5e7eb;padding-top:16px;font-size:13px;color:#9ca3af;">
+          Reply to this email to respond directly to {{ name }}.
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>

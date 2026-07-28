@@ -3,6 +3,7 @@ import os
 os.environ.setdefault("SECRET_KEY", "test-secret-key")
 os.environ.setdefault("DATABASE_URL", "sqlite://:memory:")
 os.environ.setdefault("REDIS_URL", "locmem")
+os.environ.setdefault("DEFAULT_FROM_EMAIL", "support@glavbox.com")
 
 from .settings import *  # noqa: E402,F401,F403
 

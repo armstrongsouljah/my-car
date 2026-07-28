@@ -1,10 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { MdOutlineAttachFile, MdOutlineClose } from "react-icons/md";
-import { api, getUser, isLoggedIn } from "@/lib/api";
+import { Dancing_Script } from "next/font/google";
+import { MdOutlineAttachFile, MdOutlineClose, MdOutlineMarkEmailRead } from "react-icons/md";
+import { api, getUser } from "@/lib/api";
+
+const brandFont = Dancing_Script({ subsets: ["latin"], weight: ["700"] });
 
 const SUBJECTS = [
   ["general_account", "General Account"],
@@ -15,6 +18,7 @@ const SUBJECTS = [
 
 const MAX_ATTACHMENTS = 5;
 const MAX_ATTACHMENT_SIZE_MB = 10;
+const REDIRECT_DELAY_MS = 3000;
 
 function initialForm() {
   const user = getUser();
@@ -25,6 +29,58 @@ function initialForm() {
     custom_subject: "",
     message: "",
   };
+}
+
+function Hero({ tagline }) {
+  return (
+    <div className="relative h-56 overflow-hidden">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="https://res.cloudinary.com/soultech/image/upload/e_improve,w_900,h_700,c_fill,g_auto,q_auto,f_auto/v1784111131/MANSORY_P1100_Audi_RS6_Carbon_Turquoise_Madness_Part_2_zos9uq.jpg"
+        alt=""
+        className="absolute inset-0 h-full w-full object-cover"
+      />
+      <div className="absolute inset-0 bg-gradient-to-b from-[#04120c] via-[#04120c]/20 to-[#0a1a14]" />
+      <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-black/80 via-black/40 to-transparent" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(52,211,153,0.4),transparent_55%)]" />
+      <div className="relative flex h-full flex-col items-center justify-start pt-12">
+        <h1 className={`${brandFont.className} text-4xl font-bold tracking-wide text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)]`}>
+          GlavBox
+        </h1>
+        <p className="mt-0.5 text-sm text-emerald-100/80 drop-shadow-[0_1px_6px_rgba(0,0,0,0.9)]">{tagline}</p>
+      </div>
+    </div>
+  );
+}
+
+function SentScreen() {
+  const router = useRouter();
+
+  useEffect(() => {
+    const timer = setTimeout(() => router.replace("/login"), REDIRECT_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [router]);
+
+  return (
+    <main className="flex min-h-screen flex-col bg-[#04120c] text-white">
+      <Hero tagline="Message sent" />
+      <div className="relative flex flex-1 flex-col items-center justify-center gap-3 rounded-t-[32px] bg-[#0a1a14] px-6 pb-10 pt-8 text-center shadow-[0_-20px_60px_rgba(0,0,0,0.5)]">
+        <span className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-400/10 text-emerald-400">
+          <MdOutlineMarkEmailRead size={28} aria-hidden="true" />
+        </span>
+        <h2 className="text-xl font-bold">Message sent</h2>
+        <p className="max-w-xs text-sm text-white/50">
+          Thanks for reaching out — we&apos;ve got your message and will get back to you soon.
+        </p>
+        <p className="mt-2 text-sm text-white/40">
+          Taking you back to sign in…{" "}
+          <Link href="/login" className="font-semibold text-emerald-400">
+            Go now
+          </Link>
+        </p>
+      </div>
+    </main>
+  );
 }
 
 export default function ContactPage() {
@@ -39,7 +95,7 @@ export default function ContactPage() {
 
   function goBack() {
     if (typeof window !== "undefined" && window.history.length > 1) router.back();
-    else router.push(isLoggedIn() ? "/settings" : "/");
+    else router.push("/login");
   }
 
   function addFiles(event) {
@@ -88,108 +144,100 @@ export default function ContactPage() {
     }
   }
 
-  if (sent) {
-    return (
-      <main className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
-        <p className="text-3xl">✅</p>
-        <h1 className="text-xl font-bold">Message sent</h1>
-        <p className="max-w-xs text-sm text-gray-500 dark:text-gray-400">
-          Thanks for reaching out — we&apos;ve got your message and will get back to you soon.
-        </p>
-        <Link href={isLoggedIn() ? "/settings" : "/"} className="mt-2 text-sm font-medium underline underline-offset-2">
-          {isLoggedIn() ? "Back to Settings" : "Back home"}
-        </Link>
-      </main>
-    );
-  }
+  if (sent) return <SentScreen />;
 
   return (
-    <main className="space-y-4 px-4 pb-12 pt-6">
-      <button onClick={goBack} className="mb-1 text-sm text-gray-500 dark:text-gray-400">‹ Back</button>
+    <main className="flex min-h-screen flex-col bg-[#04120c] text-white">
+      <Hero tagline="We're here to help" />
 
-      <div>
-        <h1 className="text-2xl font-bold">Contact support</h1>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+      <div className="relative flex-1 rounded-t-[32px] bg-[#0a1a14] px-6 pb-10 pt-8 shadow-[0_-20px_60px_rgba(0,0,0,0.5)]">
+        <button onClick={goBack} className="mb-4 text-sm text-white/40">‹ Back</button>
+
+        <h2 className="text-xl font-bold">Contact support</h2>
+        <p className="mt-1 mb-6 text-sm text-white/50">
           Trouble activating your account, a general question, or feedback on the app — tell us what&apos;s up and
           we&apos;ll reply by email.
         </p>
-      </div>
 
-      {error && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700 dark:bg-red-500/10 dark:text-red-400">{error}</p>}
+        {error && <p className="mb-4 rounded-xl bg-red-400/10 p-3 text-sm text-red-300">{error}</p>}
 
-      <form onSubmit={handleSubmit} className="card space-y-4">
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="label" htmlFor="name">Name</label>
-            <input id="name" className="input" required value={form.name} onChange={update("name")} />
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="auth-label" htmlFor="name">Name</label>
+              <input id="name" className="auth-input" required value={form.name} onChange={update("name")} />
+            </div>
+            <div>
+              <label className="auth-label" htmlFor="email">Email</label>
+              <input id="email" className="auth-input" type="email" required value={form.email} onChange={update("email")} />
+            </div>
           </div>
+
           <div>
-            <label className="label" htmlFor="email">Email</label>
-            <input id="email" className="input" type="email" required value={form.email} onChange={update("email")} />
+            <label className="auth-label" htmlFor="subject">Subject</label>
+            <select id="subject" className="auth-input" value={form.subject} onChange={update("subject")}>
+              {SUBJECTS.map(([value, label]) => (
+                <option key={value} value={value} className="bg-[#0a1a14]">{label}</option>
+              ))}
+            </select>
           </div>
-        </div>
 
-        <div>
-          <label className="label" htmlFor="subject">Subject</label>
-          <select id="subject" className="input" value={form.subject} onChange={update("subject")}>
-            {SUBJECTS.map(([value, label]) => (
-              <option key={value} value={value}>{label}</option>
-            ))}
-          </select>
-        </div>
+          {form.subject === "other" && (
+            <div>
+              <label className="auth-label" htmlFor="custom_subject">What&apos;s it about?</label>
+              <input
+                id="custom_subject"
+                className="auth-input"
+                required
+                placeholder="A short subject line"
+                value={form.custom_subject}
+                onChange={update("custom_subject")}
+              />
+            </div>
+          )}
 
-        {form.subject === "other" && (
           <div>
-            <label className="label" htmlFor="custom_subject">What&apos;s it about?</label>
-            <input
-              id="custom_subject"
-              className="input"
+            <label className="auth-label" htmlFor="message">Message</label>
+            <textarea
+              id="message"
+              className="auth-input min-h-32 resize-y"
               required
-              placeholder="A short subject line"
-              value={form.custom_subject}
-              onChange={update("custom_subject")}
+              placeholder="Tell us what's going on…"
+              value={form.message}
+              onChange={update("message")}
             />
           </div>
-        )}
 
-        <div>
-          <label className="label" htmlFor="message">Message</label>
-          <textarea
-            id="message"
-            className="input min-h-32 resize-y"
-            required
-            placeholder="Tell us what's going on…"
-            value={form.message}
-            onChange={update("message")}
-          />
-        </div>
+          <div>
+            <label className="auth-label">Attachments (optional)</label>
+            <label className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed border-white/15 bg-white/5 px-4 py-3 text-[13px] font-medium text-white/50">
+              <MdOutlineAttachFile size={17} />
+              Add files (up to {MAX_ATTACHMENTS}, {MAX_ATTACHMENT_SIZE_MB}MB each)
+              <input type="file" multiple className="hidden" onChange={addFiles} />
+            </label>
 
-        <div>
-          <label className="label">Attachments (optional)</label>
-          <label className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-gray-300 px-4 py-3 text-[13px] font-medium text-gray-500 dark:border-gray-700 dark:text-gray-400">
-            <MdOutlineAttachFile size={17} />
-            Add files (up to {MAX_ATTACHMENTS}, {MAX_ATTACHMENT_SIZE_MB}MB each)
-            <input type="file" multiple className="hidden" onChange={addFiles} />
-          </label>
+            {files.length > 0 && (
+              <ul className="mt-2 space-y-1.5">
+                {files.map((file, index) => (
+                  <li key={`${file.name}-${index}`} className="flex items-center justify-between gap-2 rounded-lg bg-white/5 px-3 py-2 text-[13px] text-white/70">
+                    <span className="truncate">{file.name}</span>
+                    <button type="button" onClick={() => removeFile(index)} aria-label={`Remove ${file.name}`} className="text-white/40 hover:text-white/70">
+                      <MdOutlineClose size={16} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
 
-          {files.length > 0 && (
-            <ul className="mt-2 space-y-1.5">
-              {files.map((file, index) => (
-                <li key={`${file.name}-${index}`} className="flex items-center justify-between gap-2 rounded-lg bg-gray-50 px-3 py-2 text-[13px] dark:bg-gray-800">
-                  <span className="truncate">{file.name}</span>
-                  <button type="button" onClick={() => removeFile(index)} aria-label={`Remove ${file.name}`} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
-                    <MdOutlineClose size={16} />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        <button className="btn-primary" disabled={sending}>
-          {sending ? "Sending…" : "Send message"}
-        </button>
-      </form>
+          <button
+            className="w-full rounded-full bg-gradient-to-r from-emerald-400 to-green-500 px-4 py-3.5 text-[15px] font-bold text-[#04120c] shadow-[0_8px_24px_rgba(52,211,153,0.35)] transition active:scale-[0.99] disabled:opacity-50"
+            disabled={sending}
+          >
+            {sending ? "Sending…" : "Send message"}
+          </button>
+        </form>
+      </div>
     </main>
   );
 }

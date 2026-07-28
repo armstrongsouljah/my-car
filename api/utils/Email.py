@@ -102,8 +102,8 @@ def send_support_request_email(support_request):
     hit reply, and any uploaded files are attached to the email itself.
     """
     from django.conf import settings
-    from django.core.mail import EmailMessage
 
+    attachments = list(support_request.attachments.all())
     subject = f"[GlavBox Support] {support_request.display_subject}"
     submitted_by = "a registered user" if support_request.user_id else "a visitor"
 
@@ -114,15 +114,24 @@ def send_support_request_email(support_request):
         f"Subject: {support_request.display_subject}\n\n"
         f"Message:\n{support_request.message}\n"
     )
+    html_body = render_to_string("emails/support_request.html", {
+        "name": support_request.name,
+        "email": support_request.email,
+        "subject": support_request.display_subject,
+        "message": support_request.message,
+        "submitted_by": submitted_by,
+        "attachment_count": len(attachments),
+    })
 
-    msg = EmailMessage(
+    msg = EmailMultiAlternatives(
         subject=subject,
         body=text_body,
         to=[settings.DEFAULT_FROM_EMAIL],
         reply_to=[support_request.email],
     )
+    msg.attach_alternative(html_body, "text/html")
 
-    for attachment in support_request.attachments.all():
+    for attachment in attachments:
         attachment.file.open("rb")
         try:
             msg.attach(attachment.file.name.rsplit("/", 1)[-1], attachment.file.read())
