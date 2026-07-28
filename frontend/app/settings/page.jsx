@@ -318,11 +318,11 @@ function Settings() {
         />
         {showDeactivate && (
           <div className="space-y-3 pb-1 pt-1">
-            {/* "60 days" mirrors Constants.ACCOUNT_DELETION_GRACE_DAYS (api/utils/Constants.py) —
+            {/* "30 days" mirrors Constants.ACCOUNT_DELETION_GRACE_DAYS (api/utils/Constants.py) —
                 keep in sync with that value and the ConfirmDialog message below. */}
             <p className="text-sm text-gray-500 dark:text-gray-400">
               Deactivating your account signs you out everywhere and disables logins right away. Your data is kept for
-              60 days in case you change your mind — support can reactivate you within that window. After 60 days it&apos;s
+              30 days in case you change your mind — support can reactivate you within that window. After 30 days it&apos;s
               permanently deleted.
             </p>
             <div>
@@ -354,7 +354,7 @@ function Settings() {
         destructive
         loading={deactivating}
         title="Deactivate your account?"
-        message="You'll be signed out everywhere and won't be able to log back in. Your data is kept for 60 days in case you change your mind — after that it's permanently deleted."
+        message="You'll be signed out everywhere and won't be able to log back in. Your data is kept for 30 days in case you change your mind — after that it's permanently deleted."
         confirmLabel="Deactivate"
         cancelLabel="Keep my account"
         onConfirm={deactivate}

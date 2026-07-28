@@ -155,6 +155,85 @@ def send_mileage_reminder_email(email: str, first_name: str, cars: list):
     msg.send()
 
 
+def send_account_deactivated_email(email: str, first_name: str = ""):
+    """
+    Sent right after DeactivateAccountView deactivates the account: confirms
+    the grace period and how to back out of it before permanent deletion.
+    """
+    from django.conf import settings
+
+    from utils import Constants
+
+    name = _display_name(email, first_name)
+    app_url = getattr(settings, "FRONTEND_URL", "http://localhost:3000")
+    grace_days = Constants.ACCOUNT_DELETION_GRACE_DAYS
+    context = {"name": name, "grace_days": grace_days, "support_url": f"{app_url}/contact"}
+
+    subject = "Your GlavBox account has been deactivated"
+    text_body = (
+        f"Hi {name},\n\n"
+        f"We're sorry to see you go. Your GlavBox account is now deactivated — you're signed out "
+        f"everywhere and can't log back in.\n\n"
+        f"Your profile and car data are kept for {grace_days} days. If this was a mistake, contact "
+        f"support before then and we can reactivate your account: {context['support_url']}\n\n"
+        f"After {grace_days} days, everything is permanently and irreversibly deleted."
+    )
+    html_body = render_to_string("emails/account_deactivated.html", context)
+
+    msg = EmailMultiAlternatives(subject=subject, body=text_body, to=[email])
+    msg.attach_alternative(html_body, "text/html")
+    msg.send()
+
+
+def send_deletion_reminder_email(email: str, first_name: str = "", days_remaining: int = 0):
+    """
+    Sent by the daily sweep once ACCOUNT_DELETION_REMINDER_DAYS have passed
+    since deactivation — the last nudge before the account is purged.
+    """
+    from django.conf import settings
+
+    name = _display_name(email, first_name)
+    app_url = getattr(settings, "FRONTEND_URL", "http://localhost:3000")
+    context = {"name": name, "days_remaining": days_remaining, "support_url": f"{app_url}/contact"}
+
+    subject = f"{days_remaining} days left before your GlavBox account is deleted"
+    text_body = (
+        f"Hi {name},\n\n"
+        f"Your GlavBox account has been deactivated, and in {days_remaining} days your profile and all "
+        f"of your car data — service history, expenses, reminders, and photos — will be permanently and "
+        f"irreversibly deleted.\n\n"
+        f"If you'd like to keep your account, contact support before then and we can reactivate it: "
+        f"{context['support_url']}"
+    )
+    html_body = render_to_string("emails/deletion_reminder.html", context)
+
+    msg = EmailMultiAlternatives(subject=subject, body=text_body, to=[email])
+    msg.attach_alternative(html_body, "text/html")
+    msg.send()
+
+
+def send_account_deleted_email(email: str, first_name: str = ""):
+    """
+    Sent by the purge sweep right before the account row is deleted (the
+    email address won't exist to send to afterward).
+    """
+    name = _display_name(email, first_name)
+
+    subject = "Your GlavBox account has been deleted"
+    context = {"name": name}
+    text_body = (
+        f"Hi {name},\n\n"
+        f"As promised, your GlavBox account and all associated data — profile, cars, service history, "
+        f"expenses, reminders, and photos — have now been permanently deleted from our systems.\n\n"
+        f"If this was a mistake, you're welcome to sign up again any time — we just won't have your old data."
+    )
+    html_body = render_to_string("emails/account_deleted.html", context)
+
+    msg = EmailMultiAlternatives(subject=subject, body=text_body, to=[email])
+    msg.attach_alternative(html_body, "text/html")
+    msg.send()
+
+
 def send_support_request_email(support_request, attachments=None):
     """
     Notifies the support inbox (DEFAULT_FROM_EMAIL) of a contact-us

@@ -339,6 +339,10 @@ class DeactivateAccountView(SmartAPIView):
         user = request.user
         user.deactivate()
 
+        from tasks import send_account_deactivated_email_task
+
+        send_account_deactivated_email_task.delay(email=user.email, first_name=user.first_name)
+
         # Blacklist the refresh token if provided
         refresh_token = request.data.get("refresh")
         if refresh_token:
