@@ -15,3 +15,21 @@ EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
 
 CELERY_TASK_ALWAYS_EAGER = True
 CELERY_TASK_EAGER_PROPAGATES = True
+
+# Throttle counters live in the cache and leak between tests, so leaving the
+# broad scopes on would make the suite order-dependent. The per-endpoint scopes
+# that already have their own tests (support_request, assistant_chat) keep their
+# real rates; the rest are off, and the tests that exercise them set their own
+# rate (see `throttled_rates` in accounts/tests.py).
+REST_FRAMEWORK = {  # noqa: F405
+    **REST_FRAMEWORK,  # noqa: F405
+    "DEFAULT_THROTTLE_RATES": {
+        **REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"],  # noqa: F405
+        "anon": None,
+        "user": None,
+        "auth_login": None,
+        "auth_register": None,
+        "auth_verify_otp": None,
+        "auth_resend_otp": None,
+    },
+}

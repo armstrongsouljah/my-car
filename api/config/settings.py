@@ -8,7 +8,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = config("SECRET_KEY")
 
-DEBUG = config("DEBUG", default=True, cast=bool)
+# Defaults to False: a missing/misspelled DEBUG in a deployed environment must
+# fail closed, not serve tracebacks and settings values to the internet.
+DEBUG = config("DEBUG", default=False, cast=bool)
 
 ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1", cast=Csv())
 
@@ -19,6 +21,33 @@ ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1", cast=Csv(
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 CSRF_TRUSTED_ORIGINS = config("CSRF_TRUSTED_ORIGINS", default="", cast=Csv())
+
+# ---------------------------------------------------------------------------
+# Transport security
+# ---------------------------------------------------------------------------
+# All default to "on unless DEBUG", so local HTTP development keeps working
+# while any deployed environment is hardened without needing extra env vars.
+#
+# The Gateway already redirects HTTP->HTTPS at the edge; SECURE_SSL_REDIRECT is
+# the backstop for anything that reaches the pod over plain HTTP anyway, and it
+# reads the proxy header set above to avoid a redirect loop.
+SECURE_SSL_REDIRECT = config("SECURE_SSL_REDIRECT", default=not DEBUG, cast=bool)
+# Kubernetes probes hit the pod directly over HTTP and must not be redirected.
+SECURE_REDIRECT_EXEMPT = [r"^health/$"]
+
+SESSION_COOKIE_SECURE = config("SESSION_COOKIE_SECURE", default=not DEBUG, cast=bool)
+CSRF_COOKIE_SECURE = config("CSRF_COOKIE_SECURE", default=not DEBUG, cast=bool)
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_SAMESITE = "Lax"
+
+# One year. Without HSTS the very first request of a session can still be
+# downgraded to HTTP before the redirect fires.
+SECURE_HSTS_SECONDS = config("SECURE_HSTS_SECONDS", default=0 if DEBUG else 31536000, cast=int)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = config("SECURE_HSTS_INCLUDE_SUBDOMAINS", default=not DEBUG, cast=bool)
+# Preload is deliberately opt-in: submitting to the browser preload list is
+# hard to reverse, so it should be a conscious decision rather than a default.
+SECURE_HSTS_PRELOAD = config("SECURE_HSTS_PRELOAD", default=False, cast=bool)
 
 # Base URL of the my-car frontend, used to build public-facing links in emails.
 FRONTEND_URL = config("FRONTEND_URL", default="http://localhost:3000").rstrip("/")
@@ -148,13 +177,33 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 20,
+    # A baseline ceiling on every route. Individual views layer tighter,
+    # purpose-built scopes on top (see DEFAULT_THROTTLE_RATES below).
+    "DEFAULT_THROTTLE_CLASSES": (
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ),
     "DEFAULT_THROTTLE_RATES": {
+        "anon": config("ANON_THROTTLE", default="60/min"),
+        "user": config("USER_THROTTLE", default="240/min"),
         # Caps AI assistant message sends per user — each one costs LLM tokens.
         "assistant_chat": config("ASSISTANT_CHAT_THROTTLE", default="30/min"),
         # The contact form is AllowAny (visitors included) — cap submissions
         # per user/IP so bots can't flood the support inbox or storage.
         "support_request": config("SUPPORT_REQUEST_THROTTLE", default="5/hour"),
+        # Auth endpoints are AllowAny and cheap to script against. Login and
+        # register key on IP; the OTP scopes key on the target email so a
+        # distributed attacker can't grind one account from many addresses.
+        "auth_login": config("AUTH_LOGIN_THROTTLE", default="10/min"),
+        "auth_register": config("AUTH_REGISTER_THROTTLE", default="10/hour"),
+        "auth_verify_otp": config("AUTH_VERIFY_OTP_THROTTLE", default="10/hour"),
+        "auth_resend_otp": config("AUTH_RESEND_OTP_THROTTLE", default="5/hour"),
     },
+    # Client IP is read from X-Forwarded-For, which the caller can spoof unless
+    # we know how many proxies sit in front of us. Behind the GKE Gateway the
+    # header is "<client>, <gclb>", so NUM_PROXIES=2 picks the real client.
+    # Left unset for local runs, where there is no proxy at all.
+    "NUM_PROXIES": config("NUM_PROXIES", default=None, cast=lambda v: int(v) if v not in (None, "") else None),
 }
 
 # ---------------------------------------------------------------------------
@@ -233,7 +282,15 @@ CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = TIME_ZONE
 
 if CELERY_BROKER_URL.startswith("rediss://"):
-    _ssl_opts = {"ssl_cert_reqs": _ssl.CERT_NONE}
+    # Verify the broker's certificate. CERT_NONE encrypts the connection but
+    # accepts any certificate, which leaves it open to an undetected MITM —
+    # the encryption is then only as good as the network you're trusting.
+    # CELERY_BROKER_SSL_CA_CERTS points at a CA bundle when the broker uses a
+    # private CA (Memorystore does; leave unset for a publicly-trusted cert).
+    _ssl_opts = {"ssl_cert_reqs": _ssl.CERT_REQUIRED}
+    _ssl_ca_certs = config("CELERY_BROKER_SSL_CA_CERTS", default="")
+    if _ssl_ca_certs:
+        _ssl_opts["ssl_ca_certs"] = _ssl_ca_certs
     CELERY_BROKER_USE_SSL = _ssl_opts
     CELERY_REDIS_BACKEND_USE_SSL = _ssl_opts
 

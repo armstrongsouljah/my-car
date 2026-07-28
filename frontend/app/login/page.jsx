@@ -151,7 +151,14 @@ function AuthPage() {
             last_name: form.last_name,
           },
         });
-        setInfo(`We sent a 6-digit code to ${form.email}.`);
+        // The API returns the same response whether or not the address is
+        // already registered, so the copy has to cover both: a new account
+        // gets a code, an existing one gets a "you already have an account"
+        // email and should sign in instead.
+        setInfo(
+          `We sent a 6-digit code to ${form.email}. Already have an account with that address? ` +
+          `Sign in instead — we've emailed you a reminder.`
+        );
         setMode("verify");
       } else if (mode === "verify") {
         const data = await api("/auth/verify-email/", {

@@ -1,9 +1,11 @@
+import secrets
 import uuid
 
 from django.conf import settings
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.db import models
 from django.utils import timezone
+from django.utils.crypto import salted_hmac
 
 from utils import Constants
 
@@ -82,10 +84,17 @@ class User(AbstractBaseUser, PermissionsMixin):
 
 class EmailVerificationOTP(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="otps")
-    otp = models.CharField(max_length=6)
+    # Stores an HMAC of the code, never the code itself. A plain hash would be
+    # pointless here — the whole 6-digit space can be hashed in under a second
+    # — so this is keyed on SECRET_KEY, which a database-only leak doesn't
+    # include. The raw code exists only in the verification email.
+    otp = models.CharField(max_length=64)
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField()
     is_used = models.BooleanField(default=False)
+    # A 6-digit code is only 10^6 wide — without a cap on wrong guesses the
+    # whole space is walkable inside the expiry window.
+    failed_attempts = models.PositiveSmallIntegerField(default=0)
 
     class Meta:
         ordering = ["-created_at"]
@@ -94,8 +103,34 @@ class EmailVerificationOTP(models.Model):
     def is_expired(self):
         return timezone.now() > self.expires_at
 
+    @staticmethod
+    def hash_otp(raw_otp):
+        # Pinned explicitly: salted_hmac()'s default digest is SHA1 today but
+        # is set to become SHA256 in Django 7.0, which would silently
+        # invalidate every pending OTP stored under the old default.
+        return salted_hmac("accounts.EmailVerificationOTP", str(raw_otp), algorithm="sha256").hexdigest()
+
     def verify(self, raw_otp):
-        return self.otp == raw_otp
+        # Constant-time compare so a wrong code can't be narrowed down by timing.
+        return secrets.compare_digest(self.otp, self.hash_otp(raw_otp))
+
+    def register_failed_attempt(self):
+        """
+        Count a wrong guess and burn the code once the cap is hit, so the owner
+        has to request a fresh one. Returns True if the code is now spent.
+
+        Uses an atomic F() update rather than `self.failed_attempts += 1` —
+        two verify requests racing the same OTP would otherwise both read the
+        same stale count and one increment would be lost, letting an attacker
+        get more than OTP_MAX_FAILED_ATTEMPTS guesses by parallelizing.
+        """
+        type(self).objects.filter(pk=self.pk).update(failed_attempts=models.F("failed_attempts") + 1)
+        self.refresh_from_db(fields=["failed_attempts"])
+        exhausted = self.failed_attempts >= Constants.OTP_MAX_FAILED_ATTEMPTS
+        if exhausted and not self.is_used:
+            self.is_used = True
+            self.save(update_fields=["is_used"])
+        return exhausted
 
     @classmethod
     def create_for_user(cls, user):
@@ -109,7 +144,8 @@ class EmailVerificationOTP(models.Model):
         raw_otp = generate_otp()
         instance = cls.objects.create(
             user=user,
-            otp=raw_otp,
+            otp=cls.hash_otp(raw_otp),
             expires_at=timezone.now() + timezone.timedelta(minutes=expiry_minutes),
         )
+        # The raw code is returned once, for the email, and never stored.
         return instance, raw_otp
