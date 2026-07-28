@@ -76,7 +76,9 @@ def send_mileage_reminder_email_task(user_id, cars):
     try:
         send_mileage_reminder_email(email=user.email, first_name=user.first_name, cars=cars)
     except Exception:
-        logger.error("Failed to send mileage reminder to %s; will retry on a later sweep", user.email, exc_info=True)
+        logger.error(
+            "Failed to send mileage reminder to user_id=%s; will retry on a later sweep", user_id, exc_info=True
+        )
         return
 
     User.objects.filter(pk=user_id).update(last_mileage_reminder_at=timezone.now(), updated_at=timezone.now())
@@ -213,7 +215,9 @@ def send_deletion_reminder_email_task(user_id, days_remaining):
     try:
         send_deletion_reminder_email(email=user.email, first_name=user.first_name, days_remaining=days_remaining)
     except Exception:
-        logger.error("Failed to send deletion reminder to %s; will retry on a later sweep", user.email, exc_info=True)
+        logger.error(
+            "Failed to send deletion reminder to user_id=%s; will retry on a later sweep", user_id, exc_info=True
+        )
         return
 
     User.objects.filter(pk=user_id).update(deletion_reminder_sent_at=timezone.now(), updated_at=timezone.now())
