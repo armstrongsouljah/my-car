@@ -75,6 +75,20 @@ function AuthPage() {
     if (isLoggedIn()) router.replace("/dashboard");
   }, [router]);
 
+  // The useState initializers above only run once, on mount — if /login stays
+  // mounted (e.g. a verify-email link is opened while another /login tab-nav
+  // already has the app loaded) a changed ?mode=&email= wouldn't otherwise be
+  // picked up, leaving a deep link stuck showing stale mode/email. searchParams
+  // only changes identity on an actual URL change, not on our own setMode/
+  // setForm calls below, so this can't clobber in-page transitions like
+  // signup -> verify that never touch the URL.
+  useEffect(() => {
+    const urlMode = searchParams.get("mode");
+    const urlEmail = searchParams.get("email");
+    if (urlMode === "signup" || urlMode === "verify") setMode(urlMode);
+    if (urlEmail) setForm((prev) => (prev.email === urlEmail ? prev : { ...prev, email: urlEmail }));
+  }, [searchParams]);
+
   // ── Google Sign-In ──────────────────────────────────────────────────────────
   // GIS must only be initialize()d once per page (repeat calls reset its
   // global state) — the button itself does need re-rendering on mode change

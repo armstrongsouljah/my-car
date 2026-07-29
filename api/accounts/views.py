@@ -144,8 +144,19 @@ class VerifyEmailView(SmartAPIView):
         otp_instance.is_used = True
         otp_instance.save(update_fields=["is_used"])
 
+        # Conditioned on is_email_verified=False, and its result checked,
+        # rather than user.save(update_fields=[...]): a narrow but real race
+        # against #23's day-15 purge sweep, which deletes accounts still
+        # unverified at the exact moment this request lands, would otherwise
+        # surface as an unhandled DatabaseError (Django's update_fields save
+        # raises when the row is already gone) instead of a clean response.
+        updated = User.objects.filter(pk=user.pk, is_email_verified=False).update(is_email_verified=True)
+        if not updated:
+            return self.respond_with(
+                "This account no longer exists. Please sign up again.",
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
         user.is_email_verified = True
-        user.save(update_fields=["is_email_verified"])
 
         from tasks import send_welcome_email_task
         send_welcome_email_task.delay(email=user.email, first_name=user.first_name)

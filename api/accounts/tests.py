@@ -69,6 +69,33 @@ class TestAuthFlow:
         assert response.status_code == 200
         assert "tokens" in response.data
 
+    def test_verify_email_fails_loudly_if_the_account_is_deleted_mid_request(self, client, db, monkeypatch):
+        """
+        Regression for a race against #23's day-15 purge sweep: the account
+        row could in principle disappear between the OTP being marked used and
+        the is_email_verified write. Simulated by deleting the user right
+        after the OTP's own save() succeeds (the step immediately before the
+        view's conditional update) — the view must respond cleanly instead of
+        crashing on Django's update_fields save raising for a gone row, and
+        must not hand out tokens for a user that no longer exists.
+        """
+        user = User.objects.create_user(email="raceverify@example.com", password="str0ng-pass-123")
+        _, raw_otp = EmailVerificationOTP.create_for_user(user)
+
+        original_save = EmailVerificationOTP.save
+
+        def save_then_delete_user(self, *args, **kwargs):
+            result = original_save(self, *args, **kwargs)
+            User.objects.filter(pk=user.pk).delete()
+            return result
+
+        monkeypatch.setattr(EmailVerificationOTP, "save", save_then_delete_user)
+
+        response = client.post(reverse("auth-verify-email"), {"email": "raceverify@example.com", "otp": raw_otp})
+
+        assert response.status_code == 404
+        assert "tokens" not in response.data
+
     def test_login_returns_tokens(self, client, owner):
         response = client.post(reverse("auth-login"), {
             "email": "owner@example.com",
@@ -655,6 +682,35 @@ class TestPurgeUnverifiedAccounts:
         purge_unverified_accounts_task()
 
         assert User.objects.filter(pk=owner.pk).exists()
+
+    def test_skips_a_user_who_verifies_mid_purge(self, unverified_signup, monkeypatch):
+        """
+        Regression for a bulk queryset.delete() race: Django's collector
+        gathers matching rows up front and deletes them by pk afterward, so a
+        user who verifies in that gap would still get purged by the bulk
+        form. The fix re-checks is_email_verified at the moment of each row's
+        delete — simulated here by flipping verification on inside the first
+        delete() call the task makes, before the real delete runs.
+        """
+        from django.db.models.query import QuerySet
+
+        from tasks import purge_unverified_accounts_task
+
+        User.objects.filter(pk=unverified_signup.pk).update(
+            date_joined=timezone.now() - timedelta(days=Constants.EMAIL_VERIFY_PURGE_DAYS)
+        )
+
+        original_delete = QuerySet.delete
+
+        def verify_then_delete(self):
+            User.objects.filter(pk=unverified_signup.pk).update(is_email_verified=True)
+            return original_delete(self)
+
+        monkeypatch.setattr(QuerySet, "delete", verify_then_delete)
+
+        purge_unverified_accounts_task()
+
+        assert User.objects.filter(pk=unverified_signup.pk).exists()
 
 
 @pytest.fixture

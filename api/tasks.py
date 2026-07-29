@@ -449,8 +449,19 @@ def purge_unverified_accounts_task():
     from utils import Constants
 
     cutoff = timezone.now() - timezone.timedelta(days=Constants.EMAIL_VERIFY_PURGE_DAYS)
-    queryset = User.objects.filter(is_email_verified=False, date_joined__lte=cutoff)
-    count = queryset.count()
-    queryset.delete()
+    # Deleted one row at a time (re-checking is_email_verified=False on each
+    # delete) rather than a single bulk queryset.delete(): the bulk form
+    # collects matching rows up front and deletes them by pk afterward, so a
+    # user who verifies in the gap between collection and the delete
+    # statement would still get purged. This shrinks that race to the delete
+    # of a single already-stale row instead of the whole day's batch.
+    candidate_ids = list(
+        User.objects.filter(is_email_verified=False, date_joined__lte=cutoff).values_list("pk", flat=True)
+    )
+    count = 0
+    for user_id in candidate_ids:
+        deleted, _ = User.objects.filter(pk=user_id, is_email_verified=False).delete()
+        if deleted:
+            count += 1
 
     return f"Purged {count} never-verified account(s)"
