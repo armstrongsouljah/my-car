@@ -1,10 +1,14 @@
 from datetime import date
+from unittest.mock import patch
 
 import pytest
 from dateutil.relativedelta import relativedelta
+from django.urls import reverse
+from rest_framework.test import APIClient
 
 from accounts.models import User
 from cars.models import Car
+from reminders.catalog import get_reminder_catalog
 from reminders.engine import evaluate_reminder
 from reminders.models import Reminder
 from reminders.serializers import ReminderCreateSerializer, ReminderEditSerializer
@@ -16,6 +20,11 @@ from utils.Exception import CustomValidation
 def car(db):
     owner = User.objects.create_user(email="owner@example.com", password="str0ng-pass-123")
     return Car.objects.create(owner=owner, make="Toyota", model="Corolla", current_odometer_km=40000)
+
+
+@pytest.fixture
+def client():
+    return APIClient()
 
 
 @pytest.mark.django_db
@@ -185,3 +194,87 @@ class TestReminderSerializers:
         # even though the old interval_km/baseline_odometer_km are still stored.
         assert updated.next_due_odometer_km is None
         assert updated.next_due_date is not None
+
+
+@pytest.mark.django_db
+class TestReminderListCaching:
+
+    def _create(self, car, **overrides):
+        fields = dict(
+            car=car, title="Oil change",
+            tracking_method=Constants.REMINDER_TRACKING_METHOD_MILEAGE,
+            interval_km=5000, baseline_odometer_km=car.current_odometer_km,
+        )
+        fields.update(overrides)
+        return Reminder.objects.create(**fields)
+
+    def test_unfiltered_list_is_cached_across_requests(self, car, client):
+        client.force_authenticate(car.owner)
+        first = client.get(reverse("reminder-list-create"))
+
+        # Bypasses the API's own invalidation hook — proves the second
+        # request is served from cache, not recomputed.
+        self._create(car)
+
+        second = client.get(reverse("reminder-list-create"))
+        assert second.data == first.data
+
+    def test_filtered_request_bypasses_the_cache(self, car, client):
+        client.force_authenticate(car.owner)
+        client.get(reverse("reminder-list-create"))  # warms the unfiltered cache
+
+        self._create(car)
+
+        filtered = client.get(reverse("reminder-list-create"), {"car": str(car.pk)})
+        results = filtered.data.get("results", filtered.data)
+        assert len(results) == 1
+
+    def test_creating_a_reminder_invalidates_the_cache(self, car, client):
+        client.force_authenticate(car.owner)
+        client.get(reverse("reminder-list-create"))  # warm
+
+        resp = client.post(reverse("reminder-list-create"), {
+            "car": str(car.pk), "title": "Oil change",
+            "tracking_method": Constants.REMINDER_TRACKING_METHOD_MILEAGE,
+            "interval_km": 5000,
+        }, format="json")
+        assert resp.status_code == 201
+
+        listing = client.get(reverse("reminder-list-create"))
+        results = listing.data.get("results", listing.data)
+        assert len(results) == 1
+
+    def test_editing_a_reminder_invalidates_the_cache(self, car, client):
+        reminder = self._create(car)
+        client.force_authenticate(car.owner)
+        client.get(reverse("reminder-list-create"))  # warm
+
+        resp = client.patch(reverse("reminder-detail", args=[reminder.pk]), {"title": "New title"}, format="json")
+        assert resp.status_code == 200
+
+        listing = client.get(reverse("reminder-list-create"))
+        results = listing.data.get("results", listing.data)
+        assert results[0]["title"] == "New title"
+
+    def test_deleting_a_reminder_invalidates_the_cache(self, car, client):
+        reminder = self._create(car)
+        client.force_authenticate(car.owner)
+        client.get(reverse("reminder-list-create"))  # warm
+
+        resp = client.delete(reverse("reminder-detail", args=[reminder.pk]))
+        assert resp.status_code == 200  # SmartDetailView.delete_response() quirk, not 204 — see utils/Views.py
+
+        listing = client.get(reverse("reminder-list-create"))
+        results = listing.data.get("results", listing.data)
+        assert results == []
+
+
+class TestReminderCatalogCaching:
+
+    def test_catalog_is_only_computed_once(self, client):
+        with patch("reminders.views.get_reminder_catalog", wraps=get_reminder_catalog) as mocked:
+            first = client.get(reverse("reminder-catalog"))
+            second = client.get(reverse("reminder-catalog"))
+
+        assert mocked.call_count == 1
+        assert first.data == second.data

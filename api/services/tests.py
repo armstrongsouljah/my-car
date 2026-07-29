@@ -210,3 +210,127 @@ class TestRemindersView:
         assert entry["model"] == "Corolla"
         assert entry["registration_number"] == "ABC123"
         assert "car" not in entry
+
+
+@pytest.mark.django_db
+class TestRemindersViewCaching:
+
+    def test_response_is_cached_across_requests(self, car, client):
+        client.force_authenticate(car.owner)
+        first = client.get(reverse("service-reminders"))
+
+        # Bypasses the API's own invalidation hook — proves the second
+        # request is served from cache, not recomputed.
+        ServiceRecord.objects.create(
+            car=car, odometer_km=40000,
+            service_date=date.today() - relativedelta(months=7),
+            interval_km=5000, interval_months=6,
+        )
+
+        second = client.get(reverse("service-reminders"))
+        assert second.data == first.data
+
+    def test_creating_a_service_record_invalidates_the_cache(self, car, client):
+        client.force_authenticate(car.owner)
+        client.get(reverse("service-reminders"))  # warm
+
+        resp = client.post(reverse("service-list-create"), {
+            "car": str(car.pk), "service_type": "oil_change",
+            "service_date": (date.today() - relativedelta(months=7)).isoformat(),
+            "odometer_km": 40000, "interval_km": 5000, "interval_months": 6,
+        }, format="json")
+        assert resp.status_code == 201
+
+        listing = client.get(reverse("service-reminders"))
+        kinds = [r["kind"] for r in listing.data[0]["reminders"]]
+        assert kinds == ["service"]
+
+    def test_creating_an_inspection_invalidates_the_cache(self, car, client):
+        client.force_authenticate(car.owner)
+        client.get(reverse("service-reminders"))  # warm
+
+        resp = client.post(reverse("inspection-list-create"), {
+            "car": str(car.pk),
+            "inspection_date": (date.today() - relativedelta(months=13)).isoformat(),
+        }, format="json")
+        assert resp.status_code == 201
+
+        listing = client.get(reverse("service-reminders"))
+        kinds = {r["kind"] for r in listing.data[0]["reminders"]}
+        assert "inspection" in kinds
+
+    def test_recording_a_higher_odometer_invalidates_the_cache(self, car, client):
+        ServiceRecord.objects.create(
+            car=car, odometer_km=car.current_odometer_km,
+            service_date=date.today(), interval_km=1000,
+        )
+        client.force_authenticate(car.owner)
+        first = client.get(reverse("service-reminders"))
+        assert first.data[0]["reminders"] == []  # not due yet
+
+        car.record_odometer(car.current_odometer_km + 1500)
+
+        second = client.get(reverse("service-reminders"))
+        kinds = [r["kind"] for r in second.data[0]["reminders"]]
+        assert kinds == ["service"]
+
+    def test_creating_an_oil_change_reminder_invalidates_the_cache(self, car, client):
+        ServiceRecord.objects.create(
+            car=car, odometer_km=40000,
+            service_date=date.today() - relativedelta(months=7),
+            interval_km=5000, interval_months=6,
+        )
+        client.force_authenticate(car.owner)
+        first = client.get(reverse("service-reminders"))
+        assert [r["kind"] for r in first.data[0]["reminders"]] == ["service"]
+
+        resp = client.post(reverse("reminder-list-create"), {
+            "car": str(car.pk), "catalog_key": OIL_CHANGE_KEY, "title": "Engine oil & filter change",
+            "tracking_method": Constants.REMINDER_TRACKING_METHOD_MILEAGE,
+            "interval_km": 5000,
+        }, format="json")
+        assert resp.status_code == 201
+
+        second = client.get(reverse("service-reminders"))
+        assert second.data[0]["reminders"] == []  # suppressed once the oil-change reminder exists
+
+
+@pytest.mark.django_db
+class TestServiceRecordListCaching:
+
+    def test_car_scoped_list_is_cached_across_requests(self, car, client):
+        client.force_authenticate(car.owner)
+        first = client.get(reverse("service-list-create"), {"car": str(car.pk)})
+
+        ServiceRecord.objects.create(
+            car=car, odometer_km=40000, service_date=date.today(), interval_km=5000,
+        )
+
+        second = client.get(reverse("service-list-create"), {"car": str(car.pk)})
+        assert second.data == first.data
+
+    def test_unfiltered_request_bypasses_the_cache(self, car, client):
+        client.force_authenticate(car.owner)
+        client.get(reverse("service-list-create"), {"car": str(car.pk)})  # warms the car-scoped cache
+
+        ServiceRecord.objects.create(
+            car=car, odometer_km=40000, service_date=date.today(), interval_km=5000,
+        )
+
+        unfiltered = client.get(reverse("service-list-create"))
+        results = unfiltered.data.get("results", unfiltered.data)
+        assert len(results) == 1
+
+    def test_creating_a_record_invalidates_the_car_scoped_cache(self, car, client):
+        client.force_authenticate(car.owner)
+        client.get(reverse("service-list-create"), {"car": str(car.pk)})  # warm
+
+        resp = client.post(reverse("service-list-create"), {
+            "car": str(car.pk), "service_type": "oil_change",
+            "service_date": date.today().isoformat(), "odometer_km": 40000, "interval_km": 5000,
+        }, format="json")
+        assert resp.status_code == 201
+
+        listing = client.get(reverse("service-list-create"), {"car": str(car.pk)})
+        results = listing.data.get("results", listing.data)
+        assert len(results) == 1

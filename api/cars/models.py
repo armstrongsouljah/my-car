@@ -68,6 +68,8 @@ class Car(models.Model):
         """
         from django.utils import timezone
 
+        from utils import Cache
+
         if not odometer_km:
             return
 
@@ -78,3 +80,9 @@ class Car(models.Model):
         if updated:
             self.current_odometer_km = odometer_km
             self.odometer_updated_at = now
+            # Reminder/service-digest status is computed against the current
+            # odometer reading (see reminders/engine.py, services/reminders.py)
+            # on every call site that moves it (car edit, expense/inspection/
+            # service save) — not just the cars endpoint's own cache.
+            Cache.invalidate_reminders(self.owner_id)
+            Cache.invalidate_service_digest(self.owner_id)
