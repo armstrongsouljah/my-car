@@ -1,5 +1,3 @@
-from rest_framework import serializers
-
 from utils.Serializers import CreateModelSerializer, EditModelSerializer, ListModelSerializer
 
 from expenses.models import Expense
@@ -24,13 +22,11 @@ class ExpenseEditSerializer(EditModelSerializer):
 
 
 class ExpenseListSerializer(ListModelSerializer):
-    category_display = serializers.CharField(source="get_category_display", read_only=True)
-
     class Meta:
         model = Expense
         fields = (
-            "id", "car", "category", "category_display", "amount",
-            "expense_date", "vendor", "description", "odometer_km", "litres", "created_at",
+            "id", "car", "category", "amount",
+            "expense_date", "vendor", "description", "odometer_km", "litres",
         )
 
     @staticmethod

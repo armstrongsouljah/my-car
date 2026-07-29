@@ -78,7 +78,9 @@ class TestConversationScoping:
     def test_create_conversation_pins_to_owned_car(self, client, car):
         resp = client.post("/api/v1/assistant/conversations/", {"car": str(car.id)}, format="json")
         assert resp.status_code == 201
-        assert resp.data["title"] == "Toyota Corolla"
+        # title isn't in the (trimmed) response body — the frontend never reads
+        # it there — so assert the auto-titling behavior directly against the DB.
+        assert Conversation.objects.get(pk=resp.data["id"]).title == "Toyota Corolla"
 
     def test_cannot_open_conversation_on_someone_elses_car(self, client, db):
         stranger = User.objects.create_user(email="x@example.com", password="str0ng-pass-123")

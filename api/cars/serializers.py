@@ -81,13 +81,11 @@ class CarEditSerializer(EditModelSerializer):
 
 
 class CarListSerializer(ListModelSerializer):
-    display_name = serializers.CharField(source="__str__", read_only=True)
-
     class Meta:
         model = Car
         fields = (
-            "id", "display_name", "make", "model", "year", "registration_number",
-            "color", "fuel_type", "photo_url", "current_odometer_km", "is_active", "created_at",
+            "id", "make", "model", "year", "registration_number",
+            "photo_url", "current_odometer_km",
         )
 
     @staticmethod
@@ -96,16 +94,14 @@ class CarListSerializer(ListModelSerializer):
 
 
 class CarDetailSerializer(ListModelSerializer):
-    display_name = serializers.CharField(source="__str__", read_only=True)
     reminders = serializers.SerializerMethodField()
 
     class Meta:
         model = Car
         fields = (
-            "id", "display_name", "make", "model", "year", "registration_number",
+            "id", "make", "model", "year", "registration_number",
             "vin", "color", "fuel_type", "photo_url", "current_odometer_km",
-            "odometer_updated_at", "notes", "is_active", "reminders",
-            "created_at", "updated_at",
+            "notes", "reminders",
         )
 
     def get_reminders(self, car):

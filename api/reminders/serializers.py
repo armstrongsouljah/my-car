@@ -75,23 +75,17 @@ class ReminderEditSerializer(EditModelSerializer):
 
 
 class ReminderListSerializer(ListModelSerializer):
-    category_display = serializers.CharField(source="get_category_display", read_only=True)
-    tracking_method_display = serializers.CharField(source="get_tracking_method_display", read_only=True)
     status = serializers.SerializerMethodField()
     message = serializers.SerializerMethodField()
     progress_percent = serializers.SerializerMethodField()
-    remaining_km = serializers.SerializerMethodField()
-    remaining_days = serializers.SerializerMethodField()
 
     class Meta:
         model = Reminder
         fields = (
-            "id", "car", "catalog_key", "title", "category", "category_display",
-            "is_essential", "tracking_method", "tracking_method_display",
-            "interval_km", "interval_months", "baseline_odometer_km", "baseline_date",
+            "id", "car", "title", "is_essential",
+            "baseline_odometer_km", "baseline_date",
             "next_due_odometer_km", "next_due_date",
-            "status", "message", "progress_percent", "remaining_km", "remaining_days",
-            "created_at",
+            "status", "message", "progress_percent",
         )
 
     def _state(self, instance):
@@ -108,17 +102,24 @@ class ReminderListSerializer(ListModelSerializer):
     def get_progress_percent(self, instance):
         return self._state(instance)["progress_percent"]
 
-    def get_remaining_km(self, instance):
-        return self._state(instance)["remaining_km"]
-
-    def get_remaining_days(self, instance):
-        return self._state(instance)["remaining_days"]
-
     @staticmethod
     def select_related_fields():
         return ["car"]
 
 
-class ReminderDetailSerializer(ReminderListSerializer):
-    class Meta(ReminderListSerializer.Meta):
-        fields = ReminderListSerializer.Meta.fields + ("notes", "updated_at")
+class ReminderDetailSerializer(ListModelSerializer):
+    """Fields the edit form (ReminderDetailsForm.jsx) actually reads/writes —
+    deliberately not a superset of ReminderListSerializer, which needs
+    computed status/progress fields the edit form doesn't render."""
+
+    class Meta:
+        model = Reminder
+        fields = (
+            "id", "car", "catalog_key", "title", "tracking_method",
+            "interval_km", "interval_months", "baseline_odometer_km",
+            "baseline_date", "notes",
+        )
+
+    @staticmethod
+    def select_related_fields():
+        return ["car"]

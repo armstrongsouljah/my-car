@@ -149,15 +149,10 @@ class LoginSerializer(serializers.Serializer):
 # ---------------------------------------------------------------------------
 
 class UserProfileSerializer(BaseModelSerializer):
-    full_name = serializers.CharField(read_only=True)
-
     class Meta:
         model = User
-        fields = (
-            "id", "email", "first_name", "last_name", "full_name",
-            "phone", "role", "mileage_reminder_frequency", "is_email_verified", "date_joined",
-        )
-        read_only_fields = ("id", "email", "role", "is_email_verified", "date_joined", "full_name")
+        fields = ("id", "email", "first_name", "last_name", "phone", "mileage_reminder_frequency")
+        read_only_fields = ("id", "email")
 
     @staticmethod
     def select_related_fields():

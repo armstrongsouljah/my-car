@@ -30,8 +30,8 @@ class InspectionListSerializer(ListModelSerializer):
     class Meta:
         model = Inspection
         fields = (
-            "id", "car", "inspection_date", "odometer_km", "status", "status_display",
-            "inspector_name", "report_url", "next_inspection_date", "created_at",
+            "id", "inspection_date", "status_display",
+            "inspector_name", "report_url", "next_inspection_date",
         )
 
     def get_report_url(self, instance):

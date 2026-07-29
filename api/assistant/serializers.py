@@ -14,17 +14,13 @@ class ConversationCreateSerializer(CreateModelSerializer):
 class MessageListSerializer(ListModelSerializer):
     class Meta:
         model = Message
-        fields = ("id", "role", "content", "tool_calls", "created_at")
+        fields = ("id", "role", "content", "tool_calls")
 
 
 class ConversationListSerializer(ListModelSerializer):
     class Meta:
         model = Conversation
-        fields = ("id", "car", "title", "created_at", "updated_at")
-
-    @staticmethod
-    def select_related_fields():
-        return ["car"]
+        fields = ("id",)
 
 
 class ConversationDetailSerializer(ConversationListSerializer):
