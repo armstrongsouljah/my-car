@@ -324,4 +324,12 @@ CELERY_BEAT_SCHEDULE = {
         "task": "tasks.send_account_deletion_reminder_task",
         "schedule": 60 * 60 * 24,  # once a day
     },
+    "send-email-verification-reminders": {
+        "task": "tasks.send_email_verification_reminder_task",
+        "schedule": 60 * 60 * 24,  # once a day
+    },
+    "purge-unverified-accounts": {
+        "task": "tasks.purge_unverified_accounts_task",
+        "schedule": 60 * 60 * 24,  # once a day
+    },
 }

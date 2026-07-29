@@ -102,6 +102,47 @@ def send_duplicate_signup_email(email: str, first_name: str = ""):
     msg.send()
 
 
+def send_verify_email_reminder_email(email: str, otp: str, first_name: str = "", days_remaining: int = 0):
+    """
+    Sent by the daily sweep once Constants.EMAIL_VERIFY_REMINDER_DAYS have
+    passed since signup with the address still unverified. Carries a fresh
+    OTP (the old one may be long expired) and warns that the account is
+    otherwise removed automatically — never verified in the first place, so
+    there's no "reactivate" path once that happens.
+    """
+    from urllib.parse import urlencode
+
+    from django.conf import settings
+
+    name = _display_name(email, first_name)
+    expiry_minutes = getattr(settings, "OTP_EXPIRY_MINUTES", 10)
+    app_url = getattr(settings, "FRONTEND_URL", "http://localhost:3000")
+    # Lands directly on the OTP-entry step with the address prefilled, rather
+    # than the bare login page, so finishing verification from the email
+    # doesn't also require retyping the email address.
+    verify_url = f"{app_url}/login?{urlencode({'mode': 'verify', 'email': email})}"
+    context = {
+        "name": name, "otp": otp, "expiry_minutes": expiry_minutes,
+        "days_remaining": days_remaining, "verify_url": verify_url,
+    }
+
+    subject = "Verify your GlavBox account before it's removed"
+    text_body = (
+        f"Hi {name},\n\n"
+        f"You signed up for GlavBox but never verified your email, so your account isn't active yet.\n\n"
+        f"Your verification code is: {otp}\n"
+        f"This code expires in {expiry_minutes} minutes.\n\n"
+        f"Verify here: {verify_url}\n\n"
+        f"If you don't verify within {days_remaining} days, the account will be removed automatically.\n\n"
+        f"If you didn't sign up for GlavBox, you can safely ignore this email."
+    )
+    html_body = render_to_string("emails/verify_reminder.html", context)
+
+    msg = EmailMultiAlternatives(subject=subject, body=text_body, to=[email])
+    msg.attach_alternative(html_body, "text/html")
+    msg.send()
+
+
 def send_welcome_email(email: str, first_name: str = ""):
     """Sends a post-verification welcome email."""
     from django.conf import settings

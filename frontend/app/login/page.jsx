@@ -53,11 +53,16 @@ function EyeIcon({ open }) {
 function AuthPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  // Landing page CTAs can link straight to the signup tab via ?mode=signup —
-  // anyone else (the hero's "Sign in" link, a bare /login visit) gets login.
-  const [mode, setMode] = useState(searchParams.get("mode") === "signup" ? "signup" : "login"); // login | signup | verify | forgot | reset
+  // Landing page CTAs can link straight to the signup tab via ?mode=signup;
+  // the verify-email reminder email links straight to ?mode=verify&email=...
+  // so a stale/unverified signup can finish without typing the address again.
+  // Anyone else (the hero's "Sign in" link, a bare /login visit) gets login.
+  const initialMode = searchParams.get("mode");
+  const [mode, setMode] = useState(
+    initialMode === "signup" || initialMode === "verify" ? initialMode : "login"
+  ); // login | signup | verify | forgot | reset
   const [form, setForm] = useState({
-    email: "", password: "", first_name: "", last_name: "", otp: "",
+    email: searchParams.get("email") || "", password: "", first_name: "", last_name: "", otp: "",
     new_password: "", confirm_new_password: "",
   });
   const [showPassword, setShowPassword] = useState(false);
@@ -69,6 +74,20 @@ function AuthPage() {
   useEffect(() => {
     if (isLoggedIn()) router.replace("/dashboard");
   }, [router]);
+
+  // The useState initializers above only run once, on mount — if /login stays
+  // mounted (e.g. a verify-email link is opened while another /login tab-nav
+  // already has the app loaded) a changed ?mode=&email= wouldn't otherwise be
+  // picked up, leaving a deep link stuck showing stale mode/email. searchParams
+  // only changes identity on an actual URL change, not on our own setMode/
+  // setForm calls below, so this can't clobber in-page transitions like
+  // signup -> verify that never touch the URL.
+  useEffect(() => {
+    const urlMode = searchParams.get("mode");
+    const urlEmail = searchParams.get("email");
+    if (urlMode === "signup" || urlMode === "verify") setMode(urlMode);
+    if (urlEmail) setForm((prev) => (prev.email === urlEmail ? prev : { ...prev, email: urlEmail }));
+  }, [searchParams]);
 
   // ── Google Sign-In ──────────────────────────────────────────────────────────
   // GIS must only be initialize()d once per page (repeat calls reset its
