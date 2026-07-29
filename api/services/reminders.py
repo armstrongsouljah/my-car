@@ -80,16 +80,12 @@ def build_service_reminder(car, today=None):
                 "kind": "service",
                 "status": Constants.REMINDER_STATUS_OK,
                 "message": "No service logged yet — log your last service to start tracking intervals.",
-                "next_due_odometer_km": None,
-                "next_due_date": None,
                 "progress_percent": 0,
             }
         return {
             "kind": "service",
             "status": Constants.REMINDER_STATUS_DUE_SOON,
             "message": "No service has been logged for this car yet — log your last service to start tracking intervals.",
-            "next_due_odometer_km": None,
-            "next_due_date": None,
             "progress_percent": 0,
         }
 
@@ -98,8 +94,6 @@ def build_service_reminder(car, today=None):
             "kind": "service",
             "status": Constants.REMINDER_STATUS_OK,
             "message": "No interval set on the last service.",
-            "next_due_odometer_km": None,
-            "next_due_date": None,
             "progress_percent": 0,
         }
 
@@ -119,8 +113,6 @@ def build_service_reminder(car, today=None):
         "kind": "service",
         "status": status,
         "message": message,
-        "next_due_odometer_km": record.next_due_odometer_km,
-        "next_due_date": record.next_due_date.isoformat() if record.next_due_date else None,
         "progress_percent": progress_percent,
     }
 
@@ -140,14 +132,12 @@ def build_inspection_reminder(car, today=None):
                 "kind": "inspection",
                 "status": Constants.REMINDER_STATUS_OK,
                 "message": "No general inspection on record yet — book one to know the state of your vehicle.",
-                "next_due_date": None,
                 "progress_percent": 0,
             }
         return {
             "kind": "inspection",
             "status": Constants.REMINDER_STATUS_DUE_SOON,
             "message": "No general inspection on record — book one to know the state of your vehicle.",
-            "next_due_date": None,
             "progress_percent": 0,
         }
 
@@ -174,7 +164,6 @@ def build_inspection_reminder(car, today=None):
         "kind": "inspection",
         "status": status,
         "message": message,
-        "next_due_date": next_due.isoformat(),
         "progress_percent": progress_percent,
     }
 

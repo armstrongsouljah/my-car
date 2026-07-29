@@ -39,9 +39,9 @@ class ServiceRecordListSerializer(ListModelSerializer):
     class Meta:
         model = ServiceRecord
         fields = (
-            "id", "car", "service_type", "service_type_display", "service_date",
-            "odometer_km", "garage_name", "cost", "interval_km", "interval_months",
-            "next_due_odometer_km", "next_due_date", "created_at",
+            "id", "service_type_display", "service_date",
+            "odometer_km", "garage_name", "cost",
+            "next_due_odometer_km", "next_due_date",
         )
 
     @staticmethod
