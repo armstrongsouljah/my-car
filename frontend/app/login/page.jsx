@@ -53,11 +53,16 @@ function EyeIcon({ open }) {
 function AuthPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  // Landing page CTAs can link straight to the signup tab via ?mode=signup —
-  // anyone else (the hero's "Sign in" link, a bare /login visit) gets login.
-  const [mode, setMode] = useState(searchParams.get("mode") === "signup" ? "signup" : "login"); // login | signup | verify | forgot | reset
+  // Landing page CTAs can link straight to the signup tab via ?mode=signup;
+  // the verify-email reminder email links straight to ?mode=verify&email=...
+  // so a stale/unverified signup can finish without typing the address again.
+  // Anyone else (the hero's "Sign in" link, a bare /login visit) gets login.
+  const initialMode = searchParams.get("mode");
+  const [mode, setMode] = useState(
+    initialMode === "signup" || initialMode === "verify" ? initialMode : "login"
+  ); // login | signup | verify | forgot | reset
   const [form, setForm] = useState({
-    email: "", password: "", first_name: "", last_name: "", otp: "",
+    email: searchParams.get("email") || "", password: "", first_name: "", last_name: "", otp: "",
     new_password: "", confirm_new_password: "",
   });
   const [showPassword, setShowPassword] = useState(false);

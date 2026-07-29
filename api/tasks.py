@@ -336,3 +336,121 @@ def send_duplicate_signup_email_task(email, first_name=""):
     from utils.Email import send_duplicate_signup_email
 
     send_duplicate_signup_email(email=email, first_name=first_name)
+
+
+@shared_task(name="tasks.send_verify_reminder_email_task")
+def send_verify_reminder_email_task(user_id, days_remaining):
+    """
+    Sends one account's email-verification reminder — with a fresh OTP,
+    since the original issued at signup has long since expired — and, only on
+    success, confirms it by setting verify_reminder_sent_at. Dispatched
+    (never called inline) by send_email_verification_reminder_task so one
+    account's failure can't crash the rest of that day's batch, same as the
+    mileage and deletion reminders (see #27). A failure here is logged and
+    left for the next sweep to notice the still-stale claim and retry.
+    """
+    from django.utils import timezone
+
+    from accounts.models import User, EmailVerificationOTP
+    from utils.Email import send_verify_email_reminder_email
+
+    # Re-checks is_email_verified/verify_reminder_sent_at at send time, not
+    # just at claim time: the account may have verified (or already been sent
+    # this reminder by a reclaim of a stale lease) since this task was queued.
+    user = User.objects.filter(pk=user_id, is_email_verified=False, verify_reminder_sent_at__isnull=True).first()
+    if user is None:
+        return
+
+    _, raw_otp = EmailVerificationOTP.create_for_user(user)
+
+    try:
+        send_verify_email_reminder_email(
+            email=user.email, otp=raw_otp, first_name=user.first_name, days_remaining=days_remaining
+        )
+    except Exception:
+        logger.error(
+            "Failed to send verify reminder to user_id=%s; will retry on a later sweep", user_id, exc_info=True
+        )
+        return
+
+    User.objects.filter(pk=user_id).update(
+        verify_reminder_sent_at=timezone.now(),
+        verify_reminder_queued_at=None,
+        updated_at=timezone.now(),
+    )
+
+
+@shared_task(name="tasks.send_email_verification_reminder_task")
+def send_email_verification_reminder_task():
+    """
+    Daily sweep: emails signups whose account is still unverified
+    Constants.EMAIL_VERIFY_REMINDER_DAYS after they registered, nudging them
+    to finish verifying before the account is removed.
+
+    Claims each eligible account via verify_reminder_queued_at — a lease, not
+    a delivery confirmation — then dispatches the actual send as its own task
+    (send_verify_reminder_email_task), which alone sets verify_reminder_sent_at
+    once the send actually succeeds. A claim whose send never confirms goes
+    stale after Constants.REMINDER_CLAIM_LEASE_HOURS and gets reclaimed by a
+    later sweep. See #27, #23.
+    """
+    from django.db.models import Q
+    from django.utils import timezone
+
+    from accounts.models import User
+    from utils import Constants
+
+    now = timezone.now()
+    cutoff = now - timezone.timedelta(days=Constants.EMAIL_VERIFY_REMINDER_DAYS)
+    # Excludes accounts already eligible for the purge sweep: this task and
+    # purge_unverified_accounts_task both run daily with no ordering
+    # guarantee, so without this an account past the 15-day cutoff could get
+    # a misleading "N days left" nudge right as, or after, it's deleted.
+    purge_cutoff = now - timezone.timedelta(days=Constants.EMAIL_VERIFY_PURGE_DAYS)
+    lease_cutoff = now - timezone.timedelta(hours=Constants.REMINDER_CLAIM_LEASE_HOURS)
+    days_remaining = Constants.EMAIL_VERIFY_PURGE_DAYS - Constants.EMAIL_VERIFY_REMINDER_DAYS
+
+    queryset = User.objects.filter(
+        is_email_verified=False,
+        date_joined__lte=cutoff,
+        date_joined__gt=purge_cutoff,
+        verify_reminder_sent_at__isnull=True,
+    ).filter(Q(verify_reminder_queued_at__isnull=True) | Q(verify_reminder_queued_at__lt=lease_cutoff))
+
+    queued = 0
+    for user in queryset:
+        claimed = User.objects.filter(
+            pk=user.pk,
+            verify_reminder_sent_at__isnull=True,
+            verify_reminder_queued_at=user.verify_reminder_queued_at,
+        ).update(verify_reminder_queued_at=now, updated_at=now)
+        if not claimed:
+            continue
+        send_verify_reminder_email_task.delay(user_id=user.pk, days_remaining=days_remaining)
+        queued += 1
+
+    return f"Queued {queued} verification reminder email(s)"
+
+
+@shared_task(name="tasks.purge_unverified_accounts_task")
+def purge_unverified_accounts_task():
+    """
+    Daily sweep: permanently deletes accounts that are still unverified
+    Constants.EMAIL_VERIFY_PURGE_DAYS after they registered. Unlike
+    purge_deactivated_accounts_task, there's no reactivate window and no
+    goodbye email — the account was never confirmed as real to begin with.
+    Login rejects unverified accounts (accounts.serializers.LoginSerializer),
+    so an unverified account can never have reached the dashboard to add a
+    car, meaning there's no Cloudinary cleanup needed here either.
+    """
+    from django.utils import timezone
+
+    from accounts.models import User
+    from utils import Constants
+
+    cutoff = timezone.now() - timezone.timedelta(days=Constants.EMAIL_VERIFY_PURGE_DAYS)
+    queryset = User.objects.filter(is_email_verified=False, date_joined__lte=cutoff)
+    count = queryset.count()
+    queryset.delete()
+
+    return f"Purged {count} never-verified account(s)"

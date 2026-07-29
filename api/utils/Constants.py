@@ -150,9 +150,25 @@ ACCOUNT_DELETION_GRACE_DAYS = 30
 ACCOUNT_DELETION_REMINDER_DAYS = 15
 
 # ---------------------------------------------------------------------------
-# Reminder claim lease (mileage + deletion reminders)
+# Unverified signup → nudge/purge lifecycle
 # ---------------------------------------------------------------------------
-# The daily sweeps for both reminder types claim a user (via a *_queued_at
+# RegisterView creates the User row (is_active=True) and sends an OTP before
+# the address is confirmed as real. If it's never verified, nothing about the
+# row changes on its own, so a daily sweep drives the rest of the lifecycle:
+#
+# Day EMAIL_VERIFY_REMINDER_DAYS after signup: still-unverified accounts get
+# a nudge email with a fresh OTP (tasks.send_email_verification_reminder_task).
+# Day EMAIL_VERIFY_PURGE_DAYS after signup: still-unverified accounts are
+# deleted outright (tasks.purge_unverified_accounts_task) — unlike the
+# deactivation-to-deletion lifecycle above, there's no reactivate path; the
+# account was never confirmed as real to begin with. See #23.
+EMAIL_VERIFY_REMINDER_DAYS = 7
+EMAIL_VERIFY_PURGE_DAYS = 15
+
+# ---------------------------------------------------------------------------
+# Reminder claim lease (mileage, deletion, and email-verification reminders)
+# ---------------------------------------------------------------------------
+# The daily sweeps for each reminder type claim a user (via a *_queued_at
 # timestamp) before dispatching the actual send as its own task, so one
 # user's send failure can't crash the rest of that day's batch. If the send
 # never confirms (worker crash, lost task, an exception in the send itself),

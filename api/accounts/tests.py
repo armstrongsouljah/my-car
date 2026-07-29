@@ -433,6 +433,231 @@ class TestAccountDeletionReminder:
 
 
 @pytest.fixture
+def unverified_signup(db):
+    return User.objects.create_user(email="unverified@example.com", password="str0ng-pass-123")
+
+
+@pytest.mark.django_db
+class TestEmailVerificationReminder:
+
+    def test_sends_reminder_at_the_configured_day_with_a_fresh_otp(self, unverified_signup):
+        from django.core import mail
+
+        from accounts.models import EmailVerificationOTP
+        from tasks import send_email_verification_reminder_task
+
+        User.objects.filter(pk=unverified_signup.pk).update(
+            date_joined=timezone.now() - timedelta(days=Constants.EMAIL_VERIFY_REMINDER_DAYS)
+        )
+
+        send_email_verification_reminder_task()
+
+        unverified_signup.refresh_from_db()
+        assert len(mail.outbox) == 1
+        assert mail.outbox[0].to == [unverified_signup.email]
+        assert unverified_signup.verify_reminder_sent_at is not None
+        assert EmailVerificationOTP.objects.filter(user=unverified_signup, is_used=False).exists()
+
+    def test_does_not_send_before_the_configured_day(self, unverified_signup):
+        from django.core import mail
+
+        from tasks import send_email_verification_reminder_task
+
+        User.objects.filter(pk=unverified_signup.pk).update(
+            date_joined=timezone.now() - timedelta(days=Constants.EMAIL_VERIFY_REMINDER_DAYS - 1)
+        )
+
+        send_email_verification_reminder_task()
+
+        unverified_signup.refresh_from_db()
+        assert len(mail.outbox) == 0
+        assert unverified_signup.verify_reminder_sent_at is None
+
+    def test_does_not_resend(self, unverified_signup):
+        from django.core import mail
+
+        from tasks import send_email_verification_reminder_task
+
+        already_sent = timezone.now() - timedelta(days=1)
+        User.objects.filter(pk=unverified_signup.pk).update(
+            date_joined=timezone.now() - timedelta(days=Constants.EMAIL_VERIFY_REMINDER_DAYS + 5),
+            verify_reminder_sent_at=already_sent,
+        )
+
+        send_email_verification_reminder_task()
+
+        assert len(mail.outbox) == 0
+
+    def test_does_not_send_once_past_the_purge_cutoff(self, unverified_signup):
+        """
+        Guards against send_email_verification_reminder_task and
+        purge_unverified_accounts_task running out of order on the same day:
+        an account already eligible for purge shouldn't get a misleading
+        "N days left" email right as, or after, it's deleted.
+        """
+        from django.core import mail
+
+        from tasks import send_email_verification_reminder_task
+
+        User.objects.filter(pk=unverified_signup.pk).update(
+            date_joined=timezone.now() - timedelta(days=Constants.EMAIL_VERIFY_PURGE_DAYS)
+        )
+
+        send_email_verification_reminder_task()
+
+        unverified_signup.refresh_from_db()
+        assert len(mail.outbox) == 0
+        assert unverified_signup.verify_reminder_sent_at is None
+
+    def test_skips_verified_accounts(self, owner):
+        from django.core import mail
+
+        from tasks import send_email_verification_reminder_task
+
+        User.objects.filter(pk=owner.pk).update(
+            date_joined=timezone.now() - timedelta(days=Constants.EMAIL_VERIFY_REMINDER_DAYS)
+        )
+
+        send_email_verification_reminder_task()
+
+        assert len(mail.outbox) == 0
+
+    def test_claims_but_does_not_confirm_when_the_send_fails(self, unverified_signup, monkeypatch):
+        from django.core import mail
+
+        from tasks import send_email_verification_reminder_task
+
+        User.objects.filter(pk=unverified_signup.pk).update(
+            date_joined=timezone.now() - timedelta(days=Constants.EMAIL_VERIFY_REMINDER_DAYS)
+        )
+        monkeypatch.setattr(
+            "utils.Email.send_verify_email_reminder_email",
+            lambda **kwargs: (_ for _ in ()).throw(RuntimeError("smtp down")),
+        )
+
+        send_email_verification_reminder_task()
+
+        unverified_signup.refresh_from_db()
+        assert len(mail.outbox) == 0
+        assert unverified_signup.verify_reminder_sent_at is None
+        assert unverified_signup.verify_reminder_queued_at is not None
+
+    def test_does_not_redispatch_while_the_claim_lease_is_still_fresh(self, unverified_signup, monkeypatch):
+        """A second sweep run shortly after a failed send shouldn't pile on another attempt."""
+        from tasks import send_email_verification_reminder_task
+
+        User.objects.filter(pk=unverified_signup.pk).update(
+            date_joined=timezone.now() - timedelta(days=Constants.EMAIL_VERIFY_REMINDER_DAYS)
+        )
+        calls = []
+
+        def failing_send(**kwargs):
+            calls.append(1)
+            raise RuntimeError("smtp down")
+
+        monkeypatch.setattr("utils.Email.send_verify_email_reminder_email", failing_send)
+        send_email_verification_reminder_task()
+
+        send_email_verification_reminder_task()
+
+        assert len(calls) == 1
+
+    def test_retries_once_the_claim_lease_goes_stale(self, unverified_signup):
+        from django.core import mail
+
+        from tasks import send_email_verification_reminder_task
+
+        User.objects.filter(pk=unverified_signup.pk).update(
+            date_joined=timezone.now() - timedelta(days=Constants.EMAIL_VERIFY_REMINDER_DAYS),
+            verify_reminder_queued_at=timezone.now() - timedelta(hours=Constants.REMINDER_CLAIM_LEASE_HOURS + 1),
+        )
+
+        send_email_verification_reminder_task()
+
+        unverified_signup.refresh_from_db()
+        assert len(mail.outbox) == 1
+        assert unverified_signup.verify_reminder_sent_at is not None
+
+    def test_one_failing_send_does_not_block_another_users_reminder(self, unverified_signup, monkeypatch):
+        from django.core import mail
+
+        from tasks import send_email_verification_reminder_task
+        from utils import Email
+
+        failing = User.objects.create_user(email="failing@example.com", password="str0ng-pass-123")
+        User.objects.filter(pk__in=[unverified_signup.pk, failing.pk]).update(
+            date_joined=timezone.now() - timedelta(days=Constants.EMAIL_VERIFY_REMINDER_DAYS)
+        )
+
+        real_send = Email.send_verify_email_reminder_email
+
+        def flaky_send(email, **kwargs):
+            if email == "failing@example.com":
+                raise RuntimeError("smtp down")
+            return real_send(email=email, **kwargs)
+
+        monkeypatch.setattr("utils.Email.send_verify_email_reminder_email", flaky_send)
+
+        send_email_verification_reminder_task()
+
+        unverified_signup.refresh_from_db()
+        failing.refresh_from_db()
+        assert unverified_signup.verify_reminder_sent_at is not None
+        assert failing.verify_reminder_sent_at is None
+        assert len(mail.outbox) == 1
+        assert mail.outbox[0].to == [unverified_signup.email]
+
+
+@pytest.mark.django_db
+class TestPurgeUnverifiedAccounts:
+
+    def test_purges_accounts_past_the_purge_cutoff(self, unverified_signup):
+        from tasks import purge_unverified_accounts_task
+
+        User.objects.filter(pk=unverified_signup.pk).update(
+            date_joined=timezone.now() - timedelta(days=Constants.EMAIL_VERIFY_PURGE_DAYS + 1)
+        )
+
+        purge_unverified_accounts_task()
+
+        assert not User.objects.filter(pk=unverified_signup.pk).exists()
+
+    def test_purges_accounts_exactly_at_the_purge_cutoff_boundary(self, unverified_signup):
+        """date_joined__lte means the boundary day itself is purge-eligible."""
+        from tasks import purge_unverified_accounts_task
+
+        User.objects.filter(pk=unverified_signup.pk).update(
+            date_joined=timezone.now() - timedelta(days=Constants.EMAIL_VERIFY_PURGE_DAYS)
+        )
+
+        purge_unverified_accounts_task()
+
+        assert not User.objects.filter(pk=unverified_signup.pk).exists()
+
+    def test_keeps_accounts_still_within_the_grace_period(self, unverified_signup):
+        from tasks import purge_unverified_accounts_task
+
+        User.objects.filter(pk=unverified_signup.pk).update(
+            date_joined=timezone.now() - timedelta(days=Constants.EMAIL_VERIFY_PURGE_DAYS - 1)
+        )
+
+        purge_unverified_accounts_task()
+
+        assert User.objects.filter(pk=unverified_signup.pk).exists()
+
+    def test_keeps_verified_accounts(self, owner):
+        from tasks import purge_unverified_accounts_task
+
+        User.objects.filter(pk=owner.pk).update(
+            date_joined=timezone.now() - timedelta(days=Constants.EMAIL_VERIFY_PURGE_DAYS)
+        )
+
+        purge_unverified_accounts_task()
+
+        assert User.objects.filter(pk=owner.pk).exists()
+
+
+@pytest.fixture
 def throttled_rates(monkeypatch):
     """
     Turns throttling back on for a single test.

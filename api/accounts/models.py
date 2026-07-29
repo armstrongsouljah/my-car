@@ -40,6 +40,14 @@ class User(AbstractBaseUser, PermissionsMixin):
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     is_email_verified = models.BooleanField(default=False)
+    # Set once the day-7 "verify your email" nudge has actually been *sent*
+    # (not just claimed), so the daily sweep doesn't resend it on every
+    # subsequent run before the day-15 purge sweep deletes the account. See
+    # tasks.send_email_verification_reminder_task and #23.
+    verify_reminder_sent_at = models.DateTimeField(null=True, blank=True)
+    # Same claim-lease role as deletion_reminder_queued_at, for the
+    # email-verification reminder.
+    verify_reminder_queued_at = models.DateTimeField(null=True, blank=True)
 
     # Account-level nudge to keep odometer readings fresh (off/daily/weekly/monthly).
     mileage_reminder_frequency = models.CharField(
