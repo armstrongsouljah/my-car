@@ -106,3 +106,36 @@ export async function api(path, { method = "GET", body, isForm = false } = {}) {
 
   return data;
 }
+
+// Binary downloads (PDFs, etc.) skip api()'s JSON parsing but reuse its
+// token-refresh flow, then trigger a save via a throwaway object URL.
+export async function downloadFile(path, filename) {
+  const tokens = getTokens();
+  const doFetch = (accessToken) =>
+    fetch(`${API_URL}${path}`, {
+      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+    });
+
+  let response = await doFetch(tokens?.access);
+
+  if (response.status === 401 && tokens?.refresh) {
+    const newAccess = await refreshAccessToken();
+    if (!newAccess) {
+      if (typeof window !== "undefined") window.location.href = "/login";
+      throw new Error("Session expired");
+    }
+    response = await doFetch(newAccess);
+  }
+
+  if (!response.ok) throw new Error("Something went wrong");
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}

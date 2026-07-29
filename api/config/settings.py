@@ -1,8 +1,9 @@
-from pathlib import Path
 from datetime import timedelta
+from pathlib import Path
 
 import dj_database_url
-from decouple import config, Csv
+from celery.schedules import crontab
+from decouple import Csv, config
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -331,5 +332,9 @@ CELERY_BEAT_SCHEDULE = {
     "purge-unverified-accounts": {
         "task": "tasks.purge_unverified_accounts_task",
         "schedule": 60 * 60 * 24,  # once a day
+    },
+    "send-monthly-expense-reports": {
+        "task": "tasks.send_monthly_expense_reports_task",
+        "schedule": crontab(day_of_month=1, hour=6, minute=0),  # once, on the 1st of each month
     },
 }

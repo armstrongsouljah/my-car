@@ -432,6 +432,69 @@ def send_email_verification_reminder_task():
     return f"Queued {queued} verification reminder email(s)"
 
 
+@shared_task(name="tasks.send_monthly_expense_report_email_task")
+def send_monthly_expense_report_email_task(user_id, year, month):
+    """
+    Builds and sends one user's monthly expense digest for `year`/`month`,
+    dispatched (never called inline) by send_monthly_expense_reports_task so
+    one user's failure can't crash the rest of that sweep — see #27.
+    """
+    from accounts.models import User
+    from expenses.reports import build_monthly_report
+    from utils.Email import send_monthly_expense_report_email
+
+    user = User.objects.filter(pk=user_id, is_active=True).first()
+    if user is None:
+        return
+
+    report = build_monthly_report(user, year, month)
+    # Re-checked here rather than trusted from the sweep's queryset: cheap
+    # insurance against a stale/incorrect caller, and the sweep already did
+    # the real filtering to avoid queuing this task for zero-expense users.
+    if report["count"] == 0:
+        return
+
+    try:
+        send_monthly_expense_report_email(email=user.email, first_name=user.first_name, report=report)
+    except Exception:
+        logger.error(
+            "Failed to send monthly expense report to user_id=%s for %s-%s", user_id, year, month, exc_info=True
+        )
+
+
+@shared_task(name="tasks.send_monthly_expense_reports_task")
+def send_monthly_expense_reports_task():
+    """
+    Runs on the 1st of each month (CELERY_BEAT_SCHEDULE): finds every active
+    user who logged at least one expense last calendar month and queues them
+    a digest email. Users with nothing spent are skipped entirely — no
+    "nothing spent" email, see #21.
+    """
+    from django.utils import timezone
+
+    from accounts.models import User
+
+    today = timezone.localdate()
+    prev_year, prev_month = (today.year - 1, 12) if today.month == 1 else (today.year, today.month - 1)
+
+    user_ids = (
+        User.objects.filter(
+            is_active=True,
+            cars__expenses__expense_date__year=prev_year,
+            cars__expenses__expense_date__month=prev_month,
+        )
+        .distinct()
+        .values_list("pk", flat=True)
+    )
+
+    queued = 0
+    for user_id in user_ids:
+        send_monthly_expense_report_email_task.delay(user_id=user_id, year=prev_year, month=prev_month)
+        queued += 1
+
+    return f"Queued {queued} monthly expense report email(s)"
+
+
 @shared_task(name="tasks.purge_unverified_accounts_task")
 def purge_unverified_accounts_task():
     """

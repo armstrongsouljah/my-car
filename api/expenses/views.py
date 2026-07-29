@@ -1,21 +1,23 @@
-from django.db.models import Sum, Count
+from django.db.models import Count, Sum
 from django.db.models.functions import TruncMonth
+from django.http import HttpResponse
+from django.template.loader import render_to_string
+from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework import status
-
-from utils import QueryParams
-from utils.Exception import CustomValidation
-from utils.Views import SmartDetailView, SmartPaginationAPIView, SmartAPIView
 
 from cars.models import Car
 from expenses.models import Expense
+from expenses.reports import build_monthly_report
 from expenses.serializers import (
     ExpenseCreateSerializer,
+    ExpenseDetailSerializer,
     ExpenseEditSerializer,
     ExpenseListSerializer,
-    ExpenseDetailSerializer,
 )
+from utils import QueryParams
+from utils.Exception import CustomValidation
+from utils.Views import SmartAPIView, SmartDetailView, SmartPaginationAPIView
 
 
 class ExpenseListCreateView(SmartPaginationAPIView):
@@ -143,3 +145,43 @@ class ExpenseAnalyticsView(SmartAPIView):
             "months": results,
             "grand_total": round(grand_total, 2),
         }, status=status.HTTP_200_OK)
+
+
+class ExpenseMonthlyReportView(SmartAPIView):
+    """
+    GET /expenses/reports/<year>-<month>/ — the owner's category/car
+    breakdown for one calendar month, for the in-app reports view (see #21).
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, year, month, **kwargs):
+        report = build_monthly_report(request.user, int(year), int(month))
+        return Response(report, status=status.HTTP_200_OK)
+
+
+class ExpenseMonthlyReportPDFView(SmartAPIView):
+    """
+    GET /expenses/reports/<year>-<month>/pdf/ — the same report, rendered to
+    PDF via WeasyPrint from the reports/monthly_expense_report.html template.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, year, month, **kwargs):
+        # Imported lazily, same convention as utils.Email's senders: keeps
+        # this module import-safe (no WeasyPrint/Pango load) for every
+        # request that isn't downloading a PDF.
+        from weasyprint import HTML
+
+        year, month = int(year), int(month)
+        report = build_monthly_report(request.user, year, month)
+        html = render_to_string("reports/monthly_expense_report.html", {
+            "report": report,
+            "user": request.user,
+        })
+        pdf_bytes = HTML(string=html).write_pdf()
+
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        response["Content-Disposition"] = (
+            f'attachment; filename="glavbox-expenses-{year}-{month:02d}.pdf"'
+        )
+        return response

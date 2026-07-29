@@ -22,6 +22,7 @@ dependencies = [
     "requests>=2.32",
     "google-genai>=1.0",
     "newrelic>=10.0",
+    "weasyprint>=62.0",
 ]
 
 [dependency-groups]
