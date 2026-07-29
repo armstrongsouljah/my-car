@@ -21,6 +21,7 @@ dependencies = [
     "python-dateutil>=2.9",
     "requests>=2.32",
     "google-genai>=1.0",
+    "newrelic>=10.0",
 ]
 
 [dependency-groups]

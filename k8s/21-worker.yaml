@@ -17,7 +17,19 @@ spec:
           image: ${REGISTRY}/mycar-api:${IMAGE_TAG}
           # Prefork concurrency defaults to host CPU count, which forks far more
           # workers than the memory limit below can hold — pin it explicitly.
-          command: ["celery", "-A", "config", "worker", "--loglevel=info", "--concurrency=2"]
+          # newrelic-admin run-program wraps celery to install the APM agent
+          # before the task modules import — see NEW_RELIC_LICENSE_KEY in mycar-env.
+          command:
+            - newrelic-admin
+            - run-program
+            - celery
+            - -A
+            - config
+            - worker
+            - --loglevel=info
+            - --concurrency=2
+          env:
+            - { name: NEW_RELIC_APP_NAME, value: "GlavBox Worker" }
           envFrom:
             - secretRef: { name: mycar-env }
           resources:
