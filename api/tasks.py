@@ -439,23 +439,26 @@ def send_monthly_expense_report_email_task(user_id, year, month):
     dispatched (never called inline) by send_monthly_expense_reports_task so
     one user's failure can't crash the rest of that sweep — see #27.
 
-    Records a MonthlyExpenseReportDelivery row only once the send actually
-    succeeds, and bails out up front if one already exists: a redelivered or
-    manually re-dispatched task for a period that already succeeded must not
-    send the same digest twice. A period with no row is still open to retry
-    (e.g. a re-run of send_monthly_expense_reports_task) rather than a
-    transient failure here silently losing that month's report for good.
+    Claims a MonthlyExpenseReportDelivery row before sending (atomically,
+    via its unique constraint) and only confirms it (sent_at) once the send
+    actually succeeds — same claim-then-confirm shape as the mileage/
+    deletion/verify reminder tasks (see #27), just per period instead of per
+    mutable column. This is what stops two concurrent or redelivered
+    executions for the same (user, year, month) from both proceeding to
+    send: whichever loses the race to claim (or finds an unexpired claim
+    already held) returns immediately rather than sending a duplicate.
     """
+    from django.db import IntegrityError, transaction
+    from django.utils import timezone
+
     from accounts.models import User
     from expenses.models import MonthlyExpenseReportDelivery
     from expenses.reports import build_monthly_report
+    from utils import Constants
     from utils.Email import send_monthly_expense_report_email
 
     user = User.objects.filter(pk=user_id, is_active=True).first()
     if user is None:
-        return
-
-    if MonthlyExpenseReportDelivery.objects.filter(user_id=user_id, year=year, month=month).exists():
         return
 
     report = build_monthly_report(user, year, month)
@@ -465,6 +468,31 @@ def send_monthly_expense_report_email_task(user_id, year, month):
     if report["count"] == 0:
         return
 
+    now = timezone.now()
+    lease_cutoff = now - timezone.timedelta(hours=Constants.REMINDER_CLAIM_LEASE_HOURS)
+
+    try:
+        # Wrapped in its own savepoint: an IntegrityError otherwise leaves
+        # the connection unusable for the queries in the except branch below.
+        with transaction.atomic():
+            delivery = MonthlyExpenseReportDelivery.objects.create(
+                user_id=user_id, year=year, month=month, queued_at=now
+            )
+    except IntegrityError:
+        # A row for this period already exists — either already sent, or
+        # another execution's claim on it is still live. Only a stale
+        # (unsent, lease-expired) claim is worth reclaiming.
+        claimed = MonthlyExpenseReportDelivery.objects.filter(
+            user_id=user_id,
+            year=year,
+            month=month,
+            sent_at__isnull=True,
+            queued_at__lt=lease_cutoff,
+        ).update(queued_at=now)
+        if not claimed:
+            return
+        delivery = MonthlyExpenseReportDelivery.objects.get(user_id=user_id, year=year, month=month)
+
     try:
         send_monthly_expense_report_email(email=user.email, first_name=user.first_name, report=report)
     except Exception:
@@ -473,7 +501,7 @@ def send_monthly_expense_report_email_task(user_id, year, month):
         )
         return
 
-    MonthlyExpenseReportDelivery.objects.get_or_create(user_id=user_id, year=year, month=month)
+    MonthlyExpenseReportDelivery.objects.filter(pk=delivery.pk).update(sent_at=timezone.now())
 
 
 @shared_task(name="tasks.send_monthly_expense_reports_task")
@@ -481,11 +509,13 @@ def send_monthly_expense_reports_task():
     """
     Runs on the 1st of each month (CELERY_BEAT_SCHEDULE): finds every active
     user who logged at least one expense last calendar month — and doesn't
-    already have a MonthlyExpenseReportDelivery row for it — and queues them
-    a digest email. Users with nothing spent are skipped entirely — no
-    "nothing spent" email, see #21. Excluding already-delivered users makes
-    this sweep safe to re-run for the same period (e.g. to retry whoever
-    failed) without re-sending to whoever already got theirs.
+    already have a *confirmed* MonthlyExpenseReportDelivery for it — and
+    queues them a digest email. Users with nothing spent are skipped
+    entirely — no "nothing spent" email, see #21. Excluding only confirmed
+    (sent_at is set) deliveries, rather than any row at all, is what makes
+    this sweep safe to re-run for the same period: anyone whose earlier
+    claim never got confirmed (a crash, a still-failing send) gets
+    re-queued instead of being mistaken for already delivered.
     """
     from django.utils import timezone
 
@@ -500,7 +530,11 @@ def send_monthly_expense_reports_task():
             cars__expenses__expense_date__year=prev_year,
             cars__expenses__expense_date__month=prev_month,
         )
-        .exclude(monthly_expense_report_deliveries__year=prev_year, monthly_expense_report_deliveries__month=prev_month)
+        .exclude(
+            monthly_expense_report_deliveries__year=prev_year,
+            monthly_expense_report_deliveries__month=prev_month,
+            monthly_expense_report_deliveries__sent_at__isnull=False,
+        )
         .distinct()
         .values_list("pk", flat=True)
     )

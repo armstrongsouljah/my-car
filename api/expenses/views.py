@@ -154,9 +154,13 @@ def _validate_period(year, month):
     The <int:year>-<int:month> URL converters only guarantee digits, not a
     real calendar period — month=13 or a year outside datetime's supported
     range would otherwise reach date(year, month, 1) inside
-    build_monthly_report and raise an unhandled ValueError (500).
+    build_monthly_report and raise an unhandled ValueError (500). January of
+    MINYEAR is excluded too: build_monthly_report computes the previous
+    month as (year - 1, 12) when month == 1, and MINYEAR - 1 underflows
+    datetime's supported range the same way.
     """
-    if not (MINYEAR <= year <= MAXYEAR) or not (1 <= month <= 12):
+    valid_year = MINYEAR <= year <= MAXYEAR and not (year == MINYEAR and month == 1)
+    if not valid_year or not (1 <= month <= 12):
         raise CustomValidation("Not a valid year/month.", field="detail", status_code=status.HTTP_400_BAD_REQUEST)
 
 
@@ -182,13 +186,15 @@ class ExpenseMonthlyReportPDFView(SmartAPIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, year, month, **kwargs):
-        # Imported lazily, same convention as utils.Email's senders: keeps
-        # this module import-safe (no WeasyPrint/Pango load) for every
-        # request that isn't downloading a PDF.
-        from weasyprint import HTML
-
         year, month = int(year), int(month)
         _validate_period(year, month)
+
+        # Imported lazily, same convention as utils.Email's senders: keeps
+        # this module import-safe (no WeasyPrint/Pango load) for every
+        # request that isn't downloading a PDF — and only after validation,
+        # so a malformed period 400s without paying for that import at all.
+        from weasyprint import HTML
+
         report = build_monthly_report(request.user, year, month)
         html = render_to_string("reports/monthly_expense_report.html", {
             "report": report,

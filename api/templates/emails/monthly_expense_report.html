@@ -21,17 +21,17 @@
           <!-- Stat row -->
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
             <tr>
-              <td width="33%" valign="top" style="background:#f0fdf7;border-radius:8px;padding:14px 12px;">
+              <td width="30%" valign="top" style="background:#f0fdf7;border-radius:8px;padding:14px 12px;">
                 <p style="margin:0;font-size:10px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#6b7280;">Total</p>
                 <p style="margin:4px 0 0 0;font-size:17px;font-weight:700;color:#04120c;">{{ report.total|floatformat:2 }}</p>
               </td>
-              <td width="4%">&nbsp;</td>
-              <td width="33%" valign="top" style="background:#f0fdf7;border-radius:8px;padding:14px 12px;">
+              <td width="5%">&nbsp;</td>
+              <td width="30%" valign="top" style="background:#f0fdf7;border-radius:8px;padding:14px 12px;">
                 <p style="margin:0;font-size:10px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#6b7280;">Expenses</p>
                 <p style="margin:4px 0 0 0;font-size:17px;font-weight:700;color:#04120c;">{{ report.count }}</p>
               </td>
-              <td width="4%">&nbsp;</td>
-              <td width="33%" valign="top" style="background:#f0fdf7;border-radius:8px;padding:14px 12px;">
+              <td width="5%">&nbsp;</td>
+              <td width="30%" valign="top" style="background:#f0fdf7;border-radius:8px;padding:14px 12px;">
                 <p style="margin:0;font-size:10px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#6b7280;">vs last month</p>
                 <p style="margin:4px 0 0 0;font-size:17px;font-weight:700;color:#04120c;">
                   {% if report.change_percent_vs_previous_month is not None %}

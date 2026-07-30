@@ -48,15 +48,22 @@ class Expense(models.Model):
 
 class MonthlyExpenseReportDelivery(models.Model):
     """
-    Idempotency record for the monthly expense report email (see #21): one
-    row per user per calendar period, written only after the send actually
-    succeeds. Unlike the daily reminder sweeps (mileage/deletion/verify —
-    see #27), a failed monthly send has no next-day retry of the same
-    underlying condition to fall back on — next month's sweep targets a
-    different period entirely. This row is what lets a redelivered or
-    manually re-run task recognize "already sent" and skip re-sending,
-    while a period with no row for a user is still open to a retry (a
-    re-run of the sweep, today or later) rather than being silently lost.
+    Claim + delivery record for the monthly expense report email (see #21) —
+    same lease shape as User.mileage_reminder_queued_at/last_mileage_reminder_at
+    and their deletion/verify-reminder equivalents (see #27), just per period
+    instead of per mutable column, since a user accumulates one of these a
+    month rather than ever needing just the latest.
+
+    `queued_at` is written the moment a task claims this (user, year, month)
+    — atomically, via the unique constraint below, so two concurrent/
+    redelivered task executions for the same period can't both proceed to
+    send. `sent_at` is only set once the send actually succeeds. A claim
+    whose send never confirms (crash, lost task, a raised exception) goes
+    stale after Constants.REMINDER_CLAIM_LEASE_HOURS and gets reclaimed by a
+    later run — unlike the daily reminder sweeps, a monthly digest has no
+    next-day retry of the same underlying condition to fall back on, so
+    "stale claim, no sent_at" is what keeps a transient failure from
+    silently losing that month's report for good.
     """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(
@@ -64,11 +71,15 @@ class MonthlyExpenseReportDelivery(models.Model):
     )
     year = models.PositiveSmallIntegerField()
     month = models.PositiveSmallIntegerField()
-    sent_at = models.DateTimeField(auto_now_add=True)
+    queued_at = models.DateTimeField(default=timezone.now)
+    sent_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         constraints = [
             models.UniqueConstraint(fields=["user", "year", "month"], name="unique_monthly_expense_report_delivery"),
+            models.CheckConstraint(
+                condition=models.Q(month__gte=1, month__lte=12), name="monthly_expense_report_delivery_valid_month"
+            ),
         ]
         ordering = ["-year", "-month"]
 
