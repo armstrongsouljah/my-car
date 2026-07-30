@@ -151,6 +151,19 @@ function AuthPage() {
 
   const update = (key) => (event) => setForm({ ...form, [key]: event.target.value });
 
+  // Backing out of an incomplete flow (verify/forgot/reset, or switching
+  // between login/signup) shouldn't leave a half-typed password or an
+  // abandoned OTP sitting in state to resurface in a later flow on the
+  // same page load.
+  function switchMode(nextMode) {
+    setError("");
+    setInfo("");
+    setForm((prev) => ({
+      ...prev, email: "", password: "", otp: "", new_password: "", confirm_new_password: "",
+    }));
+    setMode(nextMode);
+  }
+
   async function handleSubmit(event) {
     event.preventDefault();
     setError("");
@@ -378,8 +391,9 @@ function AuthPage() {
               {mode === "login" && (
                 <button
                   type="button"
+                  disabled={loading}
                   onClick={() => { setError(""); setInfo(""); setMode("forgot"); }}
-                  className="mt-2 text-sm font-medium text-emerald-400 underline underline-offset-2"
+                  className="mt-2 text-sm font-medium text-emerald-400 underline underline-offset-2 disabled:opacity-50"
                 >
                   Forgot password?
                 </button>
@@ -478,8 +492,9 @@ function AuthPage() {
             {mode === "login" ? "Don't have an account? " : "Already have an account? "}
             <button
               type="button"
-              onClick={() => setMode(mode === "login" ? "signup" : "login")}
-              className="font-semibold text-emerald-400"
+              disabled={loading}
+              onClick={() => switchMode(mode === "login" ? "signup" : "login")}
+              className="font-semibold text-emerald-400 disabled:opacity-50"
             >
               {mode === "login" ? "Sign up" : "Sign in"}
             </button>
@@ -490,8 +505,9 @@ function AuthPage() {
           <p className="mt-6 text-center text-sm text-white/50">
             <button
               type="button"
-              onClick={() => { setError(""); setInfo(""); setMode("login"); }}
-              className="font-semibold text-emerald-400"
+              disabled={loading}
+              onClick={() => switchMode("login")}
+              className="font-semibold text-emerald-400 disabled:opacity-50"
             >
               Back to log in
             </button>
