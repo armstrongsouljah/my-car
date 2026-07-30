@@ -62,20 +62,19 @@ async function refreshAccessToken() {
   return updated.access;
 }
 
-export async function api(path, { method = "GET", body, isForm = false } = {}) {
+// Attaches the current access token, retries once against a refreshed token
+// on a 401, and redirects to /login if the refresh itself fails. Shared by
+// api() (JSON) and downloadFile() (blob) so the auth/retry flow can't drift
+// between the two.
+async function fetchWithAuthRetry(path, options = {}) {
   const tokens = getTokens();
-  const headers = {};
-  if (tokens?.access) headers["Authorization"] = `Bearer ${tokens.access}`;
-  if (body && !isForm) headers["Content-Type"] = "application/json";
-
   const doFetch = (accessToken) =>
     fetch(`${API_URL}${path}`, {
-      method,
+      ...options,
       headers: {
-        ...headers,
+        ...(options.headers || {}),
         ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       },
-      body: body ? (isForm ? body : JSON.stringify(body)) : undefined,
     });
 
   let response = await doFetch(tokens?.access);
@@ -88,6 +87,19 @@ export async function api(path, { method = "GET", body, isForm = false } = {}) {
     }
     response = await doFetch(newAccess);
   }
+
+  return response;
+}
+
+export async function api(path, { method = "GET", body, isForm = false } = {}) {
+  const headers = {};
+  if (body && !isForm) headers["Content-Type"] = "application/json";
+
+  const response = await fetchWithAuthRetry(path, {
+    method,
+    headers,
+    body: body ? (isForm ? body : JSON.stringify(body)) : undefined,
+  });
 
   if (response.status === 204) return null;
 
@@ -110,22 +122,7 @@ export async function api(path, { method = "GET", body, isForm = false } = {}) {
 // Binary downloads (PDFs, etc.) skip api()'s JSON parsing but reuse its
 // token-refresh flow, then trigger a save via a throwaway object URL.
 export async function downloadFile(path, filename) {
-  const tokens = getTokens();
-  const doFetch = (accessToken) =>
-    fetch(`${API_URL}${path}`, {
-      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
-    });
-
-  let response = await doFetch(tokens?.access);
-
-  if (response.status === 401 && tokens?.refresh) {
-    const newAccess = await refreshAccessToken();
-    if (!newAccess) {
-      if (typeof window !== "undefined") window.location.href = "/login";
-      throw new Error("Session expired");
-    }
-    response = await doFetch(newAccess);
-  }
+  const response = await fetchWithAuthRetry(path);
 
   if (!response.ok) throw new Error("Something went wrong");
 

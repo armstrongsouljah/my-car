@@ -3,9 +3,8 @@ import uuid
 from django.db import models
 from django.utils import timezone
 
-from utils import Constants
-
 from cars.models import Car
+from utils import Constants
 
 
 class Expense(models.Model):
@@ -45,3 +44,33 @@ class Expense(models.Model):
         super().save(*args, **kwargs)
         if self.odometer_km:
             self.car.record_odometer(self.odometer_km)
+
+
+class MonthlyExpenseReportDelivery(models.Model):
+    """
+    Idempotency record for the monthly expense report email (see #21): one
+    row per user per calendar period, written only after the send actually
+    succeeds. Unlike the daily reminder sweeps (mileage/deletion/verify —
+    see #27), a failed monthly send has no next-day retry of the same
+    underlying condition to fall back on — next month's sweep targets a
+    different period entirely. This row is what lets a redelivered or
+    manually re-run task recognize "already sent" and skip re-sending,
+    while a period with no row for a user is still open to a retry (a
+    re-run of the sweep, today or later) rather than being silently lost.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        "accounts.User", on_delete=models.CASCADE, related_name="monthly_expense_report_deliveries"
+    )
+    year = models.PositiveSmallIntegerField()
+    month = models.PositiveSmallIntegerField()
+    sent_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["user", "year", "month"], name="unique_monthly_expense_report_delivery"),
+        ]
+        ordering = ["-year", "-month"]
+
+    def __str__(self):
+        return f"{self.user_id} — {self.year}-{self.month:02d}"

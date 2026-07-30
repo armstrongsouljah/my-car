@@ -438,13 +438,24 @@ def send_monthly_expense_report_email_task(user_id, year, month):
     Builds and sends one user's monthly expense digest for `year`/`month`,
     dispatched (never called inline) by send_monthly_expense_reports_task so
     one user's failure can't crash the rest of that sweep — see #27.
+
+    Records a MonthlyExpenseReportDelivery row only once the send actually
+    succeeds, and bails out up front if one already exists: a redelivered or
+    manually re-dispatched task for a period that already succeeded must not
+    send the same digest twice. A period with no row is still open to retry
+    (e.g. a re-run of send_monthly_expense_reports_task) rather than a
+    transient failure here silently losing that month's report for good.
     """
     from accounts.models import User
+    from expenses.models import MonthlyExpenseReportDelivery
     from expenses.reports import build_monthly_report
     from utils.Email import send_monthly_expense_report_email
 
     user = User.objects.filter(pk=user_id, is_active=True).first()
     if user is None:
+        return
+
+    if MonthlyExpenseReportDelivery.objects.filter(user_id=user_id, year=year, month=month).exists():
         return
 
     report = build_monthly_report(user, year, month)
@@ -460,15 +471,21 @@ def send_monthly_expense_report_email_task(user_id, year, month):
         logger.error(
             "Failed to send monthly expense report to user_id=%s for %s-%s", user_id, year, month, exc_info=True
         )
+        return
+
+    MonthlyExpenseReportDelivery.objects.get_or_create(user_id=user_id, year=year, month=month)
 
 
 @shared_task(name="tasks.send_monthly_expense_reports_task")
 def send_monthly_expense_reports_task():
     """
     Runs on the 1st of each month (CELERY_BEAT_SCHEDULE): finds every active
-    user who logged at least one expense last calendar month and queues them
+    user who logged at least one expense last calendar month — and doesn't
+    already have a MonthlyExpenseReportDelivery row for it — and queues them
     a digest email. Users with nothing spent are skipped entirely — no
-    "nothing spent" email, see #21.
+    "nothing spent" email, see #21. Excluding already-delivered users makes
+    this sweep safe to re-run for the same period (e.g. to retry whoever
+    failed) without re-sending to whoever already got theirs.
     """
     from django.utils import timezone
 
@@ -483,6 +500,7 @@ def send_monthly_expense_reports_task():
             cars__expenses__expense_date__year=prev_year,
             cars__expenses__expense_date__month=prev_month,
         )
+        .exclude(monthly_expense_report_deliveries__year=prev_year, monthly_expense_report_deliveries__month=prev_month)
         .distinct()
         .values_list("pk", flat=True)
     )

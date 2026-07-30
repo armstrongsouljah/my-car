@@ -1,3 +1,5 @@
+from datetime import MAXYEAR, MINYEAR
+
 from django.db.models import Count, Sum
 from django.db.models.functions import TruncMonth
 from django.http import HttpResponse
@@ -147,6 +149,17 @@ class ExpenseAnalyticsView(SmartAPIView):
         }, status=status.HTTP_200_OK)
 
 
+def _validate_period(year, month):
+    """
+    The <int:year>-<int:month> URL converters only guarantee digits, not a
+    real calendar period — month=13 or a year outside datetime's supported
+    range would otherwise reach date(year, month, 1) inside
+    build_monthly_report and raise an unhandled ValueError (500).
+    """
+    if not (MINYEAR <= year <= MAXYEAR) or not (1 <= month <= 12):
+        raise CustomValidation("Not a valid year/month.", field="detail", status_code=status.HTTP_400_BAD_REQUEST)
+
+
 class ExpenseMonthlyReportView(SmartAPIView):
     """
     GET /expenses/reports/<year>-<month>/ — the owner's category/car
@@ -155,7 +168,9 @@ class ExpenseMonthlyReportView(SmartAPIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, year, month, **kwargs):
-        report = build_monthly_report(request.user, int(year), int(month))
+        year, month = int(year), int(month)
+        _validate_period(year, month)
+        report = build_monthly_report(request.user, year, month)
         return Response(report, status=status.HTTP_200_OK)
 
 
@@ -173,6 +188,7 @@ class ExpenseMonthlyReportPDFView(SmartAPIView):
         from weasyprint import HTML
 
         year, month = int(year), int(month)
+        _validate_period(year, month)
         report = build_monthly_report(request.user, year, month)
         html = render_to_string("reports/monthly_expense_report.html", {
             "report": report,

@@ -125,6 +125,22 @@ class TestExpenseMonthlyReport:
 
         assert response.status_code == 401
 
+    def test_rejects_invalid_month(self, owner):
+        client = APIClient()
+        client.force_authenticate(owner)
+
+        response = client.get("/api/v1/expenses/reports/2026-13/")
+
+        assert response.status_code == 400
+
+    def test_pdf_endpoint_rejects_invalid_month(self, owner):
+        client = APIClient()
+        client.force_authenticate(owner)
+
+        response = client.get("/api/v1/expenses/reports/2026-0/pdf/")
+
+        assert response.status_code == 400
+
 
 @pytest.mark.django_db
 class TestMonthlyExpenseReportTask:
@@ -168,3 +184,38 @@ class TestMonthlyExpenseReportTask:
         send_monthly_expense_report_email_task(user_id=owner.pk, year=2026, month=5)
 
         assert len(mail.outbox) == 0
+
+    def test_successful_send_records_a_delivery(self, owner, car):
+        from expenses.models import MonthlyExpenseReportDelivery
+        from tasks import send_monthly_expense_report_email_task
+
+        Expense.objects.create(car=car, category="fuel", amount=100, expense_date=date(2026, 5, 10))
+
+        send_monthly_expense_report_email_task(user_id=owner.pk, year=2026, month=5)
+
+        assert MonthlyExpenseReportDelivery.objects.filter(user=owner, year=2026, month=5).exists()
+
+    def test_does_not_resend_once_already_delivered(self, owner, car):
+        from django.core import mail
+
+        from expenses.models import MonthlyExpenseReportDelivery
+        from tasks import send_monthly_expense_report_email_task
+
+        Expense.objects.create(car=car, category="fuel", amount=100, expense_date=date(2026, 5, 10))
+        MonthlyExpenseReportDelivery.objects.create(user=owner, year=2026, month=5)
+
+        send_monthly_expense_report_email_task(user_id=owner.pk, year=2026, month=5)
+
+        assert len(mail.outbox) == 0
+
+    def test_sweep_excludes_already_delivered_users(self, owner, car):
+        from expenses.models import MonthlyExpenseReportDelivery
+        from tasks import send_monthly_expense_reports_task
+
+        prev_year, prev_month = previous_month()
+        Expense.objects.create(car=car, category="fuel", amount=100, expense_date=date(prev_year, prev_month, 5))
+        MonthlyExpenseReportDelivery.objects.create(user=owner, year=prev_year, month=prev_month)
+
+        result = send_monthly_expense_reports_task()
+
+        assert result == "Queued 0 monthly expense report email(s)"
