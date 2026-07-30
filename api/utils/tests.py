@@ -1,7 +1,9 @@
+from datetime import datetime, timezone as dt_timezone
 from decimal import Decimal
 
 import pytest
 
+from utils import Cache
 from utils.Cloudinary import _credentials_from_settings, _public_id_from_url, delete_photos
 from utils.Currency import convert_amount, format_amount, load_latest_rates
 
@@ -65,6 +67,21 @@ class TestLoadLatestRates:
 
         assert rates["UGX"] == Decimal("0.00030")
         assert rates["USD"] == Decimal("1")
+
+
+class TestSecondsUntilMidnight:
+
+    def test_computes_seconds_remaining_in_the_day(self, monkeypatch):
+        monkeypatch.setattr(
+            Cache.timezone, "localtime", lambda: datetime(2026, 7, 29, 23, 0, 0, tzinfo=dt_timezone.utc)
+        )
+        assert Cache._seconds_until_midnight() == 3600
+
+    def test_just_after_midnight_is_nearly_a_full_day(self, monkeypatch):
+        monkeypatch.setattr(
+            Cache.timezone, "localtime", lambda: datetime(2026, 7, 29, 0, 0, 1, tzinfo=dt_timezone.utc)
+        )
+        assert Cache._seconds_until_midnight() == 86399
 
 
 class TestCredentialsFromSettings:
