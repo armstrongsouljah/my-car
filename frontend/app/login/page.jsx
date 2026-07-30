@@ -391,8 +391,9 @@ function AuthPage() {
               {mode === "login" && (
                 <button
                   type="button"
+                  disabled={loading}
                   onClick={() => { setError(""); setInfo(""); setMode("forgot"); }}
-                  className="mt-2 text-sm font-medium text-emerald-400 underline underline-offset-2"
+                  className="mt-2 text-sm font-medium text-emerald-400 underline underline-offset-2 disabled:opacity-50"
                 >
                   Forgot password?
                 </button>
@@ -491,8 +492,9 @@ function AuthPage() {
             {mode === "login" ? "Don't have an account? " : "Already have an account? "}
             <button
               type="button"
+              disabled={loading}
               onClick={() => switchMode(mode === "login" ? "signup" : "login")}
-              className="font-semibold text-emerald-400"
+              className="font-semibold text-emerald-400 disabled:opacity-50"
             >
               {mode === "login" ? "Sign up" : "Sign in"}
             </button>
@@ -503,8 +505,9 @@ function AuthPage() {
           <p className="mt-6 text-center text-sm text-white/50">
             <button
               type="button"
+              disabled={loading}
               onClick={() => switchMode("login")}
-              className="font-semibold text-emerald-400"
+              className="font-semibold text-emerald-400 disabled:opacity-50"
             >
               Back to log in
             </button>
