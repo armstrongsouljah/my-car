@@ -604,7 +604,7 @@ def refresh_exchange_rates_task():
     amount whenever a rate is missing, so a failed day degrades gracefully
     rather than breaking reports.
     """
-    from decimal import Decimal
+    from decimal import Decimal, InvalidOperation
 
     import requests
     from django.utils import timezone
@@ -627,8 +627,15 @@ def refresh_exchange_rates_task():
         usd_to_currency = usd_rates.get(currency)
         if not usd_to_currency:
             continue
+        try:
+            rate_to_usd = Decimal("1") / Decimal(str(usd_to_currency))
+        except (InvalidOperation, ZeroDivisionError):
+            # A single malformed/zero rate for one currency shouldn't abort
+            # the rest of the day's refresh for every other currency.
+            logger.warning("Skipping malformed exchange rate for %s: %r", currency, usd_to_currency)
+            continue
         ExchangeRate.objects.update_or_create(
-            date=today, currency=currency, defaults={"rate_to_usd": Decimal("1") / Decimal(str(usd_to_currency))},
+            date=today, currency=currency, defaults={"rate_to_usd": rate_to_usd},
         )
         updated += 1
 

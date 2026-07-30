@@ -79,6 +79,12 @@ class ExchangeRate(models.Model):
         constraints = [
             models.UniqueConstraint(fields=["date", "currency"], name="unique_exchange_rate_per_day"),
         ]
+        # Matches load_latest_rates()'s per-currency "most recent row" lookup
+        # (utils/Currency.py), which runs on essentially every expense/service
+        # request.
+        indexes = [
+            models.Index(fields=["currency", "-date"], name="exchangerate_currency_date_idx"),
+        ]
         ordering = ["-date"]
 
     def __str__(self):

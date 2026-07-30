@@ -32,13 +32,20 @@ def load_latest_rates():
     hasn't run, or the API dropped it that day) is simply absent —
     convert_amount() treats that as "can't convert" and returns the amount
     unchanged, same as an unset currency.
+
+    Filters to the latest row per currency at the DB layer (rather than
+    loading and sorting the whole audit table in Python) since this runs on
+    essentially every expense/service request.
     """
+    from django.db.models import OuterRef, Subquery
+
     from expenses.models import ExchangeRate
 
-    rates = {}
-    for row in ExchangeRate.objects.order_by("currency", "-date"):
-        rates.setdefault(row.currency, row.rate_to_usd)
-    return rates
+    latest_id_per_currency = (
+        ExchangeRate.objects.filter(currency=OuterRef("currency")).order_by("-date").values("pk")[:1]
+    )
+    rows = ExchangeRate.objects.filter(pk=Subquery(latest_id_per_currency))
+    return {row.currency: row.rate_to_usd for row in rows}
 
 
 def convert_amount(amount, from_currency, to_currency, rates):

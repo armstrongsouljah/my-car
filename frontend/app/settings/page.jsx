@@ -275,8 +275,9 @@ function Settings() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="label">Country</label>
+                <label className="label" htmlFor="profile-country">Country</label>
                 <select
+                  id="profile-country"
                   className="input"
                   value={profileForm.country}
                   onChange={(e) => setProfileForm({ ...profileForm, country: e.target.value })}
@@ -288,8 +289,9 @@ function Settings() {
                 </select>
               </div>
               <div>
-                <label className="label">Currency</label>
+                <label className="label" htmlFor="profile-currency">Currency</label>
                 <select
+                  id="profile-currency"
                   className="input"
                   value={profileForm.currency}
                   onChange={(e) => setProfileForm({ ...profileForm, currency: e.target.value })}
