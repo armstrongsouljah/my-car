@@ -321,6 +321,16 @@ class TestServiceRecordListCaching:
         results = unfiltered.data.get("results", unfiltered.data)
         assert len(results) == 1
 
+    def test_non_owner_cannot_read_another_owners_cached_list(self, car, client):
+        client.force_authenticate(car.owner)
+        client.get(reverse("service-list-create"), {"car": str(car.pk)})  # warm as owner
+
+        other = User.objects.create_user(email="other@example.com", password="str0ng-pass-123")
+        client.force_authenticate(other)
+        resp = client.get(reverse("service-list-create"), {"car": str(car.pk)})
+        results = resp.data.get("results", resp.data)
+        assert results == []
+
     def test_creating_a_record_invalidates_the_car_scoped_cache(self, car, client):
         client.force_authenticate(car.owner)
         client.get(reverse("service-list-create"), {"car": str(car.pk)})  # warm

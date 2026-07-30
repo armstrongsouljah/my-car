@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 import pytest
 from dateutil.relativedelta import relativedelta
+from django.core.cache import cache
 from django.urls import reverse
 from rest_framework.test import APIClient
 
@@ -270,6 +271,12 @@ class TestReminderListCaching:
 
 
 class TestReminderCatalogCaching:
+
+    @pytest.fixture(autouse=True)
+    def clear_cache(self):
+        cache.clear()
+        yield
+        cache.clear()
 
     def test_catalog_is_only_computed_once(self, client):
         with patch("reminders.views.get_reminder_catalog", wraps=get_reminder_catalog) as mocked:

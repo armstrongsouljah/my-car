@@ -68,6 +68,8 @@ class ServiceRecordListCreateView(SmartPaginationAPIView):
         car_id = QueryParams.get_str(request, "car")
         is_car_only_request = car_id and len(request.query_params) == 1
         if is_car_only_request:
+            if not Car.objects.filter(pk=car_id, owner=request.user).exists():
+                return super().get(request, *args, **kwargs)
             cached = Cache.get_service_list(car_id)
             if cached is not None:
                 return Response(cached, status=status.HTTP_200_OK)
