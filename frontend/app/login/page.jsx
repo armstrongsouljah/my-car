@@ -151,6 +151,19 @@ function AuthPage() {
 
   const update = (key) => (event) => setForm({ ...form, [key]: event.target.value });
 
+  // Backing out of an incomplete flow (verify/forgot/reset, or switching
+  // between login/signup) shouldn't leave a half-typed password or an
+  // abandoned OTP sitting in state to resurface in a later flow on the
+  // same page load.
+  function switchMode(nextMode) {
+    setError("");
+    setInfo("");
+    setForm((prev) => ({
+      ...prev, email: "", password: "", otp: "", new_password: "", confirm_new_password: "",
+    }));
+    setMode(nextMode);
+  }
+
   async function handleSubmit(event) {
     event.preventDefault();
     setError("");
@@ -478,7 +491,7 @@ function AuthPage() {
             {mode === "login" ? "Don't have an account? " : "Already have an account? "}
             <button
               type="button"
-              onClick={() => setMode(mode === "login" ? "signup" : "login")}
+              onClick={() => switchMode(mode === "login" ? "signup" : "login")}
               className="font-semibold text-emerald-400"
             >
               {mode === "login" ? "Sign up" : "Sign in"}
@@ -490,7 +503,7 @@ function AuthPage() {
           <p className="mt-6 text-center text-sm text-white/50">
             <button
               type="button"
-              onClick={() => { setError(""); setInfo(""); setMode("login"); }}
+              onClick={() => switchMode("login")}
               className="font-semibold text-emerald-400"
             >
               Back to log in
