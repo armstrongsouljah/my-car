@@ -2,6 +2,63 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Design-system tokens (issue #38, docs/design-system.md). Values are raw
+   "R G B" triplets so tailwind.config.js can wrap them in rgb(var(--x) / <alpha-value>)
+   and keep opacity modifiers (e.g. bg-surface-1/50) working. Additive only —
+   nothing below is consumed by the existing @layer components classes yet;
+   retrofitting them is a separate follow-up issue. */
+:root {
+  --color-surface: 255 255 255;
+  --color-surface-1: 255 255 255;
+  --color-surface-2: 249 250 251;
+
+  --color-text-primary: 17 24 39;
+  --color-text-secondary: 75 85 99;
+  --color-text-tertiary: 156 163 175;
+  --color-text-inverse: 255 255 255;
+
+  --color-border-subtle: 229 231 235;
+  --color-border-default: 209 213 219;
+
+  --color-brand: 16 185 129;
+  --color-brand-emphasis: 5 150 105;
+
+  --color-success: 21 128 61;
+  --color-success-subtle: 220 252 231;
+  --color-warning: 180 83 9;
+  --color-warning-subtle: 254 243 199;
+  --color-danger: 185 28 28;
+  --color-danger-subtle: 254 226 226;
+  --color-info: 29 78 216;
+  --color-info-subtle: 219 234 254;
+}
+
+.dark {
+  --color-surface: 3 7 18;
+  --color-surface-1: 17 24 39;
+  --color-surface-2: 31 41 55;
+
+  --color-text-primary: 243 244 246;
+  --color-text-secondary: 156 163 175;
+  --color-text-tertiary: 107 114 128;
+  --color-text-inverse: 17 24 39;
+
+  --color-border-subtle: 31 41 55;
+  --color-border-default: 55 65 81;
+
+  --color-brand: 52 211 153;
+  --color-brand-emphasis: 16 185 129;
+
+  --color-success: 74 222 128;
+  --color-success-subtle: 20 83 45;
+  --color-warning: 251 191 36;
+  --color-warning-subtle: 120 53 15;
+  --color-danger: 248 113 113;
+  --color-danger-subtle: 127 29 29;
+  --color-info: 96 165 250;
+  --color-info-subtle: 30 58 138;
+}
+
 @layer components {
   .input {
     @apply w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-[15px] text-gray-900 outline-none placeholder:text-gray-400 focus:border-gray-900 focus:ring-1 focus:ring-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-500 dark:focus:border-gray-100 dark:focus:ring-gray-100;
