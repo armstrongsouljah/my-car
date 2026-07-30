@@ -37,7 +37,7 @@ def get_int(request, key, default_value=None, raise_exception=False):
 
     try:
         return int(value)
-    except Exception as e:
+    except Exception:
         if raise_exception:
             raise CustomValidation(Message.create(f"{key} value must be a valid integer"), status_code=status.HTTP_400_BAD_REQUEST)
 
@@ -52,7 +52,7 @@ def get_float(request, key, default_value=None, raise_exception=False):
 
     try:
         return float(value)
-    except Exception as e:
+    except Exception:
         if raise_exception:
             raise CustomValidation(Message.create(f"{key} value must be a valid float"), status_code=status.HTTP_400_BAD_REQUEST)
 

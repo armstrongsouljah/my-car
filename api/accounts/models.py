@@ -37,6 +37,14 @@ class User(AbstractBaseUser, PermissionsMixin):
     phone = models.CharField(max_length=20, blank=True)
     role = models.CharField(max_length=20, choices=Constants.USER_ROLES, default=Constants.USER_ROLE_OWNER)
 
+    # ISO 3166-1 alpha-2, collected at signup. Blank for pre-#40 accounts and
+    # for anyone who didn't say — never guessed after the fact.
+    country = models.CharField(max_length=2, choices=Constants.COUNTRY_CHOICES, blank=True)
+    # ISO 4217, defaulted from `country` at signup (see accounts.serializers.
+    # RegisterSerializer) and editable directly from Settings thereafter.
+    # Blank means "show plain amounts, no symbol" everywhere money is rendered.
+    currency = models.CharField(max_length=3, choices=Constants.CURRENCY_CHOICES, blank=True)
+
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     is_email_verified = models.BooleanField(default=False)

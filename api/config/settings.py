@@ -344,4 +344,8 @@ CELERY_BEAT_SCHEDULE = {
         "task": "tasks.send_monthly_expense_reports_task",
         "schedule": crontab(day_of_month=1, hour=6, minute=0),  # once, on the 1st of each month
     },
+    "refresh-exchange-rates": {
+        "task": "tasks.refresh_exchange_rates_task",
+        "schedule": crontab(hour=5, minute=0),  # once a day, ahead of the monthly report sweep above
+    },
 }

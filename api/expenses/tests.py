@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 
 import pytest
 from django.utils import timezone
@@ -6,7 +7,7 @@ from rest_framework.test import APIClient
 
 from accounts.models import User
 from cars.models import Car
-from expenses.models import Expense
+from expenses.models import ExchangeRate, Expense
 
 
 def previous_month():
@@ -26,6 +27,69 @@ def owner(db):
 @pytest.fixture
 def car(owner):
     return Car.objects.create(owner=owner, make="Toyota", model="Corolla")
+
+
+@pytest.fixture
+def rates(db):
+    """
+    UGX/KES rates loosely matching real-world magnitude (not the exact
+    figures) — enough to make conversion math legible in assertions.
+    """
+    today = timezone.localdate()
+    ExchangeRate.objects.create(date=today, currency="UGX", rate_to_usd=Decimal("1") / Decimal("3700"))
+    ExchangeRate.objects.create(date=today, currency="KES", rate_to_usd=Decimal("1") / Decimal("129"))
+    ExchangeRate.objects.create(date=today, currency="USD", rate_to_usd=Decimal("1"))
+
+
+@pytest.mark.django_db
+class TestExpenseCurrencyConversion:
+    """See #40 — an expense snapshots the owner's currency at creation, and
+    conversion to the owner's *current* currency always uses the latest
+    fetched rate, not a rate tied to the transaction's own date."""
+
+    def test_currency_is_snapshotted_from_the_owner_at_creation(self, owner, car):
+        owner.currency = "UGX"
+        owner.save(update_fields=["currency"])
+
+        expense = Expense.objects.create(car=car, category="fuel", amount=100, expense_date=date(2026, 5, 10))
+
+        assert expense.currency == "UGX"
+
+    def test_later_owner_currency_changes_do_not_retroactively_change_old_rows(self, owner, car):
+        owner.currency = "UGX"
+        owner.save(update_fields=["currency"])
+        expense = Expense.objects.create(car=car, category="fuel", amount=100, expense_date=date(2026, 5, 10))
+
+        owner.currency = "KES"
+        owner.save(update_fields=["currency"])
+        expense.refresh_from_db()
+
+        assert expense.currency == "UGX"
+
+    def test_list_endpoint_converts_to_the_owners_currency(self, owner, car, rates):
+        owner.currency = "KES"
+        owner.save(update_fields=["currency"])
+        Expense.objects.create(car=car, category="fuel", amount=3700, currency="UGX", expense_date=date(2026, 5, 10))
+
+        client = APIClient()
+        client.force_authenticate(owner)
+        response = client.get("/api/v1/expenses/")
+
+        row = (response.data["results"] if "results" in response.data else response.data)[0]
+        assert row["display_currency"] == "KES"
+        assert round(row["display_amount"], 2) == 129.0
+
+    def test_list_endpoint_falls_back_to_raw_amount_without_rates(self, owner, car):
+        owner.currency = "KES"
+        owner.save(update_fields=["currency"])
+        Expense.objects.create(car=car, category="fuel", amount=3700, currency="UGX", expense_date=date(2026, 5, 10))
+
+        client = APIClient()
+        client.force_authenticate(owner)
+        response = client.get("/api/v1/expenses/")
+
+        row = (response.data["results"] if "results" in response.data else response.data)[0]
+        assert row["display_amount"] == 3700.0
 
 
 @pytest.mark.django_db
@@ -60,6 +124,23 @@ class TestExpenseAnalytics:
 
         assert response.data["grand_total"] == 10.0
 
+    def test_converts_a_month_spanning_two_currencies(self, owner, car, rates):
+        """See #40 — an owner who changed currency mid-month has expenses in
+        both; SQL Sum() can't mix them, so each currency's subtotal is
+        converted to the owner's current currency and combined in Python."""
+        owner.currency = "USD"
+        owner.save(update_fields=["currency"])
+        Expense.objects.create(car=car, category="fuel", amount=3700, currency="UGX", expense_date=date(2026, 5, 5))
+        Expense.objects.create(car=car, category="fuel", amount=50, currency="USD", expense_date=date(2026, 5, 20))
+
+        client = APIClient()
+        client.force_authenticate(owner)
+        response = client.get("/api/v1/expenses/analytics/")
+
+        months = response.data["months"]
+        assert round(months[0]["total"], 2) == 51.0  # 3700 UGX (-> $1) + $50
+        assert response.data["currency"] == "USD"
+
 
 @pytest.mark.django_db
 class TestExpenseMonthlyReport:
@@ -82,6 +163,42 @@ class TestExpenseMonthlyReport:
         by_category = {row["category"]: row["total"] for row in response.data["by_category"]}
         assert by_category == {"fuel": 130.0, "garage_visit": 50.0}
         assert len(response.data["by_car"]) == 2
+
+    def test_converts_totals_and_category_breakdown_to_the_owners_currency(self, owner, car, rates):
+        owner.currency = "USD"
+        owner.save(update_fields=["currency"])
+        Expense.objects.create(car=car, category="fuel", amount=3700, currency="UGX", expense_date=date(2026, 5, 5))
+
+        client = APIClient()
+        client.force_authenticate(owner)
+        response = client.get("/api/v1/expenses/reports/2026-5/")
+
+        assert round(response.data["total"], 2) == 1.0
+        assert response.data["currency"] == "USD"
+        assert round(response.data["by_category"][0]["total"], 2) == 1.0
+
+    def test_report_carries_the_owners_currency(self, owner, car):
+        """See #40 — the report is the one source of truth for currency across
+        the in-app view, PDF, and email digest, so it rides along on the same
+        dict rather than being looked up separately by each renderer."""
+        Expense.objects.create(car=car, category="fuel", amount=100, expense_date=date(2026, 5, 10))
+        owner.currency = "KES"
+        owner.save(update_fields=["currency"])
+
+        client = APIClient()
+        client.force_authenticate(owner)
+        response = client.get("/api/v1/expenses/reports/2026-5/")
+
+        assert response.data["currency"] == "KES"
+
+    def test_report_currency_is_blank_when_unset(self, owner, car):
+        Expense.objects.create(car=car, category="fuel", amount=100, expense_date=date(2026, 5, 10))
+
+        client = APIClient()
+        client.force_authenticate(owner)
+        response = client.get("/api/v1/expenses/reports/2026-5/")
+
+        assert response.data["currency"] == ""
 
     def test_change_vs_previous_month(self, owner, car):
         Expense.objects.create(car=car, category="fuel", amount=100, expense_date=date(2026, 4, 10))
@@ -335,3 +452,89 @@ class TestMonthlyExpenseReportTask:
 
         with pytest.raises(IntegrityError):
             MonthlyExpenseReportDelivery.objects.create(user=owner, year=2026, month=13)
+
+
+@pytest.mark.django_db
+class TestRefreshExchangeRatesTask:
+    """See #40 — the daily FX-rate fetch that powers currency conversion."""
+
+    def test_stores_a_rate_row_for_each_supported_currency_present_in_the_response(self, monkeypatch):
+        from tasks import refresh_exchange_rates_task
+
+        class FakeResponse:
+            def raise_for_status(self):
+                pass
+
+            def json(self):
+                return {"rates": {"UGX": 3700.0, "KES": 129.0, "USD": 1.0}}
+
+        monkeypatch.setattr("requests.get", lambda *args, **kwargs: FakeResponse())
+
+        refresh_exchange_rates_task()
+
+        today = timezone.localdate()
+        ugx_rate = ExchangeRate.objects.get(date=today, currency="UGX").rate_to_usd
+        assert round(ugx_rate, 6) == round(Decimal("1") / Decimal("3700"), 6)
+
+    def test_skips_currencies_missing_from_the_response(self, monkeypatch):
+        from tasks import refresh_exchange_rates_task
+
+        class FakeResponse:
+            def raise_for_status(self):
+                pass
+
+            def json(self):
+                return {"rates": {"USD": 1.0}}  # no UGX today
+
+        monkeypatch.setattr("requests.get", lambda *args, **kwargs: FakeResponse())
+
+        refresh_exchange_rates_task()
+
+        assert not ExchangeRate.objects.filter(currency="UGX").exists()
+
+    def test_a_failed_fetch_does_not_raise(self, monkeypatch):
+        from tasks import refresh_exchange_rates_task
+
+        def failing_get(*args, **kwargs):
+            raise ConnectionError("network down")
+
+        monkeypatch.setattr("requests.get", failing_get)
+
+        result = refresh_exchange_rates_task()
+
+        assert "Failed" in result
+        assert not ExchangeRate.objects.exists()
+
+    def test_a_successful_refresh_invalidates_the_cached_rates(self, monkeypatch):
+        from tasks import refresh_exchange_rates_task
+        from utils import Cache
+        from utils.Currency import load_latest_rates
+
+        ExchangeRate.objects.create(date=date(2026, 1, 1), currency="USD", rate_to_usd=Decimal("1"))
+        assert load_latest_rates() == {"USD": Decimal("1")}  # warms the cache
+
+        class FakeResponse:
+            def raise_for_status(self):
+                pass
+
+            def json(self):
+                return {"rates": {"USD": 1.0, "UGX": 3700.0}}
+
+        monkeypatch.setattr("requests.get", lambda *args, **kwargs: FakeResponse())
+        refresh_exchange_rates_task()
+
+        assert Cache.get_exchange_rates() is None
+        assert "UGX" in load_latest_rates()
+
+    def test_a_failed_fetch_does_not_invalidate_the_cached_rates(self, monkeypatch):
+        from tasks import refresh_exchange_rates_task
+        from utils import Cache
+        from utils.Currency import load_latest_rates
+
+        ExchangeRate.objects.create(date=date(2026, 1, 1), currency="USD", rate_to_usd=Decimal("1"))
+        load_latest_rates()  # warms the cache
+
+        monkeypatch.setattr("requests.get", lambda *args, **kwargs: (_ for _ in ()).throw(ConnectionError("down")))
+        refresh_exchange_rates_task()
+
+        assert Cache.get_exchange_rates() == {"USD": Decimal("1")}

@@ -1,9 +1,101 @@
 from datetime import datetime, timezone as dt_timezone
+from decimal import Decimal
 
 import pytest
 
 from utils import Cache
 from utils.Cloudinary import _credentials_from_settings, _public_id_from_url, delete_photos
+from utils.Currency import convert_amount, format_amount, load_latest_rates
+
+
+class TestFormatAmount:
+
+    def test_falls_back_to_a_bare_number_when_currency_is_unset(self):
+        assert format_amount(1234.5, "") == "1,234.50"
+
+    def test_falls_back_to_a_bare_number_for_an_unrecognized_currency(self):
+        assert format_amount(1234.5, "ZZZ") == "1,234.50"
+
+    def test_formats_with_the_currency_symbol(self):
+        assert format_amount(1234.5, "USD") == "$ 1,234.50"
+
+    def test_zero_decimal_currencies_drop_the_cents(self):
+        assert format_amount(1234.7, "UGX") == "USh 1,235"
+
+
+class TestConvertAmount:
+    """See #40 — conversion always uses the latest fetched rate, never a
+    rate keyed to the transaction's own date (a deliberate simplification)."""
+
+    RATES = {"USD": Decimal("1"), "UGX": Decimal("1") / Decimal("3700"), "KES": Decimal("1") / Decimal("129")}
+
+    def test_returns_amount_unchanged_when_currencies_match(self):
+        assert convert_amount(100, "USD", "USD", self.RATES) == 100
+
+    def test_returns_amount_unchanged_when_from_currency_is_unset(self):
+        assert convert_amount(100, "", "USD", self.RATES) == 100
+
+    def test_returns_amount_unchanged_when_to_currency_is_unset(self):
+        assert convert_amount(100, "USD", "", self.RATES) == 100
+
+    def test_returns_amount_unchanged_when_a_rate_is_missing(self):
+        assert convert_amount(100, "USD", "EUR", self.RATES) == 100
+
+    def test_converts_through_usd_as_the_pivot(self):
+        converted = convert_amount(Decimal("3700"), "UGX", "USD", self.RATES)
+        assert round(converted, 2) == Decimal("1.00")
+
+    def test_converts_between_two_non_usd_currencies(self):
+        converted = convert_amount(Decimal("3700"), "UGX", "KES", self.RATES)
+        assert round(converted, 2) == Decimal("129.00")
+
+
+@pytest.mark.django_db
+class TestLoadLatestRates:
+
+    def test_picks_the_most_recent_rate_per_currency(self):
+        from datetime import date
+
+        from expenses.models import ExchangeRate
+
+        ExchangeRate.objects.create(date=date(2026, 1, 1), currency="USD", rate_to_usd=Decimal("1"))
+        ExchangeRate.objects.create(date=date(2026, 1, 2), currency="USD", rate_to_usd=Decimal("1"))
+        ExchangeRate.objects.create(date=date(2026, 1, 1), currency="UGX", rate_to_usd=Decimal("0.00027"))
+        ExchangeRate.objects.create(date=date(2026, 1, 3), currency="UGX", rate_to_usd=Decimal("0.00030"))
+
+        rates = load_latest_rates()
+
+        assert rates["UGX"] == Decimal("0.00030")
+        assert rates["USD"] == Decimal("1")
+
+    def test_result_is_cached_across_calls(self):
+        from datetime import date
+
+        from expenses.models import ExchangeRate
+
+        ExchangeRate.objects.create(date=date(2026, 1, 1), currency="USD", rate_to_usd=Decimal("1"))
+        first = load_latest_rates()
+
+        # Bypasses cache invalidation (which only happens via
+        # refresh_exchange_rates_task) — proves the second call is served
+        # from cache, not recomputed against the now-stale row.
+        ExchangeRate.objects.create(date=date(2026, 1, 2), currency="USD", rate_to_usd=Decimal("2"))
+
+        second = load_latest_rates()
+        assert second == first == {"USD": Decimal("1")}
+
+    def test_invalidating_the_cache_picks_up_new_rates(self):
+        from datetime import date
+
+        from expenses.models import ExchangeRate
+
+        ExchangeRate.objects.create(date=date(2026, 1, 1), currency="USD", rate_to_usd=Decimal("1"))
+        load_latest_rates()
+
+        ExchangeRate.objects.create(date=date(2026, 1, 2), currency="USD", rate_to_usd=Decimal("2"))
+        Cache.invalidate_exchange_rates()
+
+        assert load_latest_rates() == {"USD": Decimal("2")}
 
 
 class TestSecondsUntilMidnight:

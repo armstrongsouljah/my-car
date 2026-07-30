@@ -1,6 +1,6 @@
 from django.urls import path
 
-from services.views import ServiceRecordListCreateView, ServiceRecordDetailView, RemindersView
+from services.views import RemindersView, ServiceRecordDetailView, ServiceRecordListCreateView
 
 urlpatterns = [
     path("", ServiceRecordListCreateView.as_view(), name="service-list-create"),

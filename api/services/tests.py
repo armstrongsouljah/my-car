@@ -213,6 +213,54 @@ class TestRemindersView:
 
 
 @pytest.mark.django_db
+class TestServiceRecordCurrency:
+    """See #40 — cost is snapshotted with the owner's currency at creation
+    and converted for display, same as Expense.amount."""
+
+    def test_cost_currency_is_snapshotted_from_the_owner(self, car):
+        car.owner.currency = "UGX"
+        car.owner.save(update_fields=["currency"])
+
+        record = ServiceRecord.objects.create(
+            car=car, odometer_km=41000, interval_km=5000, cost="150.00",
+        )
+
+        assert record.currency == "UGX"
+        assert Expense.objects.get(service_record=record).currency == "UGX"
+
+    def test_list_endpoint_converts_display_cost(self, car, client):
+        from decimal import Decimal
+
+        from expenses.models import ExchangeRate
+
+        car.owner.currency = "KES"
+        car.owner.save(update_fields=["currency"])
+        today = timezone.localdate()
+        ExchangeRate.objects.create(date=today, currency="UGX", rate_to_usd=Decimal("1") / Decimal("3700"))
+        ExchangeRate.objects.create(date=today, currency="KES", rate_to_usd=Decimal("1") / Decimal("129"))
+
+        ServiceRecord.objects.create(
+            car=car, odometer_km=41000, interval_km=5000, cost="3700.00", currency="UGX",
+        )
+
+        client.force_authenticate(car.owner)
+        response = client.get(f"/api/v1/services/?car={car.id}")
+        row = (response.data["results"] if "results" in response.data else response.data)[0]
+
+        assert row["display_currency"] == "KES"
+        assert round(row["display_cost"], 2) == 129.0
+
+    def test_display_cost_is_none_when_cost_is_unset(self, car, client):
+        ServiceRecord.objects.create(car=car, odometer_km=41000, interval_km=5000)
+
+        client.force_authenticate(car.owner)
+        response = client.get(f"/api/v1/services/?car={car.id}")
+        row = (response.data["results"] if "results" in response.data else response.data)[0]
+
+        assert row["display_cost"] is None
+
+
+@pytest.mark.django_db
 class TestRemindersViewCaching:
 
     def test_response_is_cached_across_requests(self, car, client):

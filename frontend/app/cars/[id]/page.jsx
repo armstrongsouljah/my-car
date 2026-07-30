@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { api, mediaUrl } from "@/lib/api";
+import { formatAmount } from "@/lib/currency";
 import AuthGuard from "@/components/AuthGuard";
 import BottomNav from "@/components/BottomNav";
 import ConfirmDialog from "@/components/ConfirmDialog";
@@ -353,7 +354,7 @@ function CarDetail() {
               <p className="mt-1 text-gray-500 dark:text-gray-400">
                 {Number(record.odometer_km).toLocaleString()} km
                 {record.garage_name ? ` · ${record.garage_name}` : ""}
-                {record.cost ? ` · ${record.cost}` : ""}
+                {record.display_cost != null ? ` · ${formatAmount(record.display_cost, record.display_currency)}` : ""}
               </p>
               {(record.next_due_odometer_km || record.next_due_date) && (
                 <p className="mt-1 text-[13px] text-gray-400 dark:text-gray-500">

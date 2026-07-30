@@ -284,12 +284,15 @@ def send_monthly_expense_report_email(email: str, first_name: str, report: dict)
     """
     from django.conf import settings
 
+    from utils.Currency import format_amount
+
     name = _display_name(email, first_name)
     app_url = getattr(settings, "FRONTEND_URL", "http://localhost:3000")
     report_url = f"{app_url}/expenses/reports/{report['year']}-{report['month']:02d}/"
     top_categories = report["by_category"][:3]
+    currency_code = report.get("currency", "")
 
-    subject = f"Your {report['month_label']} expense report — {report['total']:.2f}"
+    subject = f"Your {report['month_label']} expense report — {format_amount(report['total'], currency_code)}"
     context = {
         "name": name,
         "report": report,
@@ -298,10 +301,10 @@ def send_monthly_expense_report_email(email: str, first_name: str, report: dict)
         "report_url": report_url,
     }
 
-    lines = "\n".join(f"- {c['category_label']}: {c['total']:.2f}" for c in top_categories)
+    lines = "\n".join(f"- {c['category_label']}: {format_amount(c['total'], currency_code)}" for c in top_categories)
     text_body = (
         f"Hi {name},\n\n"
-        f"You spent {report['total']:.2f} on your car(s) in {report['month_label']} across "
+        f"You spent {format_amount(report['total'], currency_code)} on your car(s) in {report['month_label']} across "
         f"{report['count']} expense(s).\n\n"
         f"Top categories:\n{lines}\n\n"
         f"View the full breakdown and download the PDF: {report_url}"

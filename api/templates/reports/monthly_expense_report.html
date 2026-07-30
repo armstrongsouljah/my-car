@@ -1,3 +1,4 @@
+{% load currency_filters %}
 <!DOCTYPE html>
 <html>
 <head>
@@ -106,7 +107,7 @@
   <div class="summary">
     <div class="stat">
       <div class="label">Total spent</div>
-      <div class="value">{{ report.total|floatformat:2 }}</div>
+      <div class="value">{{ report.total|currency:report.currency }}</div>
     </div>
     <div class="stat">
       <div class="label">Expenses logged</div>
@@ -132,7 +133,7 @@
       <tr>
         <td>{{ row.category_label }}</td>
         <td class="amount">{{ row.count }}</td>
-        <td class="amount">{{ row.total|floatformat:2 }}</td>
+        <td class="amount">{{ row.total|currency:report.currency }}</td>
       </tr>
       {% endfor %}
     </tbody>
@@ -150,7 +151,7 @@
       <tr>
         <td>{{ row.label }}</td>
         <td class="amount">{{ row.count }}</td>
-        <td class="amount">{{ row.total|floatformat:2 }}</td>
+        <td class="amount">{{ row.total|currency:report.currency }}</td>
       </tr>
       {% endfor %}
     </tbody>

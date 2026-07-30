@@ -24,6 +24,14 @@ class Expense(models.Model):
 
     category = models.CharField(max_length=30, choices=Constants.EXPENSE_CATEGORIES, default=Constants.EXPENSE_CATEGORY_OTHER)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
+    # ISO 4217, snapshotted from the owner's currency the moment this
+    # expense is created (see #40) — never recomputed afterwards, so a
+    # later change to the owner's currency can't retroactively change what
+    # currency this amount was actually logged in. Blank for pre-#40 rows
+    # and for owners who have no currency set; ExpenseListSerializer/
+    # ExpenseDetailSerializer's `display_amount` falls back to the raw
+    # amount, unconverted, whenever this is blank.
+    currency = models.CharField(max_length=3, blank=True)
     expense_date = models.DateField(default=timezone.localdate)
     vendor = models.CharField(max_length=150, blank=True)
     description = models.TextField(blank=True)
@@ -41,9 +49,46 @@ class Expense(models.Model):
         return f"{self.get_category_display()} — {self.amount} on {self.expense_date} ({self.car})"
 
     def save(self, *args, **kwargs):
+        if self._state.adding and not self.currency:
+            self.currency = self.car.owner.currency
         super().save(*args, **kwargs)
         if self.odometer_km:
             self.car.record_odometer(self.odometer_km)
+
+
+class ExchangeRate(models.Model):
+    """
+    Daily USD-cross rate snapshot for a currency GlavBox supports (see #40),
+    fetched once a day by tasks.refresh_exchange_rates_task from a free,
+    keyless FX-rate API. `rate_to_usd` means "1 unit of `currency` is worth
+    this many USD" — USD is used as the pivot so any currency can be
+    converted to any other via two lookups instead of needing a rate row
+    for every currency pair.
+
+    Conversion always uses the latest row for each currency (see
+    utils.Currency.convert_amount), not the rate in effect on a given
+    expense's own date — simpler, and matches how most personal-finance
+    apps show "value in my currency today" rather than tracking historical
+    FX drift. Older daily rows are kept anyway, purely as an audit trail.
+    """
+    date = models.DateField()
+    currency = models.CharField(max_length=3)
+    rate_to_usd = models.DecimalField(max_digits=20, decimal_places=10)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["date", "currency"], name="unique_exchange_rate_per_day"),
+        ]
+        # Matches load_latest_rates()'s per-currency "most recent row" lookup
+        # (utils/Currency.py), which runs on essentially every expense/service
+        # request.
+        indexes = [
+            models.Index(fields=["currency", "-date"], name="exchangerate_currency_date_idx"),
+        ]
+        ordering = ["-date"]
+
+    def __str__(self):
+        return f"{self.currency} @ {self.date}: {self.rate_to_usd}"
 
 
 class MonthlyExpenseReportDelivery(models.Model):

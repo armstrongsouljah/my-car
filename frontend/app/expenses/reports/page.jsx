@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
+import { formatAmount } from "@/lib/currency";
 import AuthGuard from "@/components/AuthGuard";
 import BottomNav from "@/components/BottomNav";
 
@@ -16,11 +17,15 @@ function periodSlug(iso) {
 
 function Reports() {
   const [months, setMonths] = useState(null);
+  const [currency, setCurrency] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
     api("/expenses/analytics/?months=24")
-      .then((data) => setMonths([...(data.months || [])].reverse()))
+      .then((data) => {
+        setMonths([...(data.months || [])].reverse());
+        setCurrency(data.currency);
+      })
       .catch((err) => setError(err.message));
   }, []);
 
@@ -39,7 +44,7 @@ function Reports() {
           >
             <p className="font-semibold">{monthLabel(month.month)}</p>
             <div className="flex items-center gap-2">
-              <p className="font-bold">{month.total.toLocaleString()}</p>
+              <p className="font-bold">{formatAmount(month.total, currency)}</p>
               <span className="text-gray-300 dark:text-gray-600">›</span>
             </div>
           </Link>

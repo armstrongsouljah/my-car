@@ -23,6 +23,8 @@ from django.utils import timezone
 CAR_DETAIL_KEY = "car:detail:{car_id}"
 CAR_LIST_KEY = "car:list:{owner_id}"
 
+EXCHANGE_RATES_KEY = "expenses:exchange_rates"
+
 REMINDER_CATALOG_KEY = "reminders:catalog"
 REMINDER_LIST_KEY = "reminders:list:{owner_id}"
 SERVICE_DIGEST_KEY = "services:digest:{owner_id}"
@@ -69,6 +71,20 @@ def invalidate_car(car_id, owner_id=None):
 
 def invalidate_owner(owner_id):
     cache.delete(CAR_LIST_KEY.format(owner_id=owner_id))
+
+
+# ── Exchange rates: global, changes at most once a day (refresh_exchange_rates_task) ──
+
+def get_exchange_rates():
+    return cache.get(EXCHANGE_RATES_KEY)
+
+
+def set_exchange_rates(data):
+    _set_until_midnight(EXCHANGE_RATES_KEY, data)
+
+
+def invalidate_exchange_rates():
+    cache.delete(EXCHANGE_RATES_KEY)
 
 
 # ── Reminder catalog: static, global, essentially never changes ───────────────

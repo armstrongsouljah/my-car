@@ -254,3 +254,69 @@ ALLOWED_UPLOAD_CONTENT_TYPES = (
 # Wrong guesses allowed against a single code before it is burned and the owner
 # has to request a new one.
 OTP_MAX_FAILED_ATTEMPTS = 5
+
+# ---------------------------------------------------------------------------
+# Country / currency (see #40)
+# ---------------------------------------------------------------------------
+# Not exhaustive — just the countries/currencies the app has users in today
+# plus the Eurozone. A country missing from COUNTRY_CHOICES/CURRENCY_TO_COUNTRY
+# just leaves `currency` unset at signup, same as today's "no currency"
+# fallback, rather than guessing.
+COUNTRY_CHOICES = [
+    ("", "Prefer not to say"),
+    ("AT", "Austria"),
+    ("AU", "Australia"),
+    ("AE", "United Arab Emirates"),
+    ("BE", "Belgium"),
+    ("CA", "Canada"),
+    ("DE", "Germany"),
+    ("EG", "Egypt"),
+    ("ES", "Spain"),
+    ("FI", "Finland"),
+    ("FR", "France"),
+    ("GB", "United Kingdom"),
+    ("GH", "Ghana"),
+    ("IE", "Ireland"),
+    ("IN", "India"),
+    ("IT", "Italy"),
+    ("KE", "Kenya"),
+    ("NG", "Nigeria"),
+    ("NL", "Netherlands"),
+    ("PT", "Portugal"),
+    ("RW", "Rwanda"),
+    ("TZ", "Tanzania"),
+    ("UG", "Uganda"),
+    ("US", "United States"),
+    ("ZA", "South Africa"),
+]
+
+# ISO 3166-1 alpha-2 country -> default ISO 4217 currency, used to seed
+# `User.currency` at signup from `User.country`.
+COUNTRY_TO_CURRENCY = {
+    "UG": "UGX", "KE": "KES", "TZ": "TZS", "RW": "RWF",
+    "NG": "NGN", "GH": "GHS", "ZA": "ZAR", "EG": "EGP",
+    "US": "USD", "GB": "GBP", "IN": "INR", "AE": "AED",
+    "CA": "CAD", "AU": "AUD",
+    # Eurozone
+    "DE": "EUR", "FR": "EUR", "ES": "EUR", "IT": "EUR", "NL": "EUR",
+    "IE": "EUR", "PT": "EUR", "BE": "EUR", "AT": "EUR", "FI": "EUR",
+}
+
+CURRENCY_CHOICES = [
+    ("", "Not set — show plain amounts"),
+    ("UGX", "Ugandan Shilling (UGX)"),
+    ("KES", "Kenyan Shilling (KES)"),
+    ("TZS", "Tanzanian Shilling (TZS)"),
+    ("RWF", "Rwandan Franc (RWF)"),
+    ("NGN", "Nigerian Naira (NGN)"),
+    ("GHS", "Ghanaian Cedi (GHS)"),
+    ("ZAR", "South African Rand (ZAR)"),
+    ("EGP", "Egyptian Pound (EGP)"),
+    ("USD", "US Dollar (USD)"),
+    ("GBP", "British Pound (GBP)"),
+    ("EUR", "Euro (EUR)"),
+    ("INR", "Indian Rupee (INR)"),
+    ("AED", "UAE Dirham (AED)"),
+    ("CAD", "Canadian Dollar (CAD)"),
+    ("AUD", "Australian Dollar (AUD)"),
+]

@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api, getTokens, clearSession, setUser } from "@/lib/api";
+import { COUNTRIES, flagEmoji } from "@/lib/countries";
+import { CURRENCIES } from "@/lib/currency";
 import AuthGuard from "@/components/AuthGuard";
 import BottomNav from "@/components/BottomNav";
 import ConfirmDialog from "@/components/ConfirmDialog";
@@ -17,6 +19,8 @@ const REMINDER_FREQUENCIES = [
   ["monthly", "Monthly"],
 ];
 const REMINDER_LABELS = Object.fromEntries(REMINDER_FREQUENCIES);
+const COUNTRY_LABELS = Object.fromEntries(COUNTRIES);
+const CURRENCY_LABELS = Object.fromEntries(CURRENCIES);
 
 const THEME_OPTIONS = [
   ["light", "Light", "☀️"],
@@ -87,7 +91,10 @@ function ToggleRow({ label, danger, open, onClick }) {
   );
 }
 
-const emptyProfileForm = { first_name: "", last_name: "", phone: "", mileage_reminder_frequency: "off" };
+const emptyProfileForm = {
+  first_name: "", last_name: "", phone: "", mileage_reminder_frequency: "off",
+  country: "", currency: "",
+};
 const emptyPasswordForm = { current_password: "", new_password: "", confirm_new_password: "" };
 
 function profileFormFrom(data) {
@@ -96,6 +103,8 @@ function profileFormFrom(data) {
     last_name: data.last_name || "",
     phone: data.phone || "",
     mileage_reminder_frequency: data.mileage_reminder_frequency || "off",
+    country: data.country || "",
+    currency: data.currency || "",
   };
 }
 
@@ -238,6 +247,11 @@ function Settings() {
             <InfoRow label="Email" value={profile.email} />
             <InfoRow label="Name" value={fullName || "—"} />
             <InfoRow label="Phone" value={profile.phone || "—"} />
+            <InfoRow
+              label="Country"
+              value={profile.country ? `${flagEmoji(profile.country)} ${COUNTRY_LABELS[profile.country] || profile.country}` : "—"}
+            />
+            <InfoRow label="Currency" value={CURRENCY_LABELS[profile.currency] || "Not set"} />
             <InfoRow label="Mileage reminder" value={REMINDER_LABELS[profile.mileage_reminder_frequency] || "Off"} />
           </div>
         ) : (
@@ -258,6 +272,36 @@ function Settings() {
               <label className="label">Phone</label>
               <input className="input" value={profileForm.phone}
                 onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="label" htmlFor="profile-country">Country</label>
+                <select
+                  id="profile-country"
+                  className="input"
+                  value={profileForm.country}
+                  onChange={(e) => setProfileForm({ ...profileForm, country: e.target.value })}
+                >
+                  <option value="">Prefer not to say</option>
+                  {COUNTRIES.map(([code, name]) => (
+                    <option key={code} value={code}>{flagEmoji(code)} {name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="label" htmlFor="profile-currency">Currency</label>
+                <select
+                  id="profile-currency"
+                  className="input"
+                  value={profileForm.currency}
+                  onChange={(e) => setProfileForm({ ...profileForm, currency: e.target.value })}
+                >
+                  <option value="">Not set</option>
+                  {CURRENCIES.map(([code, label]) => (
+                    <option key={code} value={code}>{label}</option>
+                  ))}
+                </select>
+              </div>
             </div>
             <div>
               <label className="label">Mileage update reminder</label>

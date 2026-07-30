@@ -6,7 +6,7 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from accounts.models import User, EmailVerificationOTP, PasswordResetOTP
+from accounts.models import EmailVerificationOTP, PasswordResetOTP, User
 from utils import Constants
 
 
@@ -146,6 +146,58 @@ class TestAuthFlow:
         owner.deactivate()
 
         assert owner.deletion_reminder_sent_at is None
+
+
+@pytest.mark.django_db
+class TestSignupCurrencyDefaulting:
+    """See #40 — `currency` is derived from `country` at signup, never asked for directly."""
+
+    def test_currency_is_defaulted_from_a_recognized_country(self, client):
+        response = client.post(reverse("auth-register"), {
+            "email": "uganda@example.com",
+            "password": "str0ng-pass-123",
+            "country": "UG",
+        })
+        assert response.status_code == 201
+        user = User.objects.get(email="uganda@example.com")
+        assert user.country == "UG"
+        assert user.currency == "UGX"
+
+    def test_currency_is_left_blank_for_an_unrecognized_or_missing_country(self, client):
+        response = client.post(reverse("auth-register"), {
+            "email": "nocountry@example.com",
+            "password": "str0ng-pass-123",
+        })
+        assert response.status_code == 201
+        user = User.objects.get(email="nocountry@example.com")
+        assert user.country == ""
+        assert user.currency == ""
+
+
+@pytest.mark.django_db
+class TestProfileCurrencyUpdate:
+    """See #40 — a user can self-service correct their own currency/country from Settings."""
+
+    def test_profile_get_includes_currency_and_country(self, client, owner):
+        client.force_authenticate(owner)
+        response = client.get(reverse("auth-profile"))
+        assert response.status_code == 200
+        assert response.data["currency"] == ""
+        assert response.data["country"] == ""
+
+    def test_patch_updates_currency_directly(self, client, owner):
+        client.force_authenticate(owner)
+        response = client.patch(reverse("auth-profile"), {"currency": "KES"})
+        assert response.status_code == 200
+        owner.refresh_from_db()
+        assert owner.currency == "KES"
+
+    def test_patch_rejects_an_unrecognized_currency_code(self, client, owner):
+        client.force_authenticate(owner)
+        response = client.patch(reverse("auth-profile"), {"currency": "XXX"})
+        assert response.status_code == 400
+        owner.refresh_from_db()
+        assert owner.currency == ""
 
 
 @pytest.mark.django_db
@@ -931,6 +983,7 @@ class TestUnscopedDetailViewFailsLoudly:
 
     def test_default_queryset_without_kwargs_raises(self):
         from django.core.exceptions import ImproperlyConfigured
+
         from utils.Views import SmartDetailView
 
         view = SmartDetailView()

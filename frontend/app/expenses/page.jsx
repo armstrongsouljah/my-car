@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
+import { formatAmount } from "@/lib/currency";
 import { trackSignal } from "@/lib/telemetry";
 import AuthGuard from "@/components/AuthGuard";
 import BottomNav from "@/components/BottomNav";
@@ -145,7 +146,7 @@ function ExpenseForm({ cars, expense = null, onSaved, onCancel }) {
   );
 }
 
-function MonthChart({ months }) {
+function MonthChart({ months, currency }) {
   if (!months?.length) return null;
   const max = Math.max(...months.map((m) => m.total), 1);
 
@@ -155,7 +156,7 @@ function MonthChart({ months }) {
       <div className="flex items-end gap-2 overflow-x-auto pb-1" style={{ height: 140 }}>
         {months.map((month) => (
           <div key={month.month} className="flex min-w-[44px] flex-1 flex-col items-center justify-end gap-1">
-            <p className="text-[10px] font-medium text-gray-500 dark:text-gray-400">{Math.round(month.total).toLocaleString()}</p>
+            <p className="text-[10px] font-medium text-gray-500 dark:text-gray-400">{formatAmount(Math.round(month.total), currency)}</p>
             <div
               className="w-full rounded-t-md bg-gray-900 dark:bg-white"
               style={{ height: `${Math.max((month.total / max) * 100, 2)}%` }}
@@ -212,7 +213,7 @@ function Expenses() {
         <div className="mb-4 grid grid-cols-2 gap-3">
           <div className="card">
             <p className="text-[12px] text-gray-400 dark:text-gray-500">This month</p>
-            <p className="text-xl font-bold">{latest.total.toLocaleString()}</p>
+            <p className="text-xl font-bold">{formatAmount(latest.total, analytics.currency)}</p>
             {latest.change_percent_vs_previous_month !== null && latest.change_percent_vs_previous_month !== undefined && (
               <p className={`text-[12px] font-medium ${latest.change_percent_vs_previous_month > 0 ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`}>
                 {latest.change_percent_vs_previous_month > 0 ? "▲" : "▼"} {Math.abs(latest.change_percent_vs_previous_month)}% vs last month
@@ -221,13 +222,13 @@ function Expenses() {
           </div>
           <div className="card">
             <p className="text-[12px] text-gray-400 dark:text-gray-500">Last 12 months</p>
-            <p className="text-xl font-bold">{analytics.grand_total.toLocaleString()}</p>
+            <p className="text-xl font-bold">{formatAmount(analytics.grand_total, analytics.currency)}</p>
           </div>
         </div>
       )}
 
       <div className="mb-4">
-        <MonthChart months={analytics?.months} />
+        <MonthChart months={analytics?.months} currency={analytics?.currency} />
       </div>
 
       {formTarget ? (
@@ -265,7 +266,7 @@ function Expenses() {
               )}
             </div>
             <div className="flex flex-shrink-0 items-center gap-2">
-              <p className="font-bold">{Number(expense.amount).toLocaleString()}</p>
+              <p className="font-bold">{formatAmount(expense.display_amount, expense.display_currency)}</p>
               <span className="text-gray-300 dark:text-gray-600">›</span>
             </div>
           </button>
