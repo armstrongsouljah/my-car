@@ -610,7 +610,7 @@ def refresh_exchange_rates_task():
     from django.utils import timezone
 
     from expenses.models import ExchangeRate
-    from utils import Constants
+    from utils import Cache, Constants
 
     try:
         response = requests.get("https://open.er-api.com/v6/latest/USD", timeout=10)
@@ -638,5 +638,11 @@ def refresh_exchange_rates_task():
             date=today, currency=currency, defaults={"rate_to_usd": rate_to_usd},
         )
         updated += 1
+
+    if updated:
+        # So today's refreshed rates are picked up immediately by
+        # utils.Currency.load_latest_rates() rather than waiting for its
+        # midnight cache rollover.
+        Cache.invalidate_exchange_rates()
 
     return f"Refreshed {updated} exchange rate(s) for {today}"

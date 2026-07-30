@@ -34,18 +34,29 @@ def load_latest_rates():
     unchanged, same as an unset currency.
 
     Filters to the latest row per currency at the DB layer (rather than
-    loading and sorting the whole audit table in Python) since this runs on
-    essentially every expense/service request.
+    loading and sorting the whole audit table in Python), and caches the
+    result until local midnight (see utils/Cache.py) since this runs on
+    essentially every expense/service request but only actually changes
+    once a day, when refresh_exchange_rates_task refreshes it — which also
+    invalidates this cache so a same-day refresh is picked up immediately
+    rather than waiting for the next midnight rollover.
     """
     from django.db.models import OuterRef, Subquery
 
     from expenses.models import ExchangeRate
+    from utils import Cache
+
+    cached = Cache.get_exchange_rates()
+    if cached is not None:
+        return cached
 
     latest_id_per_currency = (
         ExchangeRate.objects.filter(currency=OuterRef("currency")).order_by("-date").values("pk")[:1]
     )
     rows = ExchangeRate.objects.filter(pk=Subquery(latest_id_per_currency))
-    return {row.currency: row.rate_to_usd for row in rows}
+    rates = {row.currency: row.rate_to_usd for row in rows}
+    Cache.set_exchange_rates(rates)
+    return rates
 
 
 def convert_amount(amount, from_currency, to_currency, rates):

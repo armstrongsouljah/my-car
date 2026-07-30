@@ -504,3 +504,37 @@ class TestRefreshExchangeRatesTask:
 
         assert "Failed" in result
         assert not ExchangeRate.objects.exists()
+
+    def test_a_successful_refresh_invalidates_the_cached_rates(self, monkeypatch):
+        from tasks import refresh_exchange_rates_task
+        from utils import Cache
+        from utils.Currency import load_latest_rates
+
+        ExchangeRate.objects.create(date=date(2026, 1, 1), currency="USD", rate_to_usd=Decimal("1"))
+        assert load_latest_rates() == {"USD": Decimal("1")}  # warms the cache
+
+        class FakeResponse:
+            def raise_for_status(self):
+                pass
+
+            def json(self):
+                return {"rates": {"USD": 1.0, "UGX": 3700.0}}
+
+        monkeypatch.setattr("requests.get", lambda *args, **kwargs: FakeResponse())
+        refresh_exchange_rates_task()
+
+        assert Cache.get_exchange_rates() is None
+        assert "UGX" in load_latest_rates()
+
+    def test_a_failed_fetch_does_not_invalidate_the_cached_rates(self, monkeypatch):
+        from tasks import refresh_exchange_rates_task
+        from utils import Cache
+        from utils.Currency import load_latest_rates
+
+        ExchangeRate.objects.create(date=date(2026, 1, 1), currency="USD", rate_to_usd=Decimal("1"))
+        load_latest_rates()  # warms the cache
+
+        monkeypatch.setattr("requests.get", lambda *args, **kwargs: (_ for _ in ()).throw(ConnectionError("down")))
+        refresh_exchange_rates_task()
+
+        assert Cache.get_exchange_rates() == {"USD": Decimal("1")}

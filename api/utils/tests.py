@@ -68,6 +68,35 @@ class TestLoadLatestRates:
         assert rates["UGX"] == Decimal("0.00030")
         assert rates["USD"] == Decimal("1")
 
+    def test_result_is_cached_across_calls(self):
+        from datetime import date
+
+        from expenses.models import ExchangeRate
+
+        ExchangeRate.objects.create(date=date(2026, 1, 1), currency="USD", rate_to_usd=Decimal("1"))
+        first = load_latest_rates()
+
+        # Bypasses cache invalidation (which only happens via
+        # refresh_exchange_rates_task) — proves the second call is served
+        # from cache, not recomputed against the now-stale row.
+        ExchangeRate.objects.create(date=date(2026, 1, 2), currency="USD", rate_to_usd=Decimal("2"))
+
+        second = load_latest_rates()
+        assert second == first == {"USD": Decimal("1")}
+
+    def test_invalidating_the_cache_picks_up_new_rates(self):
+        from datetime import date
+
+        from expenses.models import ExchangeRate
+
+        ExchangeRate.objects.create(date=date(2026, 1, 1), currency="USD", rate_to_usd=Decimal("1"))
+        load_latest_rates()
+
+        ExchangeRate.objects.create(date=date(2026, 1, 2), currency="USD", rate_to_usd=Decimal("2"))
+        Cache.invalidate_exchange_rates()
+
+        assert load_latest_rates() == {"USD": Decimal("2")}
+
 
 class TestSecondsUntilMidnight:
 
