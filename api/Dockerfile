@@ -49,6 +49,7 @@ RUN SECRET_KEY=build-time-placeholder \
     DATABASE_URL=sqlite:////tmp/build.db \
     REDIS_URL=locmem \
     DEFAULT_FROM_EMAIL=build@example.com \
+    FRONTEND_URL=http://localhost:3000 \
     python manage.py collectstatic --noinput
 
 COPY entrypoint.sh /entrypoint.sh

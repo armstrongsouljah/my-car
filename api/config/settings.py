@@ -50,8 +50,15 @@ SECURE_HSTS_INCLUDE_SUBDOMAINS = config("SECURE_HSTS_INCLUDE_SUBDOMAINS", defaul
 # hard to reverse, so it should be a conscious decision rather than a default.
 SECURE_HSTS_PRELOAD = config("SECURE_HSTS_PRELOAD", default=False, cast=bool)
 
-# Base URL of the my-car frontend, used to build public-facing links in emails.
-FRONTEND_URL = config("FRONTEND_URL", default="http://localhost:3000").rstrip("/")
+# Base URL of the my-car frontend, used to build public-facing links in
+# emails (verification, password reset, the monthly expense report, etc.).
+# Only defaults to localhost in DEBUG — same fail-closed reasoning as
+# SECRET_KEY/DATABASE_URL/DEFAULT_FROM_EMAIL above: a deployed environment
+# that forgets to set this must refuse to start, not silently mail out
+# http://localhost:3000 links nobody outside the container can open.
+FRONTEND_URL = (config("FRONTEND_URL", default="http://localhost:3000") if DEBUG else config("FRONTEND_URL")).rstrip(
+    "/"
+)
 
 # ---------------------------------------------------------------------------
 # Apps
