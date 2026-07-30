@@ -1,15 +1,25 @@
 from django.core.exceptions import ImproperlyConfigured
-from rest_framework.views import APIView
-from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.pagination import CursorPagination, PageNumberPagination
 from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
-from utils import Message, QueryParams, Constants
+from utils import Constants, Message, QueryParams
 from utils.Permissions import IsAdminPermission
 
 
 class SmartAPIView(APIView):
+
+    def get_serializer_context(self):
+        """
+        Overridable by subclasses that need a serializer field to see more
+        than just the request (e.g. a precomputed lookup table so a
+        SerializerMethodField isn't re-querying it per row) — see
+        ExpenseListCreateView.get_serializer_context for #40's currency
+        conversion.
+        """
+        return {"request": self.request}
 
     def post(self, request):
         data = request.data
@@ -127,7 +137,7 @@ class PaginationAPIView(SmartAPIView):
             else:
                 queryset = queryset.order_by(self.paginator.ordering)
 
-            data = serializer_class(queryset, many=True).data
+            data = serializer_class(queryset, many=True, context=self.get_serializer_context()).data
 
             return Response(data)
 
@@ -136,7 +146,7 @@ class PaginationAPIView(SmartAPIView):
         else:
             page = queryset
 
-        serializer = serializer_class(page, many=True)
+        serializer = serializer_class(page, many=True, context=self.get_serializer_context())
 
         if return_data:
             return serializer.data
@@ -189,7 +199,7 @@ class SmartPaginationAPIView(PaginationAPIView):
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()
         detail_serializer = self.get_detail_serializer()
-        data = detail_serializer(instance).data
+        data = detail_serializer(instance, context=self.get_serializer_context()).data
         return self.post_response(data, instance=instance)
 
     def override_post_data(self, data):
@@ -233,7 +243,7 @@ class SmartDetailView(SmartAPIView):
 
         if not instance:
             return self.get_instance_not_found_response()
-        data = self.detail_serializer(instance).data
+        data = self.detail_serializer(instance, context=self.get_serializer_context()).data
         return Response(data, status.HTTP_200_OK)
 
     def patch(self, request, **kwargs):
@@ -256,7 +266,7 @@ class SmartDetailView(SmartAPIView):
         serializer = self.edit_serializer(instance, data=request_data, partial=True)
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()
-        data = self.detail_serializer(instance).data
+        data = self.detail_serializer(instance, context=self.get_serializer_context()).data
         return self.patch_response(instance, data)
 
     def delete(self, request, *args, **kwargs):

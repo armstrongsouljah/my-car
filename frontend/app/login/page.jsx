@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Dancing_Script } from "next/font/google";
 import { api, setTokens, setUser, isLoggedIn } from "@/lib/api";
+import { COUNTRIES, flagEmoji } from "@/lib/countries";
 
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
 const brandFont = Dancing_Script({ subsets: ["latin"], weight: ["700"] });
@@ -63,7 +64,7 @@ function AuthPage() {
   ); // login | signup | verify | forgot | reset
   const [form, setForm] = useState({
     email: searchParams.get("email") || "", password: "", first_name: "", last_name: "", otp: "",
-    new_password: "", confirm_new_password: "",
+    new_password: "", confirm_new_password: "", country: "",
   });
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
@@ -173,6 +174,7 @@ function AuthPage() {
             password: form.password,
             first_name: form.first_name,
             last_name: form.last_name,
+            country: form.country,
           },
         });
         // The API returns the same response whether or not the address is
@@ -307,6 +309,21 @@ function AuthPage() {
                 <label className="auth-label" htmlFor="last_name">Last name</label>
                 <input id="last_name" className="auth-input" value={form.last_name} onChange={update("last_name")} />
               </div>
+            </div>
+          )}
+
+          {mode === "signup" && (
+            <div>
+              <label className="auth-label" htmlFor="country">Country</label>
+              <select id="country" className="auth-input" value={form.country} onChange={update("country")}>
+                <option value="">Prefer not to say</option>
+                {COUNTRIES.map(([code, name]) => (
+                  <option key={code} value={code}>{flagEmoji(code)} {name}</option>
+                ))}
+              </select>
+              <p className="mt-1 text-[12px] text-white/40">
+                Sets your default currency for expenses and reports — you can change it later in Settings.
+              </p>
             </div>
           )}
 

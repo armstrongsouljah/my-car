@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { api, downloadFile } from "@/lib/api";
+import { formatAmount } from "@/lib/currency";
 import AuthGuard from "@/components/AuthGuard";
 import BottomNav from "@/components/BottomNav";
 
@@ -45,7 +46,7 @@ function ReportDetail() {
           <div className="mb-4 grid grid-cols-2 gap-3">
             <div className="card">
               <p className="text-[12px] text-gray-400 dark:text-gray-500">Total spent</p>
-              <p className="text-xl font-bold">{report.total.toLocaleString()}</p>
+              <p className="text-xl font-bold">{formatAmount(report.total, report.currency)}</p>
               {report.change_percent_vs_previous_month !== null && report.change_percent_vs_previous_month !== undefined && (
                 <p className={`text-[12px] font-medium ${report.change_vs_previous_month > 0 ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`}>
                   {report.change_vs_previous_month > 0 ? "▲" : "▼"} {Math.abs(report.change_percent_vs_previous_month)}% vs last month
@@ -69,7 +70,7 @@ function ReportDetail() {
               {report.by_category.map((row) => (
                 <div key={row.category} className="flex items-center justify-between text-sm">
                   <p>{row.category_label}</p>
-                  <p className="font-semibold">{row.total.toLocaleString()}</p>
+                  <p className="font-semibold">{formatAmount(row.total, report.currency)}</p>
                 </div>
               ))}
             </div>
@@ -82,7 +83,7 @@ function ReportDetail() {
               {report.by_car.map((row) => (
                 <div key={row.car_id} className="flex items-center justify-between text-sm">
                   <p>{row.label}</p>
-                  <p className="font-semibold">{row.total.toLocaleString()}</p>
+                  <p className="font-semibold">{formatAmount(row.total, report.currency)}</p>
                 </div>
               ))}
             </div>

@@ -4,9 +4,8 @@ from dateutil.relativedelta import relativedelta
 from django.db import models, transaction
 from django.utils import timezone
 
-from utils import Constants
-
 from cars.models import Car
+from utils import Constants
 
 
 class ServiceRecord(models.Model):
@@ -25,6 +24,11 @@ class ServiceRecord(models.Model):
     garage_name = models.CharField(max_length=150, blank=True)
     description = models.TextField(blank=True)
     cost = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    # Mirrors Expense.currency (see #40, expenses/models.py) — snapshotted
+    # from the owner's currency at creation, since a costed service's
+    # linked Expense (see _sync_expense below) carries the same amount and
+    # needs to agree on what currency it was recorded in.
+    currency = models.CharField(max_length=3, blank=True)
 
     # Interval rule: next service at odometer + interval_km OR service_date +
     # interval_months — whichever comes first. Either side may be omitted.
@@ -56,6 +60,8 @@ class ServiceRecord(models.Model):
     def save(self, *args, **kwargs):
         self.compute_next_due()
         is_new = self._state.adding
+        if is_new and not self.currency:
+            self.currency = self.car.owner.currency
         with transaction.atomic():
             if not is_new:
                 # Lock the existing row so concurrent saves to the same
@@ -87,6 +93,7 @@ class ServiceRecord(models.Model):
                 "car": self.car,
                 "category": Constants.EXPENSE_CATEGORY_GARAGE,
                 "amount": self.cost,
+                "currency": self.currency,
                 "expense_date": self.service_date,
                 "vendor": self.garage_name,
                 "description": self.description or f"{self.get_service_type_display()} service",

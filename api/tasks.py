@@ -184,9 +184,9 @@ def send_due_reminders_task():
     whose next service or general inspection is due/soon due and emails the
     owner one digest per car.
     """
-    from utils.Email import send_reminder_email
     from cars.models import Car
     from services.reminders import build_car_reminders
+    from utils.Email import send_reminder_email
 
     sent = 0
     queryset = Car.objects.filter(is_active=True, owner__is_active=True).select_related("owner")
@@ -351,7 +351,7 @@ def send_verify_reminder_email_task(user_id, days_remaining):
     """
     from django.utils import timezone
 
-    from accounts.models import User, EmailVerificationOTP
+    from accounts.models import EmailVerificationOTP, User
     from utils.Email import send_verify_email_reminder_email
 
     # Re-checks is_email_verified/verify_reminder_sent_at at send time, not
@@ -589,3 +589,47 @@ def purge_unverified_accounts_task():
             count += 1
 
     return f"Purged {count} never-verified account(s)"
+
+
+@shared_task(name="tasks.refresh_exchange_rates_task")
+def refresh_exchange_rates_task():
+    """
+    Daily USD-cross rate snapshot for every currency GlavBox supports (see
+    #40) — this is what lets expense amounts convert between currencies at
+    all. Hits a free, keyless FX-rate API rather than a paid provider, since
+    no FX provider account exists for this project; if the request fails or
+    a currency is missing from the response, that currency's rate just
+    stays whatever was last fetched (or unset, if it's never succeeded) —
+    utils.Currency.convert_amount() already falls back to an unconverted
+    amount whenever a rate is missing, so a failed day degrades gracefully
+    rather than breaking reports.
+    """
+    from decimal import Decimal
+
+    import requests
+    from django.utils import timezone
+
+    from expenses.models import ExchangeRate
+    from utils import Constants
+
+    try:
+        response = requests.get("https://open.er-api.com/v6/latest/USD", timeout=10)
+        response.raise_for_status()
+        usd_rates = response.json().get("rates", {})
+    except Exception:
+        logger.error("Failed to fetch daily exchange rates; keeping yesterday's rates", exc_info=True)
+        return "Failed to fetch exchange rates"
+
+    today = timezone.localdate()
+    supported_currencies = {code for code, _ in Constants.CURRENCY_CHOICES if code}
+    updated = 0
+    for currency in supported_currencies:
+        usd_to_currency = usd_rates.get(currency)
+        if not usd_to_currency:
+            continue
+        ExchangeRate.objects.update_or_create(
+            date=today, currency=currency, defaults={"rate_to_usd": Decimal("1") / Decimal(str(usd_to_currency))},
+        )
+        updated += 1
+
+    return f"Refreshed {updated} exchange rate(s) for {today}"

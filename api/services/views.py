@@ -1,10 +1,6 @@
+from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework import status
-
-from utils import Cache, Constants, QueryParams
-from utils.Exception import CustomValidation
-from utils.Views import SmartDetailView, SmartPaginationAPIView, SmartAPIView
 
 from cars.models import Car
 from reminders.catalog import OIL_CHANGE_KEY
@@ -12,10 +8,14 @@ from services.models import ServiceRecord
 from services.reminders import build_car_reminders
 from services.serializers import (
     ServiceRecordCreateSerializer,
+    ServiceRecordDetailSerializer,
     ServiceRecordEditSerializer,
     ServiceRecordListSerializer,
-    ServiceRecordDetailSerializer,
 )
+from utils import Cache, Constants, QueryParams
+from utils.Currency import load_latest_rates
+from utils.Exception import CustomValidation
+from utils.Views import SmartAPIView, SmartDetailView, SmartPaginationAPIView
 
 
 class ServiceRecordListCreateView(SmartPaginationAPIView):
@@ -28,6 +28,11 @@ class ServiceRecordListCreateView(SmartPaginationAPIView):
     list_serializer = ServiceRecordListSerializer
     detail_serializer = ServiceRecordDetailSerializer
     permission_classes = [IsAuthenticated]
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["rates"] = load_latest_rates()
+        return context
 
     def override_post_data(self, data):
         data = dict(data)
@@ -65,6 +70,11 @@ class ServiceRecordDetailView(SmartDetailView):
     detail_serializer = ServiceRecordDetailSerializer
     edit_serializer = ServiceRecordEditSerializer
     permission_classes = [IsAuthenticated]
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["rates"] = load_latest_rates()
+        return context
 
     def queryset(self, **kwargs):
         return ServiceRecord.objects.filter(pk=kwargs.get("pk"), car__owner=self.request.user)

@@ -18,6 +18,7 @@ from expenses.serializers import (
     ExpenseListSerializer,
 )
 from utils import QueryParams
+from utils.Currency import convert_amount, load_latest_rates
 from utils.Exception import CustomValidation
 from utils.Views import SmartAPIView, SmartDetailView, SmartPaginationAPIView
 
@@ -32,6 +33,13 @@ class ExpenseListCreateView(SmartPaginationAPIView):
     list_serializer = ExpenseListSerializer
     detail_serializer = ExpenseDetailSerializer
     permission_classes = [IsAuthenticated]
+
+    def get_serializer_context(self):
+        # Loaded once per request rather than per-row inside the
+        # serializer's display_amount field — see #40's DisplayAmountMixin.
+        context = super().get_serializer_context()
+        context["rates"] = load_latest_rates()
+        return context
 
     def override_post_data(self, data):
         data = dict(data)
@@ -70,6 +78,11 @@ class ExpenseDetailView(SmartDetailView):
     edit_serializer = ExpenseEditSerializer
     permission_classes = [IsAuthenticated]
 
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["rates"] = load_latest_rates()
+        return context
+
     def queryset(self, **kwargs):
         return Expense.objects.filter(pk=kwargs.get("pk"), car__owner=self.request.user)
 
@@ -89,6 +102,8 @@ class ExpenseAnalyticsView(SmartAPIView):
 
     def get(self, request, **kwargs):
         months = QueryParams.get_int(request, "months", default_value=12)
+        target_currency = request.user.currency
+        rates = load_latest_rates()
 
         queryset = Expense.objects.filter(car__owner=request.user)
 
@@ -96,32 +111,47 @@ class ExpenseAnalyticsView(SmartAPIView):
         if car_id:
             queryset = queryset.filter(car_id=car_id)
 
-        monthly = (
+        def month_key(value):
+            return value.date().isoformat() if hasattr(value, "date") else value.isoformat()
+
+        # Grouped by currency too, not just month/category: an owner may
+        # have changed currency over time (see #40), so a month or category
+        # can span expenses recorded in more than one — SQL Sum() can't mix
+        # those, so each currency's own subtotal is converted and combined
+        # here in Python instead of at the DB level.
+        monthly_currency_rows = (
             queryset
             .annotate(month=TruncMonth("expense_date"))
-            .values("month")
+            .values("month", "currency")
             .annotate(total=Sum("amount"), count=Count("id"))
-            .order_by("month")
         )
 
-        by_category = (
+        monthly_totals = {}
+        monthly_counts = {}
+        for row in monthly_currency_rows:
+            key = month_key(row["month"])
+            converted = float(convert_amount(row["total"], row["currency"], target_currency, rates))
+            monthly_totals[key] = monthly_totals.get(key, 0.0) + converted
+            monthly_counts[key] = monthly_counts.get(key, 0) + row["count"]
+
+        by_category_currency_rows = (
             queryset
             .annotate(month=TruncMonth("expense_date"))
-            .values("month", "category")
+            .values("month", "category", "currency")
             .annotate(total=Sum("amount"))
-            .order_by("month")
         )
 
         categories_by_month = {}
-        for row in by_category:
-            key = row["month"].date().isoformat() if hasattr(row["month"], "date") else row["month"].isoformat()
-            categories_by_month.setdefault(key, {})[row["category"]] = float(row["total"])
+        for row in by_category_currency_rows:
+            key = month_key(row["month"])
+            converted = float(convert_amount(row["total"], row["currency"], target_currency, rates))
+            month_categories = categories_by_month.setdefault(key, {})
+            month_categories[row["category"]] = month_categories.get(row["category"], 0.0) + converted
 
         results = []
         previous_total = None
-        for row in monthly:
-            month_key = row["month"].date().isoformat() if hasattr(row["month"], "date") else row["month"].isoformat()
-            total = float(row["total"])
+        for key in sorted(monthly_totals):
+            total = round(monthly_totals[key], 2)
 
             change = None
             change_percent = None
@@ -131,10 +161,10 @@ class ExpenseAnalyticsView(SmartAPIView):
                     change_percent = round((total - previous_total) / previous_total * 100, 1)
 
             results.append({
-                "month": month_key,
+                "month": key,
                 "total": total,
-                "count": row["count"],
-                "by_category": categories_by_month.get(month_key, {}),
+                "count": monthly_counts[key],
+                "by_category": categories_by_month.get(key, {}),
                 "change_vs_previous_month": change,
                 "change_percent_vs_previous_month": change_percent,
             })
@@ -146,6 +176,7 @@ class ExpenseAnalyticsView(SmartAPIView):
         return Response({
             "months": results,
             "grand_total": round(grand_total, 2),
+            "currency": target_currency,
         }, status=status.HTTP_200_OK)
 
 

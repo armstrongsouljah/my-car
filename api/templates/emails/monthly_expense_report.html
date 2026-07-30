@@ -1,3 +1,4 @@
+{% load currency_filters %}
 <!DOCTYPE html>
 <html>
 <body style="margin:0;padding:0;background:#f4f4f7;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
@@ -14,7 +15,7 @@
         <tr><td style="padding:32px;">
           <p style="margin:0 0 20px 0;font-size:15px;line-height:1.5;color:#374151;">
             Hi {{ name }},<br>
-            You spent <strong>{{ report.total|floatformat:2 }}</strong> on your car(s) in {{ report.month_label }}
+            You spent <strong>{{ report.total|currency:report.currency }}</strong> on your car(s) in {{ report.month_label }}
             across {{ report.count }} expense{{ report.count|pluralize }}.
           </p>
 
@@ -23,7 +24,7 @@
             <tr>
               <td width="30%" valign="top" style="background:#f0fdf7;border-radius:8px;padding:14px 12px;">
                 <p style="margin:0;font-size:10px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#6b7280;">Total</p>
-                <p style="margin:4px 0 0 0;font-size:17px;font-weight:700;color:#04120c;">{{ report.total|floatformat:2 }}</p>
+                <p style="margin:4px 0 0 0;font-size:17px;font-weight:700;color:#04120c;">{{ report.total|currency:report.currency }}</p>
               </td>
               <td width="5%">&nbsp;</td>
               <td width="30%" valign="top" style="background:#f0fdf7;border-radius:8px;padding:14px 12px;">
@@ -53,7 +54,7 @@
             {% for c in top_categories %}
             <tr style="background:{% cycle '#f0fdf7' '#ffffff' %};">
               <td style="padding:12px 14px;font-size:14px;color:#374151;border-bottom:1px solid #e5e7eb;">{{ c.category_label }}</td>
-              <td align="right" style="padding:12px 14px;font-size:14px;font-weight:600;color:#04120c;border-bottom:1px solid #e5e7eb;">{{ c.total|floatformat:2 }}</td>
+              <td align="right" style="padding:12px 14px;font-size:14px;font-weight:600;color:#04120c;border-bottom:1px solid #e5e7eb;">{{ c.total|currency:report.currency }}</td>
             </tr>
             {% endfor %}
           </table>

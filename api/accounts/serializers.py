@@ -5,11 +5,10 @@ from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
 from rest_framework import serializers, status
 
+from accounts.models import EmailVerificationOTP, PasswordResetOTP, User
+from utils import Constants
 from utils.Exception import CustomValidation
-from utils.Serializers import CreateModelSerializer, EditModelSerializer, BaseModelSerializer, ListModelSerializer
-
-from accounts.models import User, EmailVerificationOTP, PasswordResetOTP
-
+from utils.Serializers import BaseModelSerializer, CreateModelSerializer, EditModelSerializer, ListModelSerializer
 
 # ---------------------------------------------------------------------------
 # Registration
@@ -20,11 +19,12 @@ class RegisterSerializer(CreateModelSerializer):
 
     class Meta:
         model = User
-        fields = ("email", "first_name", "last_name", "phone", "password")
+        fields = ("email", "first_name", "last_name", "phone", "password", "country")
         extra_kwargs = {
             "first_name": {"required": False, "default": ""},
             "last_name": {"required": False, "default": ""},
             "phone": {"required": False, "default": ""},
+            "country": {"required": False, "default": ""},
             # DRF derives a UniqueValidator from the model's unique=True, which
             # would answer "already exists" and reintroduce the enumeration
             # oracle. RegisterView does the duplicate check itself.
@@ -43,6 +43,11 @@ class RegisterSerializer(CreateModelSerializer):
         return attrs
 
     def create(self, validated_data):
+        # See #40: `currency` isn't user-supplied at signup, it's derived
+        # from `country` — an unrecognized/blank country just leaves it
+        # unset, same as an existing pre-#40 account.
+        country = validated_data.get("country") or ""
+        validated_data["currency"] = Constants.COUNTRY_TO_CURRENCY.get(country, "")
         return User.objects.create_user(**validated_data)
 
 
@@ -151,7 +156,10 @@ class LoginSerializer(serializers.Serializer):
 class UserProfileSerializer(BaseModelSerializer):
     class Meta:
         model = User
-        fields = ("id", "email", "first_name", "last_name", "phone", "mileage_reminder_frequency")
+        fields = (
+            "id", "email", "first_name", "last_name", "phone",
+            "mileage_reminder_frequency", "country", "currency",
+        )
         read_only_fields = ("id", "email")
 
     @staticmethod
@@ -162,7 +170,7 @@ class UserProfileSerializer(BaseModelSerializer):
 class UpdateProfileSerializer(EditModelSerializer):
     class Meta:
         model = User
-        fields = ("first_name", "last_name", "phone", "mileage_reminder_frequency")
+        fields = ("first_name", "last_name", "phone", "mileage_reminder_frequency", "country", "currency")
 
 
 class UserListSerializer(ListModelSerializer):
