@@ -11,6 +11,14 @@ from utils import Constants
 # via this specific catalog reminder.
 OIL_CHANGE_KEY = "engine_oil_filter_change"
 
+# ServiceRecord.service_type -> catalog key, for ServiceRecord._sync_reminder
+# (services/models.py) to auto-sync the matching catalog Reminder when a
+# service of that type is logged. Only service types with a dedicated
+# catalog entry belong here.
+SERVICE_TYPE_CATALOG_KEYS = {
+    Constants.SERVICE_TYPE_OIL_CHANGE: OIL_CHANGE_KEY,
+}
+
 CATEGORIES = [
     {"key": Constants.REMINDER_CATEGORY_DOCUMENTATION, "label": "Documents"},
     {"key": Constants.REMINDER_CATEGORY_MAINTENANCE, "label": "Maintenance"},
@@ -180,3 +188,7 @@ CATALOG = [
 
 def get_reminder_catalog():
     return {"categories": CATEGORIES, "items": CATALOG}
+
+
+def get_catalog_item(key):
+    return next((item for item in CATALOG if item["key"] == key), None)

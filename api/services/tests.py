@@ -147,6 +147,76 @@ class TestServiceExpenseSync:
 
 
 @pytest.mark.django_db
+class TestServiceReminderSync:
+
+    def test_oil_change_creates_matching_catalog_reminder(self, car):
+        ServiceRecord.objects.create(
+            car=car, service_type=Constants.SERVICE_TYPE_OIL_CHANGE,
+            odometer_km=41000, service_date=date(2026, 3, 1),
+            interval_km=6000, interval_months=7,
+        )
+        reminder = Reminder.objects.get(car=car, catalog_key=OIL_CHANGE_KEY)
+        assert reminder.baseline_odometer_km == 41000
+        assert reminder.baseline_date == date(2026, 3, 1)
+        assert reminder.interval_km == 6000
+        assert reminder.interval_months == 7
+        assert reminder.title == "Engine oil & filter change"
+
+    def test_other_service_types_do_not_touch_the_catalog_reminder(self, car):
+        ServiceRecord.objects.create(
+            car=car, service_type=Constants.SERVICE_TYPE_BRAKES, odometer_km=41000,
+        )
+        assert not Reminder.objects.filter(car=car, catalog_key=OIL_CHANGE_KEY).exists()
+
+    def test_updating_the_service_record_moves_the_reminder_baseline(self, car):
+        record = ServiceRecord.objects.create(
+            car=car, service_type=Constants.SERVICE_TYPE_OIL_CHANGE,
+            odometer_km=41000, service_date=date(2026, 3, 1), interval_km=5000,
+        )
+        record.odometer_km = 42500
+        record.service_date = date(2026, 4, 1)
+        record.save()
+
+        reminder = Reminder.objects.get(car=car, catalog_key=OIL_CHANGE_KEY)
+        assert reminder.baseline_odometer_km == 42500
+        assert reminder.baseline_date == date(2026, 4, 1)
+
+    def test_customized_interval_is_not_clobbered(self, car):
+        ServiceRecord.objects.create(
+            car=car, service_type=Constants.SERVICE_TYPE_OIL_CHANGE,
+            odometer_km=41000, interval_km=5000,
+        )
+        reminder = Reminder.objects.get(car=car, catalog_key=OIL_CHANGE_KEY)
+        reminder.interval_km = 8000  # owner deliberately customizes away from the default/synced value
+        reminder.save()
+
+        ServiceRecord.objects.create(
+            car=car, service_type=Constants.SERVICE_TYPE_OIL_CHANGE,
+            odometer_km=46000, interval_km=5000,
+        )
+        reminder.refresh_from_db()
+        assert reminder.interval_km == 8000
+        assert reminder.baseline_odometer_km == 46000
+
+    def test_editing_an_older_record_does_not_move_baseline_backwards(self, car):
+        older = ServiceRecord.objects.create(
+            car=car, service_type=Constants.SERVICE_TYPE_OIL_CHANGE,
+            odometer_km=40000, service_date=date(2026, 1, 1),
+        )
+        ServiceRecord.objects.create(
+            car=car, service_type=Constants.SERVICE_TYPE_OIL_CHANGE,
+            odometer_km=45000, service_date=date(2026, 6, 1),
+        )
+
+        older.garage_name = "Joe's Garage"
+        older.save()
+
+        reminder = Reminder.objects.get(car=car, catalog_key=OIL_CHANGE_KEY)
+        assert reminder.baseline_odometer_km == 45000
+        assert reminder.baseline_date == date(2026, 6, 1)
+
+
+@pytest.mark.django_db
 class TestNewCarGracePeriod:
 
     def test_no_service_record_is_ok_within_grace_period(self, car):
