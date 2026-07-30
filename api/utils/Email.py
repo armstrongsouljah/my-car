@@ -275,6 +275,44 @@ def send_account_deleted_email(email: str, first_name: str = ""):
     msg.send()
 
 
+def send_monthly_expense_report_email(email: str, first_name: str, report: dict):
+    """
+    Monthly digest (see #21): summarizes last calendar month's spend and
+    links to the in-app report, which is also where the PDF download lives —
+    the email itself carries no attachment, to keep the send cheap for users
+    who never open it.
+    """
+    from django.conf import settings
+
+    name = _display_name(email, first_name)
+    app_url = getattr(settings, "FRONTEND_URL", "http://localhost:3000")
+    report_url = f"{app_url}/expenses/reports/{report['year']}-{report['month']:02d}/"
+    top_categories = report["by_category"][:3]
+
+    subject = f"Your {report['month_label']} expense report — {report['total']:.2f}"
+    context = {
+        "name": name,
+        "report": report,
+        "top_categories": top_categories,
+        "app_url": app_url,
+        "report_url": report_url,
+    }
+
+    lines = "\n".join(f"- {c['category_label']}: {c['total']:.2f}" for c in top_categories)
+    text_body = (
+        f"Hi {name},\n\n"
+        f"You spent {report['total']:.2f} on your car(s) in {report['month_label']} across "
+        f"{report['count']} expense(s).\n\n"
+        f"Top categories:\n{lines}\n\n"
+        f"View the full breakdown and download the PDF: {report_url}"
+    )
+    html_body = render_to_string("emails/monthly_expense_report.html", context)
+
+    msg = EmailMultiAlternatives(subject=subject, body=text_body, to=[email])
+    msg.attach_alternative(html_body, "text/html")
+    msg.send()
+
+
 def send_support_request_email(support_request, attachments=None):
     """
     Notifies the support inbox (DEFAULT_FROM_EMAIL) of a contact-us

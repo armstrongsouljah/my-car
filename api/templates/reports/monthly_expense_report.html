@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @page {
+    size: A4;
+    margin: 28mm 18mm 20mm 18mm;
+    @bottom-center {
+      content: "GlavBox — {{ report.month_label }} expense report";
+      font-size: 9px;
+      color: #6b7280;
+    }
+  }
+  body {
+    font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    color: #1f2937;
+    font-size: 12px;
+  }
+  .header {
+    background: #04120c;
+    color: #ffffff;
+    padding: 20px 24px;
+    border-radius: 12px;
+    margin-bottom: 24px;
+  }
+  .wordmark {
+    color: #34d399;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .header h1 {
+    margin: 6px 0 2px 0;
+    font-size: 22px;
+  }
+  .header p {
+    margin: 0;
+    color: #9ca3af;
+    font-size: 12px;
+  }
+  .summary {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .stat {
+    flex: 1;
+    background: #f0fdf7;
+    border: 1px solid #d1fae5;
+    border-radius: 10px;
+    padding: 12px 16px;
+  }
+  .stat .label {
+    font-size: 10px;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  .stat .value {
+    font-size: 18px;
+    font-weight: 700;
+    color: #04120c;
+    margin-top: 2px;
+  }
+  h2 {
+    font-size: 14px;
+    color: #04120c;
+    border-bottom: 2px solid #34d399;
+    padding-bottom: 6px;
+    margin: 22px 0 10px 0;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  th, td {
+    text-align: left;
+    padding: 8px 6px;
+    border-bottom: 1px solid #e5e7eb;
+    font-size: 12px;
+  }
+  th {
+    color: #6b7280;
+    font-weight: 600;
+    font-size: 10px;
+    text-transform: uppercase;
+  }
+  td.amount, th.amount {
+    text-align: right;
+  }
+  .empty {
+    color: #6b7280;
+    font-style: italic;
+  }
+</style>
+</head>
+<body>
+  <div class="header">
+    <div class="wordmark">GlavBox</div>
+    <h1>{{ report.month_label }} expense report</h1>
+    <p>{{ user.first_name|default:user.email }}</p>
+  </div>
+
+  <div class="summary">
+    <div class="stat">
+      <div class="label">Total spent</div>
+      <div class="value">{{ report.total|floatformat:2 }}</div>
+    </div>
+    <div class="stat">
+      <div class="label">Expenses logged</div>
+      <div class="value">{{ report.count }}</div>
+    </div>
+    <div class="stat">
+      <div class="label">vs previous month</div>
+      <div class="value">
+        {% if report.change_percent_vs_previous_month is not None %}
+          {% if report.change_vs_previous_month > 0 %}▲{% elif report.change_vs_previous_month < 0 %}▼{% endif %}
+          {{ report.change_percent_vs_previous_month|floatformat:1 }}%
+        {% else %}—{% endif %}
+      </div>
+    </div>
+  </div>
+
+  <h2>By category</h2>
+  {% if report.by_category %}
+  <table>
+    <thead><tr><th>Category</th><th class="amount">Count</th><th class="amount">Total</th></tr></thead>
+    <tbody>
+      {% for row in report.by_category %}
+      <tr>
+        <td>{{ row.category_label }}</td>
+        <td class="amount">{{ row.count }}</td>
+        <td class="amount">{{ row.total|floatformat:2 }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">No expenses logged this month.</p>
+  {% endif %}
+
+  <h2>By car</h2>
+  {% if report.by_car %}
+  <table>
+    <thead><tr><th>Car</th><th class="amount">Count</th><th class="amount">Total</th></tr></thead>
+    <tbody>
+      {% for row in report.by_car %}
+      <tr>
+        <td>{{ row.label }}</td>
+        <td class="amount">{{ row.count }}</td>
+        <td class="amount">{{ row.total|floatformat:2 }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">No expenses logged this month.</p>
+  {% endif %}
+</body>
+</html>

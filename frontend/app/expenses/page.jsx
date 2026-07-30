@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { api } from "@/lib/api";
 import { trackSignal } from "@/lib/telemetry";
 import AuthGuard from "@/components/AuthGuard";
@@ -191,7 +192,12 @@ function Expenses() {
 
   return (
     <main className="px-4 pb-24 pt-6">
-      <h1 className="mb-4 text-2xl font-bold">Expenses</h1>
+      <div className="mb-4 flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Expenses</h1>
+        <Link href="/expenses/reports" className="text-sm font-medium text-gray-500 dark:text-gray-400">
+          Monthly reports ›
+        </Link>
+      </div>
 
       {error && <p className="mb-4 rounded-xl bg-red-50 dark:bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-400">{error}</p>}
 

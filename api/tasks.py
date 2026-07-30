@@ -432,6 +432,130 @@ def send_email_verification_reminder_task():
     return f"Queued {queued} verification reminder email(s)"
 
 
+@shared_task(name="tasks.send_monthly_expense_report_email_task")
+def send_monthly_expense_report_email_task(user_id, year, month):
+    """
+    Builds and sends one user's monthly expense digest for `year`/`month`,
+    dispatched (never called inline) by send_monthly_expense_reports_task so
+    one user's failure can't crash the rest of that sweep — see #27.
+
+    Claims a MonthlyExpenseReportDelivery row before sending (atomically,
+    via its unique constraint) and only confirms it (sent_at) once the send
+    actually succeeds — same claim-then-confirm shape as the mileage/
+    deletion/verify reminder tasks (see #27), just per period instead of per
+    mutable column. This is what stops two concurrent or redelivered
+    executions for the same (user, year, month) from both proceeding to
+    send: whichever loses the race to claim (or finds an unexpired claim
+    already held) returns immediately rather than sending a duplicate.
+    """
+    from django.db import IntegrityError, transaction
+    from django.utils import timezone
+
+    from accounts.models import User
+    from expenses.models import MonthlyExpenseReportDelivery
+    from expenses.reports import build_monthly_report
+    from utils import Constants
+    from utils.Email import send_monthly_expense_report_email
+
+    user = User.objects.filter(pk=user_id, is_active=True).first()
+    if user is None:
+        return
+
+    report = build_monthly_report(user, year, month)
+    # Re-checked here rather than trusted from the sweep's queryset: cheap
+    # insurance against a stale/incorrect caller, and the sweep already did
+    # the real filtering to avoid queuing this task for zero-expense users.
+    if report["count"] == 0:
+        return
+
+    now = timezone.now()
+    lease_cutoff = now - timezone.timedelta(hours=Constants.REMINDER_CLAIM_LEASE_HOURS)
+
+    try:
+        # Wrapped in its own savepoint: an IntegrityError otherwise leaves
+        # the connection unusable for the queries in the except branch below.
+        with transaction.atomic():
+            delivery = MonthlyExpenseReportDelivery.objects.create(
+                user_id=user_id, year=year, month=month, queued_at=now
+            )
+    except IntegrityError:
+        # A row for this period already exists — either already sent, or
+        # another execution's claim on it is still live. Only a stale
+        # (unsent, lease-expired) claim is worth reclaiming.
+        claimed = MonthlyExpenseReportDelivery.objects.filter(
+            user_id=user_id,
+            year=year,
+            month=month,
+            sent_at__isnull=True,
+            queued_at__lt=lease_cutoff,
+        ).update(queued_at=now)
+        if not claimed:
+            return
+        delivery = MonthlyExpenseReportDelivery.objects.get(user_id=user_id, year=year, month=month)
+
+    try:
+        send_monthly_expense_report_email(email=user.email, first_name=user.first_name, report=report)
+    except Exception:
+        logger.error(
+            "Failed to send monthly expense report to user_id=%s for %s-%s", user_id, year, month, exc_info=True
+        )
+        return
+
+    MonthlyExpenseReportDelivery.objects.filter(pk=delivery.pk).update(sent_at=timezone.now())
+
+
+@shared_task(name="tasks.send_monthly_expense_reports_task")
+def send_monthly_expense_reports_task():
+    """
+    Runs on the 1st of each month (CELERY_BEAT_SCHEDULE): finds every active
+    user who logged at least one expense last calendar month — and doesn't
+    already have a *confirmed* MonthlyExpenseReportDelivery for it — and
+    queues them a digest email. Users with nothing spent are skipped
+    entirely — no "nothing spent" email, see #21. Excluding only confirmed
+    (sent_at is set) deliveries, rather than any row at all, is what makes
+    this sweep safe to re-run for the same period: anyone whose earlier
+    claim never got confirmed (a crash, a still-failing send) gets
+    re-queued instead of being mistaken for already delivered.
+    """
+    from django.utils import timezone
+
+    from accounts.models import User
+    from expenses.models import MonthlyExpenseReportDelivery
+
+    today = timezone.localdate()
+    prev_year, prev_month = (today.year - 1, 12) if today.month == 1 else (today.year, today.month - 1)
+
+    # Deliberately not `.exclude(monthly_expense_report_deliveries__year=...,
+    # ...__month=..., ...__sent_at__isnull=False)`: exclude() with multiple
+    # conditions on a multi-valued (reverse-FK) relation does NOT require
+    # them to hold on the same related row — it can match year on one
+    # delivery and month on an entirely different one — so a user with any
+    # confirmed delivery in the same year, in a different month, would be
+    # wrongly excluded here. The subquery below pins all three conditions to
+    # one row, same as Django's documented workaround for this gotcha.
+    already_delivered = MonthlyExpenseReportDelivery.objects.filter(
+        year=prev_year, month=prev_month, sent_at__isnull=False
+    ).values("user_id")
+
+    user_ids = (
+        User.objects.filter(
+            is_active=True,
+            cars__expenses__expense_date__year=prev_year,
+            cars__expenses__expense_date__month=prev_month,
+        )
+        .exclude(pk__in=already_delivered)
+        .distinct()
+        .values_list("pk", flat=True)
+    )
+
+    queued = 0
+    for user_id in user_ids:
+        send_monthly_expense_report_email_task.delay(user_id=user_id, year=prev_year, month=prev_month)
+        queued += 1
+
+    return f"Queued {queued} monthly expense report email(s)"
+
+
 @shared_task(name="tasks.purge_unverified_accounts_task")
 def purge_unverified_accounts_task():
     """

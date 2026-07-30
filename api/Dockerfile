@@ -25,6 +25,19 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# WeasyPrint (monthly expense report PDFs, see #21) shells out to Pango/Cairo
+# via GObject introspection rather than a pure-Python renderer, so these
+# system libs are a hard runtime dependency, not just a build-time one — the
+# same image also runs the Celery worker/beat pods that render the PDFs.
+RUN apt-get update && apt-get install --no-install-recommends -y \
+    libpango-1.0-0 \
+    libpangocairo-1.0-0 \
+    libcairo2 \
+    libgdk-pixbuf-2.0-0 \
+    libffi8 \
+    shared-mime-info \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY --from=builder /venv /venv
 
 COPY . .
@@ -36,6 +49,7 @@ RUN SECRET_KEY=build-time-placeholder \
     DATABASE_URL=sqlite:////tmp/build.db \
     REDIS_URL=locmem \
     DEFAULT_FROM_EMAIL=build@example.com \
+    FRONTEND_URL=http://localhost:3000 \
     python manage.py collectstatic --noinput
 
 COPY entrypoint.sh /entrypoint.sh

@@ -1,8 +1,9 @@
-from pathlib import Path
 from datetime import timedelta
+from pathlib import Path
 
 import dj_database_url
-from decouple import config, Csv
+from celery.schedules import crontab
+from decouple import Csv, config
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -49,8 +50,15 @@ SECURE_HSTS_INCLUDE_SUBDOMAINS = config("SECURE_HSTS_INCLUDE_SUBDOMAINS", defaul
 # hard to reverse, so it should be a conscious decision rather than a default.
 SECURE_HSTS_PRELOAD = config("SECURE_HSTS_PRELOAD", default=False, cast=bool)
 
-# Base URL of the my-car frontend, used to build public-facing links in emails.
-FRONTEND_URL = config("FRONTEND_URL", default="http://localhost:3000").rstrip("/")
+# Base URL of the my-car frontend, used to build public-facing links in
+# emails (verification, password reset, the monthly expense report, etc.).
+# Only defaults to localhost in DEBUG — same fail-closed reasoning as
+# SECRET_KEY/DATABASE_URL/DEFAULT_FROM_EMAIL above: a deployed environment
+# that forgets to set this must refuse to start, not silently mail out
+# http://localhost:3000 links nobody outside the container can open.
+FRONTEND_URL = (config("FRONTEND_URL", default="http://localhost:3000") if DEBUG else config("FRONTEND_URL")).rstrip(
+    "/"
+)
 
 # ---------------------------------------------------------------------------
 # Apps
@@ -331,5 +339,9 @@ CELERY_BEAT_SCHEDULE = {
     "purge-unverified-accounts": {
         "task": "tasks.purge_unverified_accounts_task",
         "schedule": 60 * 60 * 24,  # once a day
+    },
+    "send-monthly-expense-reports": {
+        "task": "tasks.send_monthly_expense_reports_task",
+        "schedule": crontab(day_of_month=1, hour=6, minute=0),  # once, on the 1st of each month
     },
 }

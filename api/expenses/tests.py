@@ -1,11 +1,18 @@
 from datetime import date
 
 import pytest
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from accounts.models import User
 from cars.models import Car
 from expenses.models import Expense
+
+
+def previous_month():
+    """Year/month one calendar month before "today" — mirrors the task's own calculation."""
+    today = timezone.localdate()
+    return (today.year - 1, 12) if today.month == 1 else (today.year, today.month - 1)
 
 
 @pytest.fixture
@@ -52,3 +59,279 @@ class TestExpenseAnalytics:
         response = client.get("/api/v1/expenses/analytics/")
 
         assert response.data["grand_total"] == 10.0
+
+
+@pytest.mark.django_db
+class TestExpenseMonthlyReport:
+
+    def test_breakdown_by_category_and_car(self, owner, car):
+        other_car = Car.objects.create(owner=owner, make="Honda", model="Civic")
+        Expense.objects.create(car=car, category="fuel", amount=100, expense_date=date(2026, 5, 10))
+        Expense.objects.create(car=car, category="garage_visit", amount=50, expense_date=date(2026, 5, 20))
+        Expense.objects.create(car=other_car, category="fuel", amount=30, expense_date=date(2026, 5, 15))
+        Expense.objects.create(car=car, category="fuel", amount=999, expense_date=date(2026, 4, 1))  # different month
+
+        client = APIClient()
+        client.force_authenticate(owner)
+        response = client.get("/api/v1/expenses/reports/2026-5/")
+
+        assert response.status_code == 200
+        assert response.data["month_label"] == "May 2026"
+        assert response.data["total"] == 180.0
+        assert response.data["count"] == 3
+        by_category = {row["category"]: row["total"] for row in response.data["by_category"]}
+        assert by_category == {"fuel": 130.0, "garage_visit": 50.0}
+        assert len(response.data["by_car"]) == 2
+
+    def test_change_vs_previous_month(self, owner, car):
+        Expense.objects.create(car=car, category="fuel", amount=100, expense_date=date(2026, 4, 10))
+        Expense.objects.create(car=car, category="fuel", amount=150, expense_date=date(2026, 5, 10))
+
+        client = APIClient()
+        client.force_authenticate(owner)
+        response = client.get("/api/v1/expenses/reports/2026-5/")
+
+        assert response.data["previous_month_total"] == 100.0
+        assert response.data["change_vs_previous_month"] == 50.0
+        assert response.data["change_percent_vs_previous_month"] == 50.0
+
+    def test_other_owners_expenses_excluded(self, owner, car):
+        other = User.objects.create_user(email="other-report@example.com", password="str0ng-pass-123")
+        other_car = Car.objects.create(owner=other, make="Honda", model="Civic")
+        Expense.objects.create(car=other_car, category="fuel", amount=999, expense_date=date(2026, 5, 1))
+
+        client = APIClient()
+        client.force_authenticate(owner)
+        response = client.get("/api/v1/expenses/reports/2026-5/")
+
+        assert response.data["total"] == 0.0
+        assert response.data["by_category"] == []
+
+    def test_pdf_endpoint_returns_a_pdf(self, owner, car):
+        Expense.objects.create(car=car, category="fuel", amount=100, expense_date=date(2026, 5, 10))
+
+        client = APIClient()
+        client.force_authenticate(owner)
+        response = client.get("/api/v1/expenses/reports/2026-5/pdf/")
+
+        assert response.status_code == 200
+        assert response["Content-Type"] == "application/pdf"
+        assert response["Content-Disposition"] == 'attachment; filename="glavbox-expenses-2026-05.pdf"'
+        assert response.content.startswith(b"%PDF")
+
+    def test_requires_authentication(self, car):
+        client = APIClient()
+        response = client.get("/api/v1/expenses/reports/2026-5/")
+
+        assert response.status_code == 401
+
+    def test_rejects_invalid_month(self, owner):
+        client = APIClient()
+        client.force_authenticate(owner)
+
+        response = client.get("/api/v1/expenses/reports/2026-13/")
+
+        assert response.status_code == 400
+
+    def test_pdf_endpoint_rejects_invalid_month(self, owner):
+        client = APIClient()
+        client.force_authenticate(owner)
+
+        response = client.get("/api/v1/expenses/reports/2026-0/pdf/")
+
+        assert response.status_code == 400
+
+    def test_rejects_january_of_minyear(self, owner):
+        """
+        build_monthly_report computes the previous month as (year - 1, 12)
+        for month == 1, and MINYEAR - 1 underflows datetime's range — this
+        boundary must be rejected before it ever reaches that calculation.
+        """
+        client = APIClient()
+        client.force_authenticate(owner)
+
+        response = client.get("/api/v1/expenses/reports/1-1/")
+
+        assert response.status_code == 400
+
+
+@pytest.mark.django_db
+class TestMonthlyExpenseReportTask:
+
+    def test_sends_digest_only_to_users_with_expenses_last_month(self, owner, car):
+        from django.core import mail
+
+        from tasks import send_monthly_expense_reports_task
+
+        prev_year, prev_month = previous_month()
+        Expense.objects.create(car=car, category="fuel", amount=100, expense_date=date(prev_year, prev_month, 5))
+
+        quiet_owner = User.objects.create_user(email="quiet@example.com", password="str0ng-pass-123")
+        quiet_owner.is_email_verified = True
+        quiet_owner.save(update_fields=["is_email_verified"])
+        Car.objects.create(owner=quiet_owner, make="Mazda", model="3")
+
+        send_monthly_expense_reports_task()
+
+        assert len(mail.outbox) == 1
+        assert mail.outbox[0].to == [owner.email]
+
+    def test_skips_inactive_users(self, owner, car):
+        from django.core import mail
+
+        from tasks import send_monthly_expense_reports_task
+
+        prev_year, prev_month = previous_month()
+        Expense.objects.create(car=car, category="fuel", amount=100, expense_date=date(prev_year, prev_month, 5))
+        User.objects.filter(pk=owner.pk).update(is_active=False)
+
+        send_monthly_expense_reports_task()
+
+        assert len(mail.outbox) == 0
+
+    def test_email_task_skips_zero_expense_user(self, owner):
+        from django.core import mail
+
+        from tasks import send_monthly_expense_report_email_task
+
+        send_monthly_expense_report_email_task(user_id=owner.pk, year=2026, month=5)
+
+        assert len(mail.outbox) == 0
+
+    def test_successful_send_confirms_the_delivery(self, owner, car):
+        from expenses.models import MonthlyExpenseReportDelivery
+        from tasks import send_monthly_expense_report_email_task
+
+        Expense.objects.create(car=car, category="fuel", amount=100, expense_date=date(2026, 5, 10))
+
+        send_monthly_expense_report_email_task(user_id=owner.pk, year=2026, month=5)
+
+        delivery = MonthlyExpenseReportDelivery.objects.get(user=owner, year=2026, month=5)
+        assert delivery.sent_at is not None
+
+    def test_does_not_resend_once_confirmed(self, owner, car):
+        from django.core import mail
+
+        from expenses.models import MonthlyExpenseReportDelivery
+        from tasks import send_monthly_expense_report_email_task
+
+        Expense.objects.create(car=car, category="fuel", amount=100, expense_date=date(2026, 5, 10))
+        MonthlyExpenseReportDelivery.objects.create(user=owner, year=2026, month=5, sent_at=timezone.now())
+
+        send_monthly_expense_report_email_task(user_id=owner.pk, year=2026, month=5)
+
+        assert len(mail.outbox) == 0
+
+    def test_does_not_send_while_another_claim_is_still_live(self, owner, car):
+        """
+        Regression: two concurrent/redelivered executions for the same
+        (user, year, month) must not both send. A fresh, unconfirmed claim
+        (queued_at within the lease window) means another execution is
+        presumed still in flight, so this one backs off rather than racing it.
+        """
+        from django.core import mail
+
+        from expenses.models import MonthlyExpenseReportDelivery
+        from tasks import send_monthly_expense_report_email_task
+
+        Expense.objects.create(car=car, category="fuel", amount=100, expense_date=date(2026, 5, 10))
+        MonthlyExpenseReportDelivery.objects.create(user=owner, year=2026, month=5, queued_at=timezone.now())
+
+        send_monthly_expense_report_email_task(user_id=owner.pk, year=2026, month=5)
+
+        assert len(mail.outbox) == 0
+
+    def test_reclaims_a_stale_unconfirmed_claim_and_sends(self, owner, car):
+        """
+        A claim whose send never confirmed (crash, prior failure) goes stale
+        after Constants.REMINDER_CLAIM_LEASE_HOURS and must be retried, not
+        left permanently unsent.
+        """
+        from datetime import timedelta
+
+        from django.core import mail
+
+        from expenses.models import MonthlyExpenseReportDelivery
+        from tasks import send_monthly_expense_report_email_task
+        from utils import Constants
+
+        Expense.objects.create(car=car, category="fuel", amount=100, expense_date=date(2026, 5, 10))
+        stale = timezone.now() - timedelta(hours=Constants.REMINDER_CLAIM_LEASE_HOURS, minutes=1)
+        MonthlyExpenseReportDelivery.objects.create(user=owner, year=2026, month=5, queued_at=stale)
+
+        send_monthly_expense_report_email_task(user_id=owner.pk, year=2026, month=5)
+
+        assert len(mail.outbox) == 1
+        delivery = MonthlyExpenseReportDelivery.objects.get(user=owner, year=2026, month=5)
+        assert delivery.sent_at is not None
+
+    def test_sweep_excludes_confirmed_deliveries_but_retries_unconfirmed_ones(self, owner, car):
+        from django.core import mail
+
+        from expenses.models import MonthlyExpenseReportDelivery
+        from tasks import send_monthly_expense_reports_task
+
+        prev_year, prev_month = previous_month()
+        Expense.objects.create(car=car, category="fuel", amount=100, expense_date=date(prev_year, prev_month, 5))
+        MonthlyExpenseReportDelivery.objects.create(
+            user=owner, year=prev_year, month=prev_month, sent_at=timezone.now()
+        )
+
+        result = send_monthly_expense_reports_task()
+
+        assert result == "Queued 0 monthly expense report email(s)"
+
+        # A previously-failed (unconfirmed) claim for a *different* user is
+        # still open to retry on a re-run.
+        other = User.objects.create_user(email="retry-me@example.com", password="str0ng-pass-123")
+        other.is_email_verified = True
+        other.save(update_fields=["is_email_verified"])
+        other_car = Car.objects.create(owner=other, make="Mazda", model="3")
+        Expense.objects.create(car=other_car, category="fuel", amount=50, expense_date=date(prev_year, prev_month, 5))
+        MonthlyExpenseReportDelivery.objects.create(
+            user=other, year=prev_year, month=prev_month, queued_at=timezone.now() - timezone.timedelta(hours=999)
+        )
+
+        result = send_monthly_expense_reports_task()
+
+        assert result == "Queued 1 monthly expense report email(s)"
+        assert mail.outbox[0].to == [other.email]
+
+    def test_sweep_does_not_exclude_users_whose_deliveries_are_for_other_periods(self, owner, car):
+        """
+        Regression: a naive `.exclude(deliveries__year=Y, deliveries__month=M)`
+        on a reverse FK does not require both conditions to hold on the same
+        related row — a delivery matching `year` and a *different* delivery
+        matching `month` both count, independently. A user confirmed for a
+        different month in the same year (or the same month in a different
+        year) must still be queued for the target period.
+        """
+        from expenses.models import MonthlyExpenseReportDelivery
+        from tasks import send_monthly_expense_reports_task
+
+        prev_year, prev_month = previous_month()
+        other_month = 1 if prev_month != 1 else 2
+        Expense.objects.create(car=car, category="fuel", amount=100, expense_date=date(prev_year, prev_month, 5))
+        # Matches `year` alone (different month) ...
+        MonthlyExpenseReportDelivery.objects.create(
+            user=owner, year=prev_year, month=other_month, sent_at=timezone.now()
+        )
+        # ... and matches `month` alone (different year) — together these
+        # would satisfy an independently-applied year/month exclude() even
+        # though neither row is a delivery for (prev_year, prev_month).
+        other_year = prev_year - 1
+        MonthlyExpenseReportDelivery.objects.create(
+            user=owner, year=other_year, month=prev_month, sent_at=timezone.now()
+        )
+
+        result = send_monthly_expense_reports_task()
+
+        assert result == "Queued 1 monthly expense report email(s)"
+
+    def test_month_check_constraint_rejects_out_of_range_month(self, owner):
+        from django.db import IntegrityError
+
+        from expenses.models import MonthlyExpenseReportDelivery
+
+        with pytest.raises(IntegrityError):
+            MonthlyExpenseReportDelivery.objects.create(user=owner, year=2026, month=13)
