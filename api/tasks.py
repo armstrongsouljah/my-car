@@ -520,9 +520,22 @@ def send_monthly_expense_reports_task():
     from django.utils import timezone
 
     from accounts.models import User
+    from expenses.models import MonthlyExpenseReportDelivery
 
     today = timezone.localdate()
     prev_year, prev_month = (today.year - 1, 12) if today.month == 1 else (today.year, today.month - 1)
+
+    # Deliberately not `.exclude(monthly_expense_report_deliveries__year=...,
+    # ...__month=..., ...__sent_at__isnull=False)`: exclude() with multiple
+    # conditions on a multi-valued (reverse-FK) relation does NOT require
+    # them to hold on the same related row — it can match year on one
+    # delivery and month on an entirely different one — so a user with any
+    # confirmed delivery in the same year, in a different month, would be
+    # wrongly excluded here. The subquery below pins all three conditions to
+    # one row, same as Django's documented workaround for this gotcha.
+    already_delivered = MonthlyExpenseReportDelivery.objects.filter(
+        year=prev_year, month=prev_month, sent_at__isnull=False
+    ).values("user_id")
 
     user_ids = (
         User.objects.filter(
@@ -530,11 +543,7 @@ def send_monthly_expense_reports_task():
             cars__expenses__expense_date__year=prev_year,
             cars__expenses__expense_date__month=prev_month,
         )
-        .exclude(
-            monthly_expense_report_deliveries__year=prev_year,
-            monthly_expense_report_deliveries__month=prev_month,
-            monthly_expense_report_deliveries__sent_at__isnull=False,
-        )
+        .exclude(pk__in=already_delivered)
         .distinct()
         .values_list("pk", flat=True)
     )

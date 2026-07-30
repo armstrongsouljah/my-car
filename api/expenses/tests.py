@@ -297,6 +297,37 @@ class TestMonthlyExpenseReportTask:
         assert result == "Queued 1 monthly expense report email(s)"
         assert mail.outbox[0].to == [other.email]
 
+    def test_sweep_does_not_exclude_users_whose_deliveries_are_for_other_periods(self, owner, car):
+        """
+        Regression: a naive `.exclude(deliveries__year=Y, deliveries__month=M)`
+        on a reverse FK does not require both conditions to hold on the same
+        related row — a delivery matching `year` and a *different* delivery
+        matching `month` both count, independently. A user confirmed for a
+        different month in the same year (or the same month in a different
+        year) must still be queued for the target period.
+        """
+        from expenses.models import MonthlyExpenseReportDelivery
+        from tasks import send_monthly_expense_reports_task
+
+        prev_year, prev_month = previous_month()
+        other_month = 1 if prev_month != 1 else 2
+        Expense.objects.create(car=car, category="fuel", amount=100, expense_date=date(prev_year, prev_month, 5))
+        # Matches `year` alone (different month) ...
+        MonthlyExpenseReportDelivery.objects.create(
+            user=owner, year=prev_year, month=other_month, sent_at=timezone.now()
+        )
+        # ... and matches `month` alone (different year) — together these
+        # would satisfy an independently-applied year/month exclude() even
+        # though neither row is a delivery for (prev_year, prev_month).
+        other_year = prev_year - 1
+        MonthlyExpenseReportDelivery.objects.create(
+            user=owner, year=other_year, month=prev_month, sent_at=timezone.now()
+        )
+
+        result = send_monthly_expense_reports_task()
+
+        assert result == "Queued 1 monthly expense report email(s)"
+
     def test_month_check_constraint_rejects_out_of_range_month(self, owner):
         from django.db import IntegrityError
 
