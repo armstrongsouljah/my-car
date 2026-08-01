@@ -517,7 +517,7 @@ def send_monthly_expense_report_email_task(user_id, year, month):
 @shared_task(name="tasks.send_monthly_expense_reports_task")
 def send_monthly_expense_reports_task():
     """
-    Runs daily at 06:00 (CELERY_BEAT_SCHEDULE): finds every active user who
+    Runs daily at 12:00 (CELERY_BEAT_SCHEDULE): finds every active user who
     logged at least one expense *last* calendar month — and doesn't already
     have a *confirmed* MonthlyExpenseReportDelivery for it — and queues them
     a digest email. Users with nothing spent are skipped entirely — no
@@ -526,7 +526,7 @@ def send_monthly_expense_reports_task():
     Deliberately runs every day, not just the 1st: it's a no-op for everyone
     once that month's batch has gone out (the exclude() below), so the extra
     runs cost nothing, but they mean a run that's missed entirely — worker
-    down at 6am on the 1st, a bad deploy — gets caught up the next day
+    down at noon on the 1st, a bad deploy — gets caught up the next day
     instead of silently skipping the whole month until the 1st of the next
     one (see #56). Excluding only confirmed (sent_at is set) deliveries,
     rather than any row at all, is what makes this safe to re-run: anyone
