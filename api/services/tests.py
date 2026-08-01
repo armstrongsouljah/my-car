@@ -352,8 +352,13 @@ class TestRemindersViewCaching:
         client.force_authenticate(car.owner)
         client.get(reverse("service-reminders"))  # warm
 
+        # Deliberately not service_type=oil_change: that auto-syncs a
+        # matching catalog Reminder (see #52) which would suppress the
+        # generic "service" kind below (see test_suppresses_service_
+        # reminder_when_oil_change_reminder_exists) — this test is only
+        # about cache invalidation, not that suppression behavior.
         resp = client.post(reverse("service-list-create"), {
-            "car": str(car.pk), "service_type": "oil_change",
+            "car": str(car.pk), "service_type": "brakes",
             "service_date": (date.today() - relativedelta(months=7)).isoformat(),
             "odometer_km": 40000, "interval_km": 5000, "interval_months": 6,
         }, format="json")
