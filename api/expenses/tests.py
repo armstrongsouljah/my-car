@@ -2,12 +2,14 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
+from dateutil.relativedelta import relativedelta
 from django.utils import timezone
 from rest_framework.test import APIClient
 
 from accounts.models import User
 from cars.models import Car
 from expenses.models import ExchangeRate, Expense
+from expenses.views import ExpenseAnalyticsView
 
 
 def previous_month():
@@ -96,9 +98,11 @@ class TestExpenseCurrencyConversion:
 class TestExpenseAnalytics:
 
     def test_month_on_month_totals_and_change(self, owner, car):
-        Expense.objects.create(car=car, category="fuel", amount=100, expense_date=date(2026, 5, 10))
-        Expense.objects.create(car=car, category="garage_visit", amount=50, expense_date=date(2026, 5, 20))
-        Expense.objects.create(car=car, category="fuel", amount=200, expense_date=date(2026, 6, 5))
+        today = timezone.localdate()
+        last_month = today - relativedelta(months=1)
+        Expense.objects.create(car=car, category="fuel", amount=100, expense_date=last_month.replace(day=10))
+        Expense.objects.create(car=car, category="garage_visit", amount=50, expense_date=last_month.replace(day=20))
+        Expense.objects.create(car=car, category="fuel", amount=200, expense_date=today)
 
         client = APIClient()
         client.force_authenticate(owner)
@@ -106,17 +110,37 @@ class TestExpenseAnalytics:
 
         assert response.status_code == 200
         months = response.data["months"]
-        assert months[0]["total"] == 150.0
-        assert months[0]["by_category"] == {"fuel": 100.0, "garage_visit": 50.0}
-        assert months[1]["total"] == 200.0
-        assert months[1]["change_vs_previous_month"] == 50.0
+        # The window is anchored to the real current month (see #56), so
+        # index from the end rather than assuming these are the only months.
+        assert months[-1]["month"] == today.replace(day=1).isoformat()
+        assert months[-2]["total"] == 150.0
+        assert months[-2]["by_category"] == {"fuel": 100.0, "garage_visit": 50.0}
+        assert months[-1]["total"] == 200.0
+        assert months[-1]["change_vs_previous_month"] == 50.0
         assert response.data["grand_total"] == 350.0
+
+    def test_current_month_is_always_present_even_with_no_expenses_yet(self, owner, car):
+        """See #56 — before this, a month with no expenses logged yet simply
+        never appeared, so the frontend's "last entry = this month" lookup
+        would silently show a stale earlier month's total instead of zero."""
+        last_month = timezone.localdate() - relativedelta(months=1)
+        Expense.objects.create(car=car, category="fuel", amount=100, expense_date=last_month.replace(day=10))
+
+        client = APIClient()
+        client.force_authenticate(owner)
+        response = client.get("/api/v1/expenses/analytics/")
+
+        months = response.data["months"]
+        assert months[-1]["month"] == timezone.localdate().replace(day=1).isoformat()
+        assert months[-1]["total"] == 0.0
+        assert months[-1]["count"] == 0
 
     def test_other_owners_expenses_excluded(self, owner, car, db):
         other = User.objects.create_user(email="other@example.com", password="str0ng-pass-123")
         other_car = Car.objects.create(owner=other, make="Honda", model="Civic")
-        Expense.objects.create(car=other_car, category="fuel", amount=999, expense_date=date(2026, 6, 1))
-        Expense.objects.create(car=car, category="fuel", amount=10, expense_date=date(2026, 6, 1))
+        today = timezone.localdate()
+        Expense.objects.create(car=other_car, category="fuel", amount=999, expense_date=today)
+        Expense.objects.create(car=car, category="fuel", amount=10, expense_date=today)
 
         client = APIClient()
         client.force_authenticate(owner)
@@ -130,16 +154,36 @@ class TestExpenseAnalytics:
         converted to the owner's current currency and combined in Python."""
         owner.currency = "USD"
         owner.save(update_fields=["currency"])
-        Expense.objects.create(car=car, category="fuel", amount=3700, currency="UGX", expense_date=date(2026, 5, 5))
-        Expense.objects.create(car=car, category="fuel", amount=50, currency="USD", expense_date=date(2026, 5, 20))
+        today = timezone.localdate()
+        Expense.objects.create(car=car, category="fuel", amount=3700, currency="UGX", expense_date=today)
+        Expense.objects.create(car=car, category="fuel", amount=50, currency="USD", expense_date=today)
 
         client = APIClient()
         client.force_authenticate(owner)
         response = client.get("/api/v1/expenses/analytics/")
 
         months = response.data["months"]
-        assert round(months[0]["total"], 2) == 51.0  # 3700 UGX (-> $1) + $50
+        assert round(months[-1]["total"], 2) == 51.0  # 3700 UGX (-> $1) + $50
         assert response.data["currency"] == "USD"
+
+    def test_months_param_is_clamped_to_a_sane_range(self, owner, car):
+        """An out-of-range ?months= (unchecked past QueryParams.get_int's
+        int-syntax check) shouldn't be able to feed a negative/huge window
+        into the range()/list-slice building the response."""
+        client = APIClient()
+        client.force_authenticate(owner)
+
+        response = client.get("/api/v1/expenses/analytics/?months=-5")
+        assert response.status_code == 200
+        assert len(response.data["months"]) == 1
+
+        response = client.get("/api/v1/expenses/analytics/?months=0")
+        assert response.status_code == 200
+        assert len(response.data["months"]) == 1
+
+        response = client.get("/api/v1/expenses/analytics/?months=9999")
+        assert response.status_code == 200
+        assert len(response.data["months"]) == ExpenseAnalyticsView.MAX_MONTHS
 
 
 @pytest.mark.django_db

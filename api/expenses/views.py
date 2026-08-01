@@ -1,9 +1,11 @@
 from datetime import MAXYEAR, MINYEAR
 
+from dateutil.relativedelta import relativedelta
 from django.db.models import Count, Sum
 from django.db.models.functions import TruncMonth
 from django.http import HttpResponse
 from django.template.loader import render_to_string
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -100,8 +102,14 @@ class ExpenseAnalyticsView(SmartAPIView):
     """
     permission_classes = [IsAuthenticated]
 
+    # QueryParams.get_int only validates that ?months= parses as an int, not
+    # that it's a sane window size — clamp it here so an out-of-range value
+    # (0, negative, or huge) can't feed a malformed range()/list slice below.
+    MAX_MONTHS = 60
+
     def get(self, request, **kwargs):
         months = QueryParams.get_int(request, "months", default_value=12)
+        months = max(1, min(months, self.MAX_MONTHS))
         target_currency = request.user.currency
         rates = load_latest_rates()
 
@@ -133,6 +141,20 @@ class ExpenseAnalyticsView(SmartAPIView):
             converted = float(convert_amount(row["total"], row["currency"], target_currency, rates))
             monthly_totals[key] = monthly_totals.get(key, 0.0) + converted
             monthly_counts[key] = monthly_counts.get(key, 0) + row["count"]
+
+        # Anchor the trailing window to the real current month rather than
+        # to "the last month with data" — otherwise once a new month starts
+        # before any expense is logged in it, the previous month's total
+        # silently stands in as "this month" on the frontend (see #56).
+        # Zero-fill every month in the window that has no rows.
+        current_month = timezone.localdate().replace(day=1)
+        window_keys = [
+            (current_month - relativedelta(months=offset)).isoformat()
+            for offset in range(months - 1, -1, -1)
+        ]
+        for key in window_keys:
+            monthly_totals.setdefault(key, 0.0)
+            monthly_counts.setdefault(key, 0)
 
         by_category_currency_rows = (
             queryset

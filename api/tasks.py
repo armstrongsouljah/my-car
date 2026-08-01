@@ -443,10 +443,20 @@ def send_monthly_expense_report_email_task(user_id, year, month):
     via its unique constraint) and only confirms it (sent_at) once the send
     actually succeeds — same claim-then-confirm shape as the mileage/
     deletion/verify reminder tasks (see #27), just per period instead of per
-    mutable column. This is what stops two concurrent or redelivered
-    executions for the same (user, year, month) from both proceeding to
-    send: whichever loses the race to claim (or finds an unexpired claim
-    already held) returns immediately rather than sending a duplicate.
+    mutable column. This is what stops two *concurrent* executions for the
+    same (user, year, month) from both proceeding to send: whichever loses
+    the race to claim (or finds an unexpired claim already held) returns
+    immediately rather than sending a duplicate.
+
+    Not a hard guarantee against ever sending twice, though: this is
+    at-least-once delivery, not exactly-once. django.core.mail has no
+    idempotency-key concept to hand the provider, so a crash (or an
+    ambiguous provider error) between the send call above actually
+    succeeding and the sent_at confirm below would leave the claim
+    unconfirmed; once its lease (REMINDER_CLAIM_LEASE_HOURS) expires, a
+    later run would legitimately reclaim it and resend. Rare in practice —
+    it needs a failure in that narrow window — and duplicate expense
+    digest is a low-stakes email to double up on, unlike, say, a payment.
     """
     from django.db import IntegrityError, transaction
     from django.utils import timezone
@@ -507,15 +517,21 @@ def send_monthly_expense_report_email_task(user_id, year, month):
 @shared_task(name="tasks.send_monthly_expense_reports_task")
 def send_monthly_expense_reports_task():
     """
-    Runs on the 1st of each month (CELERY_BEAT_SCHEDULE): finds every active
-    user who logged at least one expense last calendar month — and doesn't
-    already have a *confirmed* MonthlyExpenseReportDelivery for it — and
-    queues them a digest email. Users with nothing spent are skipped
-    entirely — no "nothing spent" email, see #21. Excluding only confirmed
-    (sent_at is set) deliveries, rather than any row at all, is what makes
-    this sweep safe to re-run for the same period: anyone whose earlier
-    claim never got confirmed (a crash, a still-failing send) gets
-    re-queued instead of being mistaken for already delivered.
+    Runs daily at 12:00 (CELERY_BEAT_SCHEDULE): finds every active user who
+    logged at least one expense *last* calendar month — and doesn't already
+    have a *confirmed* MonthlyExpenseReportDelivery for it — and queues them
+    a digest email. Users with nothing spent are skipped entirely — no
+    "nothing spent" email, see #21.
+
+    Deliberately runs every day, not just the 1st: it's a no-op for everyone
+    once that month's batch has gone out (the exclude() below), so the extra
+    runs cost nothing, but they mean a run that's missed entirely — worker
+    down at noon on the 1st, a bad deploy — gets caught up the next day
+    instead of silently skipping the whole month until the 1st of the next
+    one (see #56). Excluding only confirmed (sent_at is set) deliveries,
+    rather than any row at all, is what makes this safe to re-run: anyone
+    whose earlier claim never got confirmed (a crash, a still-failing send)
+    gets re-queued instead of being mistaken for already delivered.
     """
     from django.utils import timezone
 

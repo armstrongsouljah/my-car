@@ -342,7 +342,15 @@ CELERY_BEAT_SCHEDULE = {
     },
     "send-monthly-expense-reports": {
         "task": "tasks.send_monthly_expense_reports_task",
-        "schedule": crontab(day_of_month=1, hour=6, minute=0),  # once, on the 1st of each month
+        # Midday, not first thing in the morning — most owners are more
+        # likely to see/open it then. Daily, not just on the 1st (see #56):
+        # the task itself only ever queues *last* calendar month's report
+        # and skips anyone with a confirmed delivery for it already, so a
+        # daily run is a no-op for everyone once the 1st-of-month batch
+        # succeeds — but it also means a run that's missed entirely (deploy,
+        # worker down at noon on the 1st) gets caught up the next day
+        # instead of silently skipping the whole month.
+        "schedule": crontab(hour=12, minute=0),
     },
     "refresh-exchange-rates": {
         "task": "tasks.refresh_exchange_rates_task",
