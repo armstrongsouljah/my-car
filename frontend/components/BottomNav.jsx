@@ -26,7 +26,7 @@ export default function BottomNav() {
   const activeIndex = ITEMS.findIndex(({ match }) => isActive(pathname, match));
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-20 mx-auto max-w-lg">
+    <div className="fixed inset-x-0 bottom-0 z-20">
       <nav className="relative grid grid-cols-4 rounded-t-2xl border-t border-gray-200 bg-white/95 pb-[env(safe-area-inset-bottom)] shadow-lg shadow-black/5 backdrop-blur dark:border-white/10 dark:bg-gray-900/95 dark:shadow-black/40">
         {/* Absolutely positioned, so it's excluded from grid placement —
             slides between the 4 equal-width column slots by translating its
