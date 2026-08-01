@@ -30,7 +30,7 @@ SYSTEM_INSTRUCTION = (
     "lists, **bold**, `code`. Never use LaTeX or raw math notation (no $$...$$ "
     "or \\text{}/\\frac{}/\\mathbf{} commands) — the chat UI can't render it. "
     "For calculations, just show the numbers and result in plain words, e.g. "
-    "'75 litres x 6,695 = 502,125'."
+    "'75 litres multiplied by 6,695 equals 502,125'."
 )
 
 
