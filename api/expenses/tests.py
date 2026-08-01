@@ -20,7 +20,14 @@ def previous_month():
 
 @pytest.fixture
 def owner(db):
-    user = User.objects.create_user(email="owner@example.com", password="str0ng-pass-123")
+    # Backdated well past any window these tests exercise (?months= caps at
+    # 60) — an analytics test can freely plant expenses years back without
+    # them getting clipped by the #60 "no months before signup" guard.
+    # Tests for that guard itself override date_joined explicitly.
+    user = User.objects.create_user(
+        email="owner@example.com", password="str0ng-pass-123",
+        date_joined=timezone.now() - relativedelta(years=10),
+    )
     user.is_email_verified = True
     user.save(update_fields=["is_email_verified"])
     return user
@@ -184,6 +191,40 @@ class TestExpenseAnalytics:
         response = client.get("/api/v1/expenses/analytics/?months=9999")
         assert response.status_code == 200
         assert len(response.data["months"]) == ExpenseAnalyticsView.MAX_MONTHS
+
+    def test_months_before_signup_are_not_zero_filled(self, owner, car):
+        """See #60 — a wide ?months= window (the reports page uses 24)
+        shouldn't manufacture $0 "ghost" report entries for months before
+        the account existed."""
+        today = timezone.localdate()
+        owner.date_joined = timezone.now() - relativedelta(months=2)
+        owner.save(update_fields=["date_joined"])
+        Expense.objects.create(car=car, category="fuel", amount=50, expense_date=today)
+
+        client = APIClient()
+        client.force_authenticate(owner)
+        response = client.get("/api/v1/expenses/analytics/?months=24")
+
+        months = response.data["months"]
+        earliest = date.fromisoformat(months[0]["month"])
+        assert earliest >= timezone.localtime(owner.date_joined).date().replace(day=1)
+        assert len(months) <= 3  # join month, the month after, and this month
+
+    def test_real_backdated_data_before_signup_still_shows(self, owner, car):
+        """A deliberately backdated entry (e.g. a historical service logged
+        after signing up) is real data, not a manufactured ghost month —
+        the #60 guard only suppresses zero-filled months, never real ones."""
+        owner.date_joined = timezone.now() - relativedelta(days=1)
+        owner.save(update_fields=["date_joined"])
+        old_date = timezone.localdate() - relativedelta(years=2)
+        Expense.objects.create(car=car, category="fuel", amount=75, expense_date=old_date)
+
+        client = APIClient()
+        client.force_authenticate(owner)
+        response = client.get("/api/v1/expenses/analytics/?months=24")
+
+        months = {m["month"]: m for m in response.data["months"]}
+        assert months[old_date.replace(day=1).isoformat()]["total"] == 75.0
 
 
 @pytest.mark.django_db
