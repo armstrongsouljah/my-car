@@ -120,10 +120,10 @@ function Dashboard() {
                 <img
                   src={mediaUrl(car.photo_url)}
                   alt={`${car.make} ${car.model}`}
-                  className="h-14 w-14 rounded-full border border-gray-200 object-cover transition group-focus-visible:ring-2 group-focus-visible:ring-brand dark:border-gray-800"
+                  className="h-14 w-14 rounded-full border border-gray-200 object-cover ring-inset transition group-focus-visible:ring-2 group-focus-visible:ring-brand dark:border-gray-800"
                 />
               ) : (
-                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-gray-100 to-gray-200 text-2xl transition group-focus-visible:ring-2 group-focus-visible:ring-brand dark:from-gray-800 dark:to-gray-700">
+                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-gray-100 to-gray-200 text-2xl ring-inset transition group-focus-visible:ring-2 group-focus-visible:ring-brand dark:from-gray-800 dark:to-gray-700">
                   🚗
                 </div>
               )}
