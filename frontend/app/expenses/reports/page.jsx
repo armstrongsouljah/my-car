@@ -35,6 +35,17 @@ function Reports() {
 
       {error && <p className="mb-4 rounded-xl bg-red-50 dark:bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-400">{error}</p>}
 
+      <Link
+        href="/expenses/reports/all-time"
+        className="card mb-4 flex items-center justify-between border-brand/30 bg-brand/5 text-sm active:scale-[0.99] dark:bg-brand/10"
+      >
+        <div>
+          <p className="font-semibold">All-time report</p>
+          <p className="text-[12px] text-gray-500 dark:text-gray-400">Every expense ever logged, across every car</p>
+        </div>
+        <span className="text-gray-300 dark:text-gray-600">›</span>
+      </Link>
+
       <div className="space-y-3">
         {months?.map((month) => (
           <Link

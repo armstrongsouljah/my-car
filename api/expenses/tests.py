@@ -444,6 +444,79 @@ class TestExpenseMonthlyReport:
 
 
 @pytest.mark.django_db
+class TestExpenseAllTimeReport:
+
+    def test_aggregates_everything_ever_logged_across_cars(self, owner, car):
+        other_car = Car.objects.create(owner=owner, make="Honda", model="Civic")
+        Expense.objects.create(car=car, category="fuel", amount=100, expense_date=date(2020, 1, 10))
+        Expense.objects.create(car=car, category="garage_visit", amount=50, expense_date=date(2023, 6, 20))
+        Expense.objects.create(car=other_car, category="fuel", amount=30, expense_date=date(2026, 5, 15))
+
+        client = APIClient()
+        client.force_authenticate(owner)
+        response = client.get("/api/v1/expenses/reports/all-time/")
+
+        assert response.status_code == 200
+        assert response.data["month_label"] == "All-time"
+        assert response.data["total"] == 180.0
+        assert response.data["count"] == 3
+        assert response.data["since"] == "January 2020"
+        by_category = {row["category"]: row["total"] for row in response.data["by_category"]}
+        assert by_category == {"fuel": 130.0, "garage_visit": 50.0}
+        assert len(response.data["by_car"]) == 2
+
+    def test_no_previous_period_comparison(self, owner, car):
+        Expense.objects.create(car=car, category="fuel", amount=100, expense_date=date(2020, 1, 10))
+
+        client = APIClient()
+        client.force_authenticate(owner)
+        response = client.get("/api/v1/expenses/reports/all-time/")
+
+        assert response.data["previous_month_total"] is None
+        assert response.data["change_vs_previous_month"] is None
+        assert response.data["change_percent_vs_previous_month"] is None
+
+    def test_no_expenses_yet(self, owner, car):
+        client = APIClient()
+        client.force_authenticate(owner)
+        response = client.get("/api/v1/expenses/reports/all-time/")
+
+        assert response.data["total"] == 0.0
+        assert response.data["count"] == 0
+        assert response.data["since"] is None
+        assert response.data["by_category"] == []
+
+    def test_other_owners_expenses_excluded(self, owner, car):
+        other = User.objects.create_user(email="other-all-time@example.com", password="str0ng-pass-123")
+        other_car = Car.objects.create(owner=other, make="Honda", model="Civic")
+        Expense.objects.create(car=other_car, category="fuel", amount=999, expense_date=date(2020, 1, 1))
+
+        client = APIClient()
+        client.force_authenticate(owner)
+        response = client.get("/api/v1/expenses/reports/all-time/")
+
+        assert response.data["total"] == 0.0
+
+    def test_pdf_endpoint_returns_a_pdf(self, owner, car):
+        Expense.objects.create(car=car, category="fuel", amount=100, expense_date=date(2020, 1, 10))
+
+        client = APIClient()
+        client.force_authenticate(owner)
+        response = client.get("/api/v1/expenses/reports/all-time/pdf/")
+
+        assert response.status_code == 200
+        assert response["Content-Type"] == "application/pdf"
+        assert response["Content-Disposition"] == 'attachment; filename="glavbox-expenses-all-time.pdf"'
+        assert response.content.startswith(b"%PDF")
+
+    def test_requires_authentication(self, car):
+        client = APIClient()
+        response = client.get("/api/v1/expenses/reports/all-time/")
+
+        assert response.status_code == 401
+
+
+@pytest.mark.django_db
 class TestMonthlyExpenseReportTask:
 
     def test_sends_digest_only_to_users_with_expenses_last_month(self, owner, car):

@@ -41,7 +41,8 @@ function ReportDetail() {
 
       {report && (
         <>
-          <h1 className="mb-4 text-2xl font-bold">{report.month_label}</h1>
+          <h1 className={`text-2xl font-bold ${report.since ? "mb-1" : "mb-4"}`}>{report.month_label}</h1>
+          {report.since && <p className="mb-4 text-sm text-gray-400 dark:text-gray-500">Tracking since {report.since}</p>}
 
           <div className="mb-4 grid grid-cols-2 gap-3">
             <div className="card">

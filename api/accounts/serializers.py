@@ -158,9 +158,12 @@ class UserProfileSerializer(BaseModelSerializer):
         model = User
         fields = (
             "id", "email", "first_name", "last_name", "phone",
-            "mileage_reminder_frequency", "country", "currency",
+            "mileage_reminder_frequency", "country", "currency", "date_joined",
         )
-        read_only_fields = ("id", "email")
+        # date_joined is the account's own signup date, not sensitive to the
+        # owner themselves — exposed so the frontend can clamp "how far back
+        # can I browse expense history" without a separate lookup.
+        read_only_fields = ("id", "email", "date_joined")
 
     @staticmethod
     def select_related_fields():

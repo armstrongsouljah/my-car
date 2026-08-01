@@ -12,7 +12,7 @@ from rest_framework.response import Response
 
 from cars.models import Car
 from expenses.models import Expense
-from expenses.reports import build_monthly_report
+from expenses.reports import build_all_time_report, build_monthly_report
 from expenses.serializers import (
     ExpenseCreateSerializer,
     ExpenseDetailSerializer,
@@ -251,6 +251,42 @@ def _validate_period(year, month):
     valid_year = MINYEAR <= year <= MAXYEAR and not (year == MINYEAR and month == 1)
     if not valid_year or not (1 <= month <= 12):
         raise CustomValidation("Not a valid year/month.", field="detail", status_code=status.HTTP_400_BAD_REQUEST)
+
+
+class ExpenseAllTimeReportView(SmartAPIView):
+    """
+    GET /expenses/reports/all-time/ — the owner's category/car breakdown
+    across everything ever logged, for every car (full cost of ownership).
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, **kwargs):
+        report = build_all_time_report(request.user)
+        return Response(report, status=status.HTTP_200_OK)
+
+
+class ExpenseAllTimeReportPDFView(SmartAPIView):
+    """
+    GET /expenses/reports/all-time/pdf/ — the same report, rendered to PDF
+    via the same template as a monthly report (its fields are a superset-
+    compatible shape — see build_all_time_report).
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, **kwargs):
+        # Lazy import — see ExpenseMonthlyReportPDFView below.
+        from weasyprint import HTML
+
+        report = build_all_time_report(request.user)
+        html = render_to_string("reports/monthly_expense_report.html", {
+            "report": report,
+            "user": request.user,
+        })
+        pdf_bytes = HTML(string=html).write_pdf()
+
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        response["Content-Disposition"] = 'attachment; filename="glavbox-expenses-all-time.pdf"'
+        return response
 
 
 class ExpenseMonthlyReportView(SmartAPIView):
