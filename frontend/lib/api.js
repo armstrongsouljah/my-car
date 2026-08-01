@@ -82,7 +82,10 @@ async function fetchWithAuthRetry(path, options = {}) {
   if (response.status === 401 && tokens?.refresh) {
     const newAccess = await refreshAccessToken();
     if (!newAccess) {
-      if (typeof window !== "undefined") window.location.href = "/login";
+      if (typeof window !== "undefined") {
+        const next = window.location.pathname + window.location.search;
+        window.location.href = `/login?next=${encodeURIComponent(next)}`;
+      }
       throw new Error("Session expired");
     }
     response = await doFetch(newAccess);

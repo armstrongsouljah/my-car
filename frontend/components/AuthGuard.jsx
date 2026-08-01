@@ -10,7 +10,11 @@ export default function AuthGuard({ children }) {
 
   useEffect(() => {
     if (!isLoggedIn()) {
-      router.replace("/login");
+      // Reads the URL straight off window rather than usePathname/
+      // useSearchParams so this component doesn't need a Suspense boundary
+      // (every page that wraps its content in AuthGuard would need one too).
+      const next = window.location.pathname + window.location.search;
+      router.replace(`/login?next=${encodeURIComponent(next)}`);
     } else {
       setReady(true);
     }

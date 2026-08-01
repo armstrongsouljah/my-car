@@ -18,6 +18,18 @@ const brandFont = Dancing_Script({ subsets: ["latin"], weight: ["700"] });
 let googleInitialized = false;
 let googleScriptLoading = false;
 
+// Reads fresh from window.location rather than the useSearchParams() hook's
+// value so the long-lived Google Identity Services callback (initialized
+// once per page load — see googleInitialized) can't close over a stale
+// `next` from whatever query string was present at that first render.
+function getNextPath() {
+  if (typeof window === "undefined") return "/dashboard";
+  const next = new URLSearchParams(window.location.search).get("next");
+  // Must be an in-app path, never an absolute/protocol-relative URL —
+  // otherwise a crafted `?next=` turns this into an open redirect.
+  return next && next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard";
+}
+
 function MailIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -73,7 +85,7 @@ function AuthPage() {
   const googleButtonRef = useRef(null);
 
   useEffect(() => {
-    if (isLoggedIn()) router.replace("/dashboard");
+    if (isLoggedIn()) router.replace(getNextPath());
   }, [router]);
 
   // The useState initializers above only run once, on mount — if /login stays
@@ -123,7 +135,7 @@ function AuthPage() {
             const data = await api("/auth/google/", { method: "POST", body: { id_token: response.credential } });
             setTokens(data.tokens);
             setUser(data.user);
-            router.replace("/dashboard");
+            router.replace(getNextPath());
           } catch (err) {
             setError(err.message);
           } finally {
@@ -178,7 +190,7 @@ function AuthPage() {
         });
         setTokens(data.tokens);
         setUser(data.user);
-        router.replace("/dashboard");
+        router.replace(getNextPath());
       } else if (mode === "signup") {
         await api("/auth/register/", {
           method: "POST",
@@ -206,7 +218,7 @@ function AuthPage() {
         });
         setTokens(data.tokens);
         setUser(data.user);
-        router.replace("/dashboard");
+        router.replace(getNextPath());
       } else if (mode === "forgot") {
         await api("/auth/password/reset/request/", {
           method: "POST",
@@ -228,7 +240,7 @@ function AuthPage() {
         });
         setTokens(data.tokens);
         setUser(data.user);
-        router.replace("/dashboard");
+        router.replace(getNextPath());
       }
     } catch (err) {
       if (mode === "login" && err.status === 403 && /verify your email/i.test(err.message)) {
