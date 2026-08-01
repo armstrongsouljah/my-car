@@ -110,7 +110,9 @@ class ExpenseAnalyticsView(SmartAPIView):
     Returns one row per month with the total, per-category breakdown, and the
     change (absolute and percentage) versus the previous calendar month —
     computed by month key, not by list position, so a gap month with no data
-    can't make two non-adjacent months look adjacent.
+    can't make two non-adjacent months look adjacent. Months before the
+    account's date_joined are omitted unless they have real logged data (see
+    #60) — a month the user was never signed up for isn't "$0 spent."
     """
     permission_classes = [IsAuthenticated]
 
@@ -172,9 +174,20 @@ class ExpenseAnalyticsView(SmartAPIView):
         # "the last month with data" — otherwise once a new month starts
         # before any expense is logged in it, the previous month's total
         # silently stands in as "this month" on the frontend (see #56).
-        # Zero-fill every month in the window that has no rows.
         current_month = timezone.localdate().replace(day=1)
         window_keys = self._window_keys(current_month, year_param, months_param)
+
+        # Don't zero-fill a month from before the account existed — that's
+        # not "nothing spent that month", it's a month the user was never on
+        # the app for (see #60). A month that already has real logged data
+        # (e.g. a backdated historical service entered after signup) still
+        # shows regardless of when it falls; only the *manufactured* zero
+        # entries are excluded. Checked before the zero-fill loop below, so
+        # `key in monthly_totals` here only ever reflects real DB rows.
+        join_month = timezone.localtime(request.user.date_joined).date().replace(day=1)
+        window_keys = [key for key in window_keys if key in monthly_totals or date.fromisoformat(key) >= join_month]
+
+        # Zero-fill every remaining month in the window that has no rows.
         for key in window_keys:
             monthly_totals.setdefault(key, 0.0)
             monthly_counts.setdefault(key, 0)
