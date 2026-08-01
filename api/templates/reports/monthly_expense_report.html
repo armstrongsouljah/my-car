@@ -101,7 +101,7 @@
   <div class="header">
     <div class="wordmark">GlavBox</div>
     <h1>{{ report.month_label }} expense report</h1>
-    <p>{{ user.first_name|default:user.email }}</p>
+    <p>{{ user.first_name|default:user.email }}{% if report.since %} &middot; tracking since {{ report.since }}{% endif %}</p>
   </div>
 
   <div class="summary">
@@ -139,7 +139,7 @@
     </tbody>
   </table>
   {% else %}
-  <p class="empty">No expenses logged this month.</p>
+  <p class="empty">{% if report.month %}No expenses logged this month.{% else %}No expenses logged yet.{% endif %}</p>
   {% endif %}
 
   <h2>By car</h2>
@@ -157,7 +157,7 @@
     </tbody>
   </table>
   {% else %}
-  <p class="empty">No expenses logged this month.</p>
+  <p class="empty">{% if report.month %}No expenses logged this month.{% else %}No expenses logged yet.{% endif %}</p>
   {% endif %}
 </body>
 </html>

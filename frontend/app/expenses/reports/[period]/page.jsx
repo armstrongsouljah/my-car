@@ -41,7 +41,8 @@ function ReportDetail() {
 
       {report && (
         <>
-          <h1 className="mb-4 text-2xl font-bold">{report.month_label}</h1>
+          <h1 className={`text-2xl font-bold ${report.since ? "mb-1" : "mb-4"}`}>{report.month_label}</h1>
+          {report.since && <p className="mb-4 text-sm text-gray-400 dark:text-gray-500">Tracking since {report.since}</p>}
 
           <div className="mb-4 grid grid-cols-2 gap-3">
             <div className="card">
@@ -65,7 +66,7 @@ function ReportDetail() {
 
           <div className="card mb-4">
             <p className="mb-3 font-semibold">By category</p>
-            {report.by_category.length === 0 && <p className="text-sm text-gray-400 dark:text-gray-500">Nothing logged this month.</p>}
+            {report.by_category.length === 0 && <p className="text-sm text-gray-400 dark:text-gray-500">{report.month ? "Nothing logged this month." : "Nothing logged yet."}</p>}
             <div className="space-y-2">
               {report.by_category.map((row) => (
                 <div key={row.category} className="flex items-center justify-between text-sm">
@@ -78,7 +79,7 @@ function ReportDetail() {
 
           <div className="card">
             <p className="mb-3 font-semibold">By car</p>
-            {report.by_car.length === 0 && <p className="text-sm text-gray-400 dark:text-gray-500">Nothing logged this month.</p>}
+            {report.by_car.length === 0 && <p className="text-sm text-gray-400 dark:text-gray-500">{report.month ? "Nothing logged this month." : "Nothing logged yet."}</p>}
             <div className="space-y-2">
               {report.by_car.map((row) => (
                 <div key={row.car_id} className="flex items-center justify-between text-sm">

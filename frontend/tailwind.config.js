@@ -36,6 +36,17 @@ module.exports = {
         warning: { DEFAULT: withOpacity("--color-warning"), subtle: withOpacity("--color-warning-subtle") },
         danger: { DEFAULT: withOpacity("--color-danger"), subtle: withOpacity("--color-danger-subtle") },
         info: { DEFAULT: withOpacity("--color-info"), subtle: withOpacity("--color-info-subtle") },
+        // Categorical chart palette (issue #58) — fixed hue order, never
+        // cycled; see the comment above the CSS vars in globals.css.
+        chart: {
+          1: withOpacity("--color-chart-1"),
+          2: withOpacity("--color-chart-2"),
+          3: withOpacity("--color-chart-3"),
+          4: withOpacity("--color-chart-4"),
+          5: withOpacity("--color-chart-5"),
+          6: withOpacity("--color-chart-6"),
+          7: withOpacity("--color-chart-7"),
+        },
       },
       fontSize: {
         display: ["28px", { lineHeight: "34px", fontWeight: "700" }],

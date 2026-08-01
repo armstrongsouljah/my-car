@@ -19,17 +19,13 @@ def _converted_total(rows, target_currency, rates):
     return sum((float(convert_amount(row["total"], row["currency"], target_currency, rates)) for row in rows), 0.0)
 
 
-def build_monthly_report(user, year: int, month: int) -> dict:
+def _aggregate(queryset, target_currency, rates):
     """
-    Aggregates one user's expenses, across all their cars, for a single
-    calendar month. This is the one source of truth behind the in-app
-    report, the downloadable PDF, and the monthly email digest — see #21 —
-    so the numbers on all three surfaces can't drift apart.
+    Shared by build_monthly_report and build_all_time_report: total, count,
+    and the by-category/by-car breakdowns for an arbitrary Expense queryset
+    (a single month for one, everything the owner has ever logged for the
+    other) — the aggregation shape doesn't depend on the date range.
     """
-    queryset = Expense.objects.filter(car__owner=user, expense_date__year=year, expense_date__month=month)
-    target_currency = user.currency
-    rates = load_latest_rates()
-
     totals_by_currency = queryset.values("currency").annotate(total=Sum("amount"))
     total = round(_converted_total(totals_by_currency, target_currency, rates), 2)
     count = queryset.count()
@@ -77,6 +73,21 @@ def build_monthly_report(user, year: int, month: int) -> dict:
         key=lambda row: -row["total"],
     )
 
+    return total, count, list(by_category), list(by_car)
+
+
+def build_monthly_report(user, year: int, month: int) -> dict:
+    """
+    Aggregates one user's expenses, across all their cars, for a single
+    calendar month. This is the one source of truth behind the in-app
+    report, the downloadable PDF, and the monthly email digest — see #21 —
+    so the numbers on all three surfaces can't drift apart.
+    """
+    queryset = Expense.objects.filter(car__owner=user, expense_date__year=year, expense_date__month=month)
+    target_currency = user.currency
+    rates = load_latest_rates()
+    total, count, by_category, by_car = _aggregate(queryset, target_currency, rates)
+
     prev_year, prev_month = (year - 1, 12) if month == 1 else (year, month - 1)
     previous_totals_by_currency = Expense.objects.filter(
         car__owner=user, expense_date__year=prev_year, expense_date__month=prev_month
@@ -92,8 +103,8 @@ def build_monthly_report(user, year: int, month: int) -> dict:
         "month_label": date(year, month, 1).strftime("%B %Y"),
         "total": total,
         "count": count,
-        "by_category": list(by_category),
-        "by_car": list(by_car),
+        "by_category": by_category,
+        "by_car": by_car,
         "previous_month_total": previous_total,
         "change_vs_previous_month": change,
         "change_percent_vs_previous_month": change_percent,
@@ -101,5 +112,37 @@ def build_monthly_report(user, year: int, month: int) -> dict:
         # so the in-app view, PDF, and email digest can't drift on it either.
         # Blank means the owner has no currency set; renderers fall back to
         # a bare number.
+        "currency": target_currency,
+    }
+
+
+def build_all_time_report(user) -> dict:
+    """
+    Same shape as build_monthly_report but across everything the user has
+    ever logged, for every car — a full cost-of-ownership summary rather
+    than one calendar month. Reuses the same in-app view, PDF
+    template, and frontend detail page as the monthly report; there's no
+    "previous period" for an all-time span, so those comparison fields are
+    simply None rather than compared against nothing.
+    """
+    queryset = Expense.objects.filter(car__owner=user)
+    target_currency = user.currency
+    rates = load_latest_rates()
+    total, count, by_category, by_car = _aggregate(queryset, target_currency, rates)
+
+    earliest = queryset.order_by("expense_date").values_list("expense_date", flat=True).first()
+
+    return {
+        "year": None,
+        "month": None,
+        "month_label": "All-time",
+        "since": earliest.strftime("%B %Y") if earliest else None,
+        "total": total,
+        "count": count,
+        "by_category": by_category,
+        "by_car": by_car,
+        "previous_month_total": None,
+        "change_vs_previous_month": None,
+        "change_percent_vs_previous_month": None,
         "currency": target_currency,
     }

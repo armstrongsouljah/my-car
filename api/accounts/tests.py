@@ -185,6 +185,13 @@ class TestProfileCurrencyUpdate:
         assert response.data["currency"] == ""
         assert response.data["country"] == ""
 
+    def test_profile_get_includes_date_joined(self, client, owner):
+        """Not sensitive to the owner themselves — the frontend uses it to
+        clamp how far back expense history browsing can go."""
+        client.force_authenticate(owner)
+        response = client.get(reverse("auth-profile"))
+        assert response.data["date_joined"] is not None
+
     def test_patch_updates_currency_directly(self, client, owner):
         client.force_authenticate(owner)
         response = client.patch(reverse("auth-profile"), {"currency": "KES"})
