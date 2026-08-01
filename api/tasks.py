@@ -503,15 +503,29 @@ def send_monthly_expense_report_email_task(user_id, year, month):
             return
         delivery = MonthlyExpenseReportDelivery.objects.get(user_id=user_id, year=year, month=month)
 
+    import newrelic.agent
+
     try:
         send_monthly_expense_report_email(email=user.email, first_name=user.first_name, report=report)
     except Exception:
         logger.error(
             "Failed to send monthly expense report to user_id=%s for %s-%s", user_id, year, month, exc_info=True
         )
+        # No-ops when the agent isn't active (e.g. tests, a non-instrumented
+        # process) — see NEW_RELIC_APP_NAME on the worker deployment. Lets
+        # "did this month's batch actually go out" be answered from NRQL
+        # instead of grepping worker logs.
+        newrelic.agent.record_custom_event(
+            "MonthlyExpenseReportSent",
+            {"user_id": str(user_id), "year": year, "month": month, "status": "failed"},
+        )
         return
 
     MonthlyExpenseReportDelivery.objects.filter(pk=delivery.pk).update(sent_at=timezone.now())
+    newrelic.agent.record_custom_event(
+        "MonthlyExpenseReportSent",
+        {"user_id": str(user_id), "year": year, "month": month, "status": "sent"},
+    )
 
 
 @shared_task(name="tasks.send_monthly_expense_reports_task")
@@ -568,6 +582,16 @@ def send_monthly_expense_reports_task():
     for user_id in user_ids:
         send_monthly_expense_report_email_task.delay(user_id=user_id, year=prev_year, month=prev_month)
         queued += 1
+
+    import newrelic.agent
+
+    # Recorded on every run, including the no-op re-runs after the month's
+    # batch already went out (queued=0) — that's what makes "the sweep ran
+    # today" and "the batch actually went out this month" both answerable
+    # from NRQL instead of just the per-send MonthlyExpenseReportSent events.
+    newrelic.agent.record_custom_event(
+        "MonthlyExpenseReportSweep", {"year": prev_year, "month": prev_month, "queued": queued}
+    )
 
     return f"Queued {queued} monthly expense report email(s)"
 
