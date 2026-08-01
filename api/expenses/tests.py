@@ -1,5 +1,6 @@
 from datetime import date
 from decimal import Decimal
+from unittest import mock
 
 import pytest
 from dateutil.relativedelta import relativedelta
@@ -195,20 +196,26 @@ class TestExpenseAnalytics:
     def test_default_window_is_the_current_calendar_year(self, owner, car):
         """See #58 — a rolling trailing-12-months window can span two
         different calendar years; the chart now shows Jan through the
-        current month of *this* year instead."""
-        today = timezone.localdate()
-        Expense.objects.create(car=car, category="fuel", amount=100, expense_date=date(today.year, 1, 15))
-        Expense.objects.create(car=car, category="fuel", amount=200, expense_date=today)
+        current month of *this* year instead.
 
-        client = APIClient()
-        client.force_authenticate(owner)
-        response = client.get("/api/v1/expenses/analytics/")
+        Pinned to June rather than using the real "today": in January, a
+        Jan-15 planted expense and one dated "today" would collide into the
+        same month, making months[0] and months[-1] the same row.
+        """
+        fixed_today = date(timezone.localdate().year, 6, 15)
+        with mock.patch("django.utils.timezone.localdate", return_value=fixed_today):
+            Expense.objects.create(car=car, category="fuel", amount=100, expense_date=date(fixed_today.year, 1, 15))
+            Expense.objects.create(car=car, category="fuel", amount=200, expense_date=fixed_today)
+
+            client = APIClient()
+            client.force_authenticate(owner)
+            response = client.get("/api/v1/expenses/analytics/")
 
         months = response.data["months"]
-        assert len(months) == today.month
-        assert months[0]["month"] == date(today.year, 1, 1).isoformat()
+        assert len(months) == fixed_today.month
+        assert months[0]["month"] == date(fixed_today.year, 1, 1).isoformat()
         assert months[0]["total"] == 100.0
-        assert months[-1]["month"] == today.replace(day=1).isoformat()
+        assert months[-1]["month"] == fixed_today.replace(day=1).isoformat()
         assert months[-1]["total"] == 200.0
 
     def test_year_param_returns_a_past_years_full_january_to_december(self, owner, car):

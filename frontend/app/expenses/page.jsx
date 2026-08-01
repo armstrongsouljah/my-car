@@ -170,7 +170,7 @@ function YearNav({ year, onPrevYear, onNextYear, canGoPrev, canGoNext }) {
         onClick={onPrevYear}
         disabled={!canGoPrev}
         aria-label="Previous year"
-        className="flex h-6 w-6 items-center justify-center rounded-full text-gray-400 outline-none transition hover:bg-gray-100 disabled:opacity-30 disabled:hover:bg-transparent dark:text-gray-500 dark:hover:bg-gray-800"
+        className="flex h-6 w-6 items-center justify-center rounded-full text-gray-400 outline-none transition hover:bg-gray-100 focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-30 disabled:hover:bg-transparent dark:text-gray-500 dark:hover:bg-gray-800"
       >
         ‹
       </button>
@@ -180,7 +180,7 @@ function YearNav({ year, onPrevYear, onNextYear, canGoPrev, canGoNext }) {
         onClick={onNextYear}
         disabled={!canGoNext}
         aria-label="Next year"
-        className="flex h-6 w-6 items-center justify-center rounded-full text-gray-400 outline-none transition hover:bg-gray-100 disabled:opacity-30 disabled:hover:bg-transparent dark:text-gray-500 dark:hover:bg-gray-800"
+        className="flex h-6 w-6 items-center justify-center rounded-full text-gray-400 outline-none transition hover:bg-gray-100 focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-30 disabled:hover:bg-transparent dark:text-gray-500 dark:hover:bg-gray-800"
       >
         ›
       </button>
@@ -241,6 +241,7 @@ function MonthChart({ months, currency, year, onPrevYear, onNextYear, canGoPrev,
                   key={month.month}
                   onClick={() => setSelectedKey(month.month)}
                   onFocus={() => setSelectedKey(month.month)}
+                  aria-pressed={isSelected}
                   aria-label={`${monthLabel(month.month)}: ${formatAmount(month.total, currency)}`}
                   className={`flex min-w-[32px] flex-1 flex-col items-center justify-end gap-1 rounded-lg pt-2 outline-none transition ${
                     isSelected ? "bg-brand/10" : "hover:bg-gray-100 dark:hover:bg-gray-800/60"
@@ -322,8 +323,17 @@ function Expenses() {
     // yearFilter lets the owner browse past years (and, further back, an
     // all-time report — see the Reports page) rather than only ever seeing
     // the current one.
-    api(`/expenses/analytics/?${carScope}year=${yearFilter}`).then(setAnalytics).catch((err) => setError(err.message));
-    api(`/expenses/${carFilter ? `?car=${carFilter}` : ""}`).then((data) => setExpenses(data.results || data)).catch(() => {});
+    // Guards against out-of-order responses: rapid ‹/› clicks fire a new
+    // request per year before the previous one settles, and network timing
+    // doesn't guarantee they resolve in the order they were sent.
+    let cancelled = false;
+    api(`/expenses/analytics/?${carScope}year=${yearFilter}`)
+      .then((data) => { if (!cancelled) { setAnalytics(data); setError(""); } })
+      .catch((err) => { if (!cancelled) setError(err.message); });
+    api(`/expenses/${carFilter ? `?car=${carFilter}` : ""}`)
+      .then((data) => { if (!cancelled) setExpenses(data.results || data); })
+      .catch(() => {});
+    return () => { cancelled = true; };
   }, [carFilter, yearFilter]);
 
   useEffect(() => {
@@ -333,7 +343,7 @@ function Expenses() {
       .catch(() => {});
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => load(), [load]);
 
   const isCurrentYear = yearFilter === currentYear;
   const latest = analytics?.months?.[analytics.months.length - 1];
@@ -368,7 +378,7 @@ function Expenses() {
             )}
           </div>
           <div className="card">
-            <p className="text-[12px] text-gray-400 dark:text-gray-500">{isCurrentYear ? "Annual Total" : `${yearFilter} Total`}</p>
+            <p className="text-[12px] text-gray-400 dark:text-gray-500">{isCurrentYear ? "Year to Date" : `${yearFilter} Total`}</p>
             <p className="text-xl font-bold">{formatAmount(analytics.grand_total, analytics.currency)}</p>
           </div>
         </div>

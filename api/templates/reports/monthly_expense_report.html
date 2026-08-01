@@ -139,7 +139,7 @@
     </tbody>
   </table>
   {% else %}
-  <p class="empty">No expenses logged this month.</p>
+  <p class="empty">{% if report.month %}No expenses logged this month.{% else %}No expenses logged yet.{% endif %}</p>
   {% endif %}
 
   <h2>By car</h2>
@@ -157,7 +157,7 @@
     </tbody>
   </table>
   {% else %}
-  <p class="empty">No expenses logged this month.</p>
+  <p class="empty">{% if report.month %}No expenses logged this month.{% else %}No expenses logged yet.{% endif %}</p>
   {% endif %}
 </body>
 </html>
