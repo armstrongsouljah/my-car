@@ -31,6 +31,19 @@
   --color-danger-subtle: 254 226 226;
   --color-info: 29 78 216;
   --color-info-subtle: 219 234 254;
+
+  /* Categorical chart palette (issue #58) — fixed hue order, slot 1 anchored
+     on the brand emerald, slots 2-7 the next validated hues from the
+     dataviz skill's default categorical palette. Assign in this order only
+     (never cycled/reordered) — the order is what clears the CVD-adjacency
+     checks; re-run `validate_palette.js` before changing any value. */
+  --color-chart-1: 16 185 129; /* emerald */
+  --color-chart-2: 235 104 52; /* orange */
+  --color-chart-3: 27 175 122; /* aqua */
+  --color-chart-4: 237 161 0; /* yellow */
+  --color-chart-5: 232 123 164; /* magenta */
+  --color-chart-6: 0 131 0; /* green */
+  --color-chart-7: 74 58 167; /* violet */
 }
 
 .dark {
@@ -57,6 +70,16 @@
   --color-danger-subtle: 127 29 29;
   --color-info: 96 165 250;
   --color-info-subtle: 30 58 138;
+
+  /* Same categorical palette, dark-surface steps — re-validated against
+     this app's dark card surface (gray-900, #111827), not just inverted. */
+  --color-chart-1: 5 150 105; /* emerald */
+  --color-chart-2: 217 89 38; /* orange */
+  --color-chart-3: 25 158 112; /* aqua */
+  --color-chart-4: 201 133 0; /* yellow */
+  --color-chart-5: 213 81 129; /* magenta */
+  --color-chart-6: 0 131 0; /* green */
+  --color-chart-7: 144 133 233; /* violet */
 }
 
 @layer components {

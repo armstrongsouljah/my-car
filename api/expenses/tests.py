@@ -185,6 +185,75 @@ class TestExpenseAnalytics:
         assert response.status_code == 200
         assert len(response.data["months"]) == ExpenseAnalyticsView.MAX_MONTHS
 
+    def test_default_window_is_the_current_calendar_year(self, owner, car):
+        """See #58 — a rolling trailing-12-months window can span two
+        different calendar years; the chart now shows Jan through the
+        current month of *this* year instead."""
+        today = timezone.localdate()
+        Expense.objects.create(car=car, category="fuel", amount=100, expense_date=date(today.year, 1, 15))
+        Expense.objects.create(car=car, category="fuel", amount=200, expense_date=today)
+
+        client = APIClient()
+        client.force_authenticate(owner)
+        response = client.get("/api/v1/expenses/analytics/")
+
+        months = response.data["months"]
+        assert len(months) == today.month
+        assert months[0]["month"] == date(today.year, 1, 1).isoformat()
+        assert months[0]["total"] == 100.0
+        assert months[-1]["month"] == today.replace(day=1).isoformat()
+        assert months[-1]["total"] == 200.0
+
+    def test_year_param_returns_a_past_years_full_january_to_december(self, owner, car):
+        past_year = timezone.localdate().year - 1
+        Expense.objects.create(car=car, category="fuel", amount=75, expense_date=date(past_year, 6, 10))
+
+        client = APIClient()
+        client.force_authenticate(owner)
+        response = client.get(f"/api/v1/expenses/analytics/?year={past_year}")
+
+        months = response.data["months"]
+        assert len(months) == 12
+        assert months[0]["month"] == date(past_year, 1, 1).isoformat()
+        assert months[-1]["month"] == date(past_year, 12, 1).isoformat()
+        assert months[5]["total"] == 75.0  # June
+
+    def test_year_param_for_the_current_year_stops_at_the_current_month(self, owner, car):
+        today = timezone.localdate()
+
+        client = APIClient()
+        client.force_authenticate(owner)
+        response = client.get(f"/api/v1/expenses/analytics/?year={today.year}")
+
+        months = response.data["months"]
+        assert len(months) == today.month
+        assert months[-1]["month"] == today.replace(day=1).isoformat()
+
+    def test_year_param_for_a_future_year_returns_no_months(self, owner, car):
+        future_year = timezone.localdate().year + 1
+
+        client = APIClient()
+        client.force_authenticate(owner)
+        response = client.get(f"/api/v1/expenses/analytics/?year={future_year}")
+
+        assert response.data["months"] == []
+        assert response.data["grand_total"] == 0
+
+    def test_months_param_still_returns_a_trailing_window(self, owner, car):
+        """Explicit ?months= (used by the reports page's month picker) keeps
+        the old rolling-window behavior rather than snapping to a calendar
+        year — it's an intentional override, not replaced by #58."""
+        today = timezone.localdate()
+        Expense.objects.create(car=car, category="fuel", amount=40, expense_date=today)
+
+        client = APIClient()
+        client.force_authenticate(owner)
+        response = client.get("/api/v1/expenses/analytics/?months=3")
+
+        months = response.data["months"]
+        assert len(months) == 3
+        assert months[-1]["month"] == today.replace(day=1).isoformat()
+
 
 @pytest.mark.django_db
 class TestExpenseMonthlyReport:

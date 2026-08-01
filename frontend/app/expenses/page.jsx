@@ -20,6 +20,22 @@ const CATEGORIES = [
 
 const CATEGORY_LABELS = Object.fromEntries(CATEGORIES);
 
+// Fixed hue order (issue #58) — assigned by category identity, never
+// reordered/cycled; see the CVD-validation comment above the CSS vars in
+// globals.css. Literal "bg-chart-N" strings so Tailwind's JIT scanner can
+// find them (a templated `bg-${var}` class name would not be generated).
+const CATEGORY_COLOR_CLASS = {
+  garage_visit: "bg-chart-1",
+  modification_parts: "bg-chart-2",
+  fuel: "bg-chart-3",
+  insurance: "bg-chart-4",
+  tax_licensing: "bg-chart-5",
+  cleaning: "bg-chart-6",
+  other: "bg-chart-7",
+};
+
+const BAR_AREA_HEIGHT = 100; // px — the bar's own max height inside MonthChart's 150px row
+
 function monthLabel(iso) {
   return new Date(iso + "T00:00:00").toLocaleDateString(undefined, { month: "short", year: "2-digit" });
 }
@@ -147,23 +163,102 @@ function ExpenseForm({ cars, expense = null, onSaved, onCancel }) {
 }
 
 function MonthChart({ months, currency }) {
+  const [selectedKey, setSelectedKey] = useState(null);
+
   if (!months?.length) return null;
+
   const max = Math.max(...months.map((m) => m.total), 1);
+  // Only legend/detail categories that actually appear somewhere in the
+  // visible range — no point listing all 7 fixed categories if this car
+  // has never had e.g. an insurance expense.
+  const activeCategories = CATEGORIES.filter(([key]) => months.some((m) => (m.by_category?.[key] || 0) > 0));
+  const selectedMonth = months.find((m) => m.month === selectedKey) || months[months.length - 1];
 
   return (
     <div className="card">
       <p className="mb-3 font-semibold">Month on month</p>
-      <div className="flex items-end gap-2 overflow-x-auto pb-1" style={{ height: 140 }}>
-        {months.map((month) => (
-          <div key={month.month} className="flex min-w-[44px] flex-1 flex-col items-center justify-end gap-1">
-            <p className="text-[10px] font-medium text-gray-500 dark:text-gray-400">{formatAmount(Math.round(month.total), currency)}</p>
-            <div
-              className="w-full rounded-t-md bg-gray-900 dark:bg-white"
-              style={{ height: `${Math.max((month.total / max) * 100, 2)}%` }}
-            />
-            <p className="text-[10px] text-gray-400 dark:text-gray-500">{monthLabel(month.month)}</p>
+
+      {activeCategories.length > 0 && (
+        <div className="mb-3 flex flex-wrap gap-x-3 gap-y-1.5">
+          {activeCategories.map(([key, label]) => (
+            <span key={key} className="flex items-center gap-1.5 text-[11px] text-gray-500 dark:text-gray-400">
+              <span className={`h-2 w-2 rounded-full ${CATEGORY_COLOR_CLASS[key]}`} />
+              {label}
+            </span>
+          ))}
+        </div>
+      )}
+
+      <div className="flex items-end gap-1 overflow-x-auto pb-1" style={{ height: 150 }}>
+        {months.map((month) => {
+          const isSelected = month.month === selectedMonth.month;
+          const segments = CATEGORIES
+            .map(([key]) => [key, month.by_category?.[key] || 0])
+            .filter(([, value]) => value > 0);
+          // Pixels, not a percentage: this div's immediate parent (the
+          // button) has no defined height of its own (items-end, not
+          // stretch), so a percentage height here would resolve against
+          // "auto" and collapse to 0 — see #58.
+          const barHeight = Math.max((month.total / max) * BAR_AREA_HEIGHT, 2);
+
+          return (
+            <button
+              type="button"
+              key={month.month}
+              onClick={() => setSelectedKey(month.month)}
+              onFocus={() => setSelectedKey(month.month)}
+              aria-label={`${monthLabel(month.month)}: ${formatAmount(month.total, currency)}`}
+              className={`flex min-w-[32px] flex-1 flex-col items-center justify-end gap-1 rounded-lg pt-2 outline-none transition ${
+                isSelected ? "bg-brand/10" : "hover:bg-gray-100 dark:hover:bg-gray-800/60"
+              }`}
+            >
+              <p className="text-[10px] font-medium text-gray-500 dark:text-gray-400">
+                {formatAmount(Math.round(month.total), currency)}
+              </p>
+              <div
+                className="flex w-full max-w-[24px] flex-col justify-end gap-[2px] overflow-hidden rounded-t-[4px]"
+                style={{ height: barHeight }}
+              >
+                {segments.length === 0 ? (
+                  <div className="w-full flex-1 bg-gray-200 dark:bg-gray-700" />
+                ) : (
+                  segments.map(([key, value]) => (
+                    <div
+                      key={key}
+                      className={`w-full ${CATEGORY_COLOR_CLASS[key]}`}
+                      style={{ flexGrow: value, flexBasis: 0 }}
+                    />
+                  ))
+                )}
+              </div>
+              <p className="text-[10px] text-gray-400 dark:text-gray-500">{monthLabel(month.month)}</p>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="mt-3 rounded-xl bg-gray-50 p-3 dark:bg-gray-800/60">
+        <div className="mb-2 flex items-center justify-between">
+          <p className="text-[13px] font-semibold">{monthLabel(selectedMonth.month)}</p>
+          <p className="text-[13px] font-bold">{formatAmount(selectedMonth.total, currency)}</p>
+        </div>
+        {selectedMonth.total === 0 ? (
+          <p className="text-[12px] text-gray-400 dark:text-gray-500">No expenses logged.</p>
+        ) : (
+          <div className="space-y-1.5">
+            {CATEGORIES.filter(([key]) => (selectedMonth.by_category?.[key] || 0) > 0).map(([key, label]) => (
+              <div key={key} className="flex items-center justify-between text-[12px]">
+                <span className="flex items-center gap-1.5 text-gray-600 dark:text-gray-300">
+                  <span className={`h-2 w-2 rounded-full ${CATEGORY_COLOR_CLASS[key]}`} />
+                  {label}
+                </span>
+                <span className="font-medium text-gray-900 dark:text-gray-100">
+                  {formatAmount(selectedMonth.by_category[key], currency)}
+                </span>
+              </div>
+            ))}
           </div>
-        ))}
+        )}
       </div>
     </div>
   );
@@ -178,9 +273,12 @@ function Expenses() {
   const [error, setError] = useState("");
 
   const load = useCallback(() => {
-    const scope = carFilter ? `?car=${carFilter}` : "";
-    api(`/expenses/analytics/${scope}`).then(setAnalytics).catch((err) => setError(err.message));
-    api(`/expenses/${scope}`).then((data) => setExpenses(data.results || data)).catch(() => {});
+    const carScope = carFilter ? `car=${carFilter}&` : "";
+    // Explicit ?year= (see #58): the chart shows Jan through the current
+    // month of *this* calendar year, not a rolling trailing-12-months
+    // window that could span two different years.
+    api(`/expenses/analytics/?${carScope}year=${new Date().getFullYear()}`).then(setAnalytics).catch((err) => setError(err.message));
+    api(`/expenses/${carFilter ? `?car=${carFilter}` : ""}`).then((data) => setExpenses(data.results || data)).catch(() => {});
   }, [carFilter]);
 
   useEffect(() => {
@@ -221,7 +319,7 @@ function Expenses() {
             )}
           </div>
           <div className="card">
-            <p className="text-[12px] text-gray-400 dark:text-gray-500">Last 12 months</p>
+            <p className="text-[12px] text-gray-400 dark:text-gray-500">Annual Total</p>
             <p className="text-xl font-bold">{formatAmount(analytics.grand_total, analytics.currency)}</p>
           </div>
         </div>

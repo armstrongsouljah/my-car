@@ -1,4 +1,4 @@
-from datetime import MAXYEAR, MINYEAR
+from datetime import MAXYEAR, MINYEAR, date
 
 from dateutil.relativedelta import relativedelta
 from django.db.models import Count, Sum
@@ -95,10 +95,22 @@ class ExpenseAnalyticsView(SmartAPIView):
 
     GET params:
     - ?car=<uuid>     scope to one car (defaults to all the owner's cars)
-    - ?months=<int>   how many trailing months to include (default 12)
+    - ?year=<int>     a specific calendar year, Jan through Dec — or through
+                       the current month if it's the current year, since a
+                       future month has nothing to show yet.
+    - ?months=<int>   trailing N months ending at the current one, instead
+                       of a calendar year — used by the reports page's
+                       month picker (?months=24), which wants a rolling
+                       window rather than a Jan-anchored one.
+
+    Defaults (no params) to the current calendar year (see #58) rather than
+    a trailing-12-months window, which could span two different years and
+    read oddly next to a "this year" framing.
 
     Returns one row per month with the total, per-category breakdown, and the
-    change (absolute and percentage) versus the previous month.
+    change (absolute and percentage) versus the previous calendar month —
+    computed by month key, not by list position, so a gap month with no data
+    can't make two non-adjacent months look adjacent.
     """
     permission_classes = [IsAuthenticated]
 
@@ -107,9 +119,23 @@ class ExpenseAnalyticsView(SmartAPIView):
     # (0, negative, or huge) can't feed a malformed range()/list slice below.
     MAX_MONTHS = 60
 
+    def _window_keys(self, current_month, year_param, months_param):
+        if year_param is not None:
+            year = max(MINYEAR, min(year_param, MAXYEAR))
+            if year > current_month.year:
+                return []
+            last_month_num = current_month.month if year == current_month.year else 12
+            return [date(year, m, 1).isoformat() for m in range(1, last_month_num + 1)]
+
+        if months_param is not None:
+            months = max(1, min(months_param, self.MAX_MONTHS))
+            return [(current_month - relativedelta(months=offset)).isoformat() for offset in range(months - 1, -1, -1)]
+
+        return [date(current_month.year, m, 1).isoformat() for m in range(1, current_month.month + 1)]
+
     def get(self, request, **kwargs):
-        months = QueryParams.get_int(request, "months", default_value=12)
-        months = max(1, min(months, self.MAX_MONTHS))
+        year_param = QueryParams.get_int(request, "year")
+        months_param = QueryParams.get_int(request, "months")
         target_currency = request.user.currency
         rates = load_latest_rates()
 
@@ -142,16 +168,13 @@ class ExpenseAnalyticsView(SmartAPIView):
             monthly_totals[key] = monthly_totals.get(key, 0.0) + converted
             monthly_counts[key] = monthly_counts.get(key, 0) + row["count"]
 
-        # Anchor the trailing window to the real current month rather than
-        # to "the last month with data" — otherwise once a new month starts
+        # Anchor the window to the real current month/year rather than to
+        # "the last month with data" — otherwise once a new month starts
         # before any expense is logged in it, the previous month's total
         # silently stands in as "this month" on the frontend (see #56).
         # Zero-fill every month in the window that has no rows.
         current_month = timezone.localdate().replace(day=1)
-        window_keys = [
-            (current_month - relativedelta(months=offset)).isoformat()
-            for offset in range(months - 1, -1, -1)
-        ]
+        window_keys = self._window_keys(current_month, year_param, months_param)
         for key in window_keys:
             monthly_totals.setdefault(key, 0.0)
             monthly_counts.setdefault(key, 0)
@@ -171,13 +194,16 @@ class ExpenseAnalyticsView(SmartAPIView):
             month_categories[row["category"]] = month_categories.get(row["category"], 0.0) + converted
 
         results = []
-        previous_total = None
-        for key in sorted(monthly_totals):
+        for key in window_keys:
             total = round(monthly_totals[key], 2)
+
+            prev_key = (date.fromisoformat(key) - relativedelta(months=1)).isoformat()
+            previous_total = monthly_totals.get(prev_key)
 
             change = None
             change_percent = None
             if previous_total is not None:
+                previous_total = round(previous_total, 2)
                 change = round(total - previous_total, 2)
                 if previous_total > 0:
                     change_percent = round((total - previous_total) / previous_total * 100, 1)
@@ -190,9 +216,6 @@ class ExpenseAnalyticsView(SmartAPIView):
                 "change_vs_previous_month": change,
                 "change_percent_vs_previous_month": change_percent,
             })
-            previous_total = total
-
-        results = results[-months:]
 
         grand_total = sum(row["total"] for row in results)
         return Response({
