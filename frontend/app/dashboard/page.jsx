@@ -3,10 +3,11 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, mediaUrl } from "@/lib/api";
+import { formatAmount } from "@/lib/currency";
+import { CATEGORIES, CATEGORY_COLOR_CLASS } from "@/lib/expenseCategories";
 import AssistantChat from "@/components/AssistantChat";
 import AuthGuard from "@/components/AuthGuard";
 import BottomNav from "@/components/BottomNav";
-import MonthChart from "@/components/MonthChart";
 import Spinner from "@/components/Spinner";
 import StatusChip from "@/components/StatusChip";
 
@@ -15,7 +16,44 @@ const STATUS_PRIORITY = { overdue: 0, due_soon: 1, ok: 2 };
 // section this redesign promotes, so there's now room for a couple more
 // before "See all" takes over (see #63).
 const UPCOMING_COUNT = 5;
-const CURRENT_YEAR = new Date().getFullYear();
+
+// A single-month glance, not the multi-month bar chart — that lives on the
+// dedicated Expenses page (see #63). `month` is the one row returned by
+// ?months=1, i.e. the current month's totals.
+function ThisMonthSpending({ month, currency }) {
+  if (!month) return null;
+
+  return (
+    <div className="card">
+      <div className="mb-2 flex items-center justify-between">
+        <p className="text-[13px] font-semibold">This month</p>
+        <p className="text-xl font-bold">{formatAmount(month.total, currency)}</p>
+      </div>
+      {month.change_percent_vs_previous_month !== null && month.change_percent_vs_previous_month !== undefined && (
+        <p className={`mb-2 text-[12px] font-medium ${month.change_percent_vs_previous_month > 0 ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`}>
+          {month.change_percent_vs_previous_month > 0 ? "▲" : "▼"} {Math.abs(month.change_percent_vs_previous_month)}% vs last month
+        </p>
+      )}
+      {month.total === 0 ? (
+        <p className="text-[12px] text-gray-400 dark:text-gray-500">No expenses logged.</p>
+      ) : (
+        <div className="space-y-1.5">
+          {CATEGORIES.filter(([key]) => (month.by_category?.[key] || 0) > 0).map(([key, label]) => (
+            <div key={key} className="flex items-center justify-between text-[12px]">
+              <span className="flex items-center gap-1.5 text-gray-600 dark:text-gray-300">
+                <span className={`h-2 w-2 rounded-full ${CATEGORY_COLOR_CLASS[key]}`} />
+                {label}
+              </span>
+              <span className="font-medium text-gray-900 dark:text-gray-100">
+                {formatAmount(month.by_category[key], currency)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function Dashboard() {
   const [cars, setCars] = useState(null);
@@ -32,7 +70,10 @@ function Dashboard() {
     api("/reminders/")
       .then((data) => setReminders(data.results || data))
       .catch(() => setRemindersError(true));
-    api(`/expenses/analytics/?year=${CURRENT_YEAR}`)
+    // Just the current month (see #63) — a full year-on-year chart belongs
+    // on the dedicated Expenses page ("See details" below), not a
+    // quick-glance dashboard tile.
+    api("/expenses/analytics/?months=1")
       .then(setAnalytics)
       .catch(() => setAnalyticsError(true));
   }, []);
@@ -48,12 +89,6 @@ function Dashboard() {
         <h1 className="text-2xl font-bold">Your Garage</h1>
       </header>
 
-      {cars?.length > 0 && (
-        <div className="mb-6">
-          <AssistantChat />
-        </div>
-      )}
-
       {error && <p className="mb-4 rounded-xl bg-red-50 dark:bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-400">{error}</p>}
 
       {cars === null && !error && <div className="flex justify-center py-6"><Spinner /></div>}
@@ -68,9 +103,12 @@ function Dashboard() {
 
       {/* Compact picker (see #63) — cars are still one tap away, but no
           longer the dominant thing on the screen; that's now reminders and
-          spending, the two things worth checking on every open. */}
+          spending, the two things worth checking on every open. The
+          assistant shares this row too (compact trigger, same chip size)
+          instead of its own full-width card above it. */}
       {cars?.length > 0 && (
         <div className="flex gap-3 overflow-x-auto pb-1">
+          <AssistantChat compact />
           {cars.map((car) => (
             <Link
               key={car.id}
@@ -145,7 +183,7 @@ function Dashboard() {
           ) : analyticsError ? (
             <p className="card text-center text-sm text-gray-500 dark:text-gray-400">Couldn&apos;t load spending right now.</p>
           ) : (
-            <MonthChart months={analytics.months} currency={analytics.currency} year={CURRENT_YEAR} />
+            <ThisMonthSpending month={analytics.months?.[0]} currency={analytics.currency} />
           )}
         </div>
       )}

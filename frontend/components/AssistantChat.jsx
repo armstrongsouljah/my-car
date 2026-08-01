@@ -79,7 +79,10 @@ function AssistantMessageContent({ text }) {
   return blocks;
 }
 
-export default function AssistantChat() {
+// compact: a small round chip sized to sit in the same row as the
+// dashboard's car picker (see #63), instead of the full-width card with
+// its own description line.
+export default function AssistantChat({ compact = false }) {
   const [open, setOpen] = useState(false);
   const [cars, setCars] = useState(null); // null = not loaded yet
   const [carId, setCarId] = useState(null);
@@ -225,24 +228,41 @@ export default function AssistantChat() {
 
   return (
     <>
-      <button
-        ref={triggerRef}
-        onClick={() => {
-          trackSignal("assistant_chat_opened");
-          setOpen(true);
-        }}
-        className="card flex w-full items-center gap-3 text-left active:scale-[0.99]"
-      >
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gray-100 text-xl dark:bg-gray-800">
-          💬
-        </span>
-        <span className="min-w-0">
-          <span className="block font-semibold">Ask the car assistant</span>
-          <span className="block truncate text-[13px] text-gray-500 dark:text-gray-400">
-            Service history, what&apos;s due, expenses, trouble codes…
+      {compact ? (
+        <button
+          ref={triggerRef}
+          onClick={() => {
+            trackSignal("assistant_chat_opened");
+            setOpen(true);
+          }}
+          aria-label="Ask the car assistant"
+          className="flex w-16 flex-shrink-0 flex-col items-center gap-1.5 text-center active:scale-95"
+        >
+          <span className="flex h-14 w-14 items-center justify-center rounded-full bg-brand/10 text-2xl ring-1 ring-inset ring-brand/30">
+            💬
           </span>
-        </span>
-      </button>
+          <span className="w-full truncate text-[11px] font-medium text-gray-600 dark:text-gray-300">Assistant</span>
+        </button>
+      ) : (
+        <button
+          ref={triggerRef}
+          onClick={() => {
+            trackSignal("assistant_chat_opened");
+            setOpen(true);
+          }}
+          className="card flex w-full items-center gap-3 text-left active:scale-[0.99]"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gray-100 text-xl dark:bg-gray-800">
+            💬
+          </span>
+          <span className="min-w-0">
+            <span className="block font-semibold">Ask the car assistant</span>
+            <span className="block truncate text-[13px] text-gray-500 dark:text-gray-400">
+              Service history, what&apos;s due, expenses, trouble codes…
+            </span>
+          </span>
+        </button>
+      )}
 
       {open && (
         <div
