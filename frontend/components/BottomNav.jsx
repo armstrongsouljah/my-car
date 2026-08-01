@@ -34,7 +34,7 @@ export default function BottomNav() {
         {activeIndex >= 0 && (
           <span
             aria-hidden="true"
-            className="absolute top-0 h-[3px] w-1/4 rounded-full bg-brand transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] motion-reduce:transition-none"
+            className="pointer-events-none absolute top-0 h-[3px] w-1/4 rounded-full bg-brand transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] motion-reduce:transition-none"
             style={{ transform: `translateX(${activeIndex * 100}%)` }}
           />
         )}
