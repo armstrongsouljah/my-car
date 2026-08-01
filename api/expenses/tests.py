@@ -9,6 +9,7 @@ from rest_framework.test import APIClient
 from accounts.models import User
 from cars.models import Car
 from expenses.models import ExchangeRate, Expense
+from expenses.views import ExpenseAnalyticsView
 
 
 def previous_month():
@@ -101,7 +102,7 @@ class TestExpenseAnalytics:
         last_month = today - relativedelta(months=1)
         Expense.objects.create(car=car, category="fuel", amount=100, expense_date=last_month.replace(day=10))
         Expense.objects.create(car=car, category="garage_visit", amount=50, expense_date=last_month.replace(day=20))
-        Expense.objects.create(car=car, category="fuel", amount=200, expense_date=today.replace(day=5))
+        Expense.objects.create(car=car, category="fuel", amount=200, expense_date=today)
 
         client = APIClient()
         client.force_authenticate(owner)
@@ -154,10 +155,8 @@ class TestExpenseAnalytics:
         owner.currency = "USD"
         owner.save(update_fields=["currency"])
         today = timezone.localdate()
-        Expense.objects.create(
-            car=car, category="fuel", amount=3700, currency="UGX", expense_date=today.replace(day=5)
-        )
-        Expense.objects.create(car=car, category="fuel", amount=50, currency="USD", expense_date=today.replace(day=20))
+        Expense.objects.create(car=car, category="fuel", amount=3700, currency="UGX", expense_date=today)
+        Expense.objects.create(car=car, category="fuel", amount=50, currency="USD", expense_date=today)
 
         client = APIClient()
         client.force_authenticate(owner)
@@ -166,6 +165,25 @@ class TestExpenseAnalytics:
         months = response.data["months"]
         assert round(months[-1]["total"], 2) == 51.0  # 3700 UGX (-> $1) + $50
         assert response.data["currency"] == "USD"
+
+    def test_months_param_is_clamped_to_a_sane_range(self, owner, car):
+        """An out-of-range ?months= (unchecked past QueryParams.get_int's
+        int-syntax check) shouldn't be able to feed a negative/huge window
+        into the range()/list-slice building the response."""
+        client = APIClient()
+        client.force_authenticate(owner)
+
+        response = client.get("/api/v1/expenses/analytics/?months=-5")
+        assert response.status_code == 200
+        assert len(response.data["months"]) == 1
+
+        response = client.get("/api/v1/expenses/analytics/?months=0")
+        assert response.status_code == 200
+        assert len(response.data["months"]) == 1
+
+        response = client.get("/api/v1/expenses/analytics/?months=9999")
+        assert response.status_code == 200
+        assert len(response.data["months"]) == ExpenseAnalyticsView.MAX_MONTHS
 
 
 @pytest.mark.django_db

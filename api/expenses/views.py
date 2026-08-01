@@ -102,8 +102,14 @@ class ExpenseAnalyticsView(SmartAPIView):
     """
     permission_classes = [IsAuthenticated]
 
+    # QueryParams.get_int only validates that ?months= parses as an int, not
+    # that it's a sane window size — clamp it here so an out-of-range value
+    # (0, negative, or huge) can't feed a malformed range()/list slice below.
+    MAX_MONTHS = 60
+
     def get(self, request, **kwargs):
         months = QueryParams.get_int(request, "months", default_value=12)
+        months = max(1, min(months, self.MAX_MONTHS))
         target_currency = request.user.currency
         rates = load_latest_rates()
 

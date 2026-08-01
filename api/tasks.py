@@ -443,10 +443,20 @@ def send_monthly_expense_report_email_task(user_id, year, month):
     via its unique constraint) and only confirms it (sent_at) once the send
     actually succeeds — same claim-then-confirm shape as the mileage/
     deletion/verify reminder tasks (see #27), just per period instead of per
-    mutable column. This is what stops two concurrent or redelivered
-    executions for the same (user, year, month) from both proceeding to
-    send: whichever loses the race to claim (or finds an unexpired claim
-    already held) returns immediately rather than sending a duplicate.
+    mutable column. This is what stops two *concurrent* executions for the
+    same (user, year, month) from both proceeding to send: whichever loses
+    the race to claim (or finds an unexpired claim already held) returns
+    immediately rather than sending a duplicate.
+
+    Not a hard guarantee against ever sending twice, though: this is
+    at-least-once delivery, not exactly-once. django.core.mail has no
+    idempotency-key concept to hand the provider, so a crash (or an
+    ambiguous provider error) between the send call above actually
+    succeeding and the sent_at confirm below would leave the claim
+    unconfirmed; once its lease (REMINDER_CLAIM_LEASE_HOURS) expires, a
+    later run would legitimately reclaim it and resend. Rare in practice —
+    it needs a failure in that narrow window — and duplicate expense
+    digest is a low-stakes email to double up on, unlike, say, a payment.
     """
     from django.db import IntegrityError, transaction
     from django.utils import timezone
