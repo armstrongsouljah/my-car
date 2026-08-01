@@ -50,33 +50,47 @@ class CarCreateSerializer(CreateModelSerializer):
 
 
 class CarEditSerializer(EditModelSerializer):
+    # Not a model field — an explicit opt-in the owner ticks (e.g. after an
+    # engine/odometer replacement) to let a reading move backwards. Never
+    # persisted; only consumed by update() below.
+    allow_odometer_decrease = serializers.BooleanField(write_only=True, required=False, default=False)
+
     class Meta:
         model = Car
         fields = (
             "make", "model", "year", "registration_number", "vin",
             "color", "fuel_type", "photo_url", "current_odometer_km", "notes",
+            "allow_odometer_decrease",
         )
 
     def validate_photo_url(self, value):
         return _check_cloudinary_url(value)
 
-    def validate_current_odometer_km(self, value):
-        if self.instance and value < self.instance.current_odometer_km:
+    def validate(self, attrs):
+        odometer_km = attrs.get("current_odometer_km")
+        allow_decrease = attrs.get("allow_odometer_decrease", False)
+        if (
+            odometer_km is not None
+            and self.instance
+            and not allow_decrease
+            and odometer_km < self.instance.current_odometer_km
+        ):
             raise CustomValidation(
                 "Odometer reading cannot go backwards.",
                 field="current_odometer_km",
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
-        return value
+        return attrs
 
     def update(self, instance, validated_data):
         # current_odometer_km always goes through record_odometer() so the
         # write is atomic against concurrent updates and odometer_updated_at
         # stays in sync (matches the ServiceRecord/Inspection save() path).
         odometer_km = validated_data.pop("current_odometer_km", None)
+        allow_decrease = validated_data.pop("allow_odometer_decrease", False)
         instance = super().update(instance, validated_data)
         if odometer_km is not None:
-            instance.record_odometer(odometer_km)
+            instance.record_odometer(odometer_km, allow_decrease=allow_decrease)
         return instance
 
 

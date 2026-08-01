@@ -60,11 +60,15 @@ class Car(models.Model):
             label = f"{label} — {self.registration_number}"
         return label
 
-    def record_odometer(self, odometer_km):
+    def record_odometer(self, odometer_km, allow_decrease=False):
         """
-        Moves the odometer forward; readings never go backwards. Uses a
-        single conditional UPDATE (rather than compare-then-save) so
+        Moves the odometer forward; readings never go backwards by default.
+        Uses a single conditional UPDATE (rather than compare-then-save) so
         concurrent writers can't race a higher reading back down.
+
+        `allow_decrease` opts out of that guard for the rare legitimate case
+        (engine/odometer replacement) — callers must gather explicit owner
+        confirmation before passing it, this method doesn't ask why.
         """
         from django.utils import timezone
 
@@ -74,7 +78,10 @@ class Car(models.Model):
             return
 
         now = timezone.now()
-        updated = Car.objects.filter(pk=self.pk, current_odometer_km__lt=odometer_km).update(
+        filters = {"pk": self.pk}
+        if not allow_decrease:
+            filters["current_odometer_km__lt"] = odometer_km
+        updated = Car.objects.filter(**filters).update(
             current_odometer_km=odometer_km, odometer_updated_at=now, updated_at=now,
         )
         if updated:
