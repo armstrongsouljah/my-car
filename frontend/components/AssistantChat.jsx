@@ -236,9 +236,9 @@ export default function AssistantChat({ compact = false }) {
             setOpen(true);
           }}
           aria-label="Ask the car assistant"
-          className="flex w-16 flex-shrink-0 flex-col items-center gap-1.5 text-center active:scale-95"
+          className="group flex w-16 flex-shrink-0 flex-col items-center gap-1.5 text-center outline-none active:scale-95"
         >
-          <span className="flex h-14 w-14 items-center justify-center rounded-full bg-brand/10 text-2xl ring-1 ring-inset ring-brand/30">
+          <span className="flex h-14 w-14 items-center justify-center rounded-full bg-brand/10 text-2xl ring-1 ring-inset ring-brand/30 transition group-focus-visible:ring-2 group-focus-visible:ring-brand">
             💬
           </span>
           <span className="w-full truncate text-[11px] font-medium text-gray-600 dark:text-gray-300">Assistant</span>
@@ -250,7 +250,7 @@ export default function AssistantChat({ compact = false }) {
             trackSignal("assistant_chat_opened");
             setOpen(true);
           }}
-          className="card flex w-full items-center gap-3 text-left active:scale-[0.99]"
+          className="card flex w-full items-center gap-3 text-left outline-none transition focus-visible:ring-2 focus-visible:ring-brand active:scale-[0.99]"
         >
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gray-100 text-xl dark:bg-gray-800">
             💬
