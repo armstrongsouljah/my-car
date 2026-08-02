@@ -1,7 +1,10 @@
 import LandingContent from "@/components/LandingContent";
 
 export const metadata = {
-  title: "GlavBox — The glovebox for your car's paperwork",
+  // .absolute bypasses the root layout's `template: "%s · GlavBox"` — this
+  // title already carries the brand name, so the template would double it up
+  // ("... paperwork · GlavBox") and blow past what search results display.
+  title: { absolute: "GlavBox — The glovebox for your car's paperwork" },
   description:
     "Track every car you own: service history, expenses, and reminders that catch what's due before you have to think about it. Plus a built-in assistant that knows your car.",
   robots: { index: true, follow: true },

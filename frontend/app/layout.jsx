@@ -3,8 +3,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { TelemetryProvider } from "@/components/TelemetryProvider";
 import ServiceWorkerRegistration from "@/components/ServiceWorkerRegistration";
 import { THEME_KEY } from "@/lib/theme";
-
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.glavbox.com";
+import { APP_URL } from "@/lib/site";
 
 export const metadata = {
   metadataBase: new URL(APP_URL),

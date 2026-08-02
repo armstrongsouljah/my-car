@@ -20,15 +20,14 @@ const MAX_ATTACHMENTS = 5;
 const MAX_ATTACHMENT_SIZE_MB = 10;
 const REDIRECT_DELAY_MS = 3000;
 
+// Deliberately starts empty rather than reading getUser() here: this runs
+// during SSR too (client components still render server-side for the initial
+// HTML), where getUser() always returns null, so seeding it with the actual
+// stored user would mismatch the server-rendered markup a logged-in browser
+// hydrates against. Prefilled in a useEffect below instead — client-only, by
+// definition after the mismatch-sensitive hydration pass has already happened.
 function initialForm() {
-  const user = getUser();
-  return {
-    name: [user?.first_name, user?.last_name].filter(Boolean).join(" ") || "",
-    email: user?.email || "",
-    subject: "general_account",
-    custom_subject: "",
-    message: "",
-  };
+  return { name: "", email: "", subject: "general_account", custom_subject: "", message: "" };
 }
 
 function Hero({ tagline }) {
@@ -90,6 +89,13 @@ export default function ContactForm() {
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
+
+  useEffect(() => {
+    const user = getUser();
+    if (!user) return;
+    const name = [user.first_name, user.last_name].filter(Boolean).join(" ");
+    setForm((prev) => ({ ...prev, name: name || prev.name, email: user.email || prev.email }));
+  }, []);
 
   const update = (key) => (event) => setForm({ ...form, [key]: event.target.value });
 
@@ -209,7 +215,7 @@ export default function ContactForm() {
           </div>
 
           <div>
-            <label className="auth-label">Attachments (optional)</label>
+            <p className="auth-label">Attachments (optional)</p>
             <label className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed border-white/15 bg-white/5 px-4 py-3 text-[13px] font-medium text-white/50">
               <MdOutlineAttachFile size={17} />
               Add files (up to {MAX_ATTACHMENTS}, {MAX_ATTACHMENT_SIZE_MB}MB each)

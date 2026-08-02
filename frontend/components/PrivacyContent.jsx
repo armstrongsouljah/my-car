@@ -1,8 +1,10 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { MdOutlineDeleteOutline, MdOutlineFactCheck, MdOutlineMailOutline, MdOutlineShield, MdOutlineVpnKey } from "react-icons/md";
+import { isLoggedIn } from "@/lib/api";
 
 function Section({ Icon, title, children }) {
   return (
@@ -20,10 +22,18 @@ function Section({ Icon, title, children }) {
 
 export default function PrivacyContent() {
   const router = useRouter();
+  // This page is public/indexable (see app/privacy/page.jsx) — a signed-out
+  // visitor can land here straight from search. Defaults to false (the
+  // signed-out case) on both the server render and the first client render,
+  // same value either way, so there's nothing to mismatch on hydration; only
+  // flips true after mount, once it's safe to read localStorage.
+  const [loggedIn, setLoggedIn] = useState(false);
+
+  useEffect(() => setLoggedIn(isLoggedIn()), []);
 
   function goBack() {
     // router.back() is a no-op if this page was opened directly (no
-    // in-app history to return to) — fall back to the login screen.
+    // in-app history to return to) — fall back to the landing page.
     if (typeof window !== "undefined" && window.history.length > 1) {
       router.back();
     } else {
@@ -102,7 +112,11 @@ export default function PrivacyContent() {
       </Section>
 
       <p className="pt-2 text-center text-[12px] text-gray-600 dark:text-gray-400">
-        <Link href="/settings" className="underline underline-offset-2">Back to Settings</Link>
+        {loggedIn ? (
+          <Link href="/settings" className="underline underline-offset-2">Back to Settings</Link>
+        ) : (
+          <Link href="/" className="underline underline-offset-2">Back to home</Link>
+        )}
       </p>
     </main>
   );

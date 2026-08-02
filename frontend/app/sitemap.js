@@ -1,4 +1,4 @@
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.glavbox.com";
+import { APP_URL } from "@/lib/site";
 
 export default function sitemap() {
   const lastModified = new Date();

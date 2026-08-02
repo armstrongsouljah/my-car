@@ -1,15 +1,19 @@
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.glavbox.com";
+import { APP_URL } from "@/lib/site";
 
-// Fail-closed: only the public/marketing routes are allowed, everything else
-// (the authenticated app) is disallowed explicitly rather than trying to
-// remember to list every future authenticated route here — a disallowed
-// prefix always wins over the bare "/" allow below, regardless of add order.
+// True deny-by-default: only the three public paths are allowed, everything
+// else — including any authenticated route added later — is disallowed
+// without needing this file touched. "/$" (the Robots Exclusion Protocol's
+// end-of-string anchor) matches only the exact root, not every path as a
+// prefix, so it can't accidentally allow-list everything alongside it.
+// `robots: { index: false, follow: false }` on the root layout (see
+// app/layout.jsx) is the same fail-closed default enforced again in the
+// per-page <meta name="robots"> tag.
 export default function robots() {
   return {
     rules: {
       userAgent: "*",
-      allow: "/",
-      disallow: ["/dashboard", "/cars", "/expenses", "/reminders", "/settings", "/login", "/mileage"],
+      allow: ["/$", "/contact", "/privacy"],
+      disallow: "/",
     },
     sitemap: `${APP_URL}/sitemap.xml`,
   };
