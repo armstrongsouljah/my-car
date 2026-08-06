@@ -325,8 +325,11 @@ if CELERY_BROKER_URL.startswith("rediss://"):
 # next-due time is `last_run_at + interval`; once last_run_at resets to "now"
 # on every restart, a task can go long stretches without ever actually firing
 # (this is exactly what broke weekly mileage reminders — see #76). crontab
-# instead computes the next due wall-clock time on every beat startup, so it
-# self-heals across restarts regardless of how often they happen.
+# instead computes the next due wall-clock time fresh on every beat startup —
+# it can't accumulate the same permanent starvation, though a restart that
+# lands exactly on/after a scheduled time still skips that one occurrence
+# rather than catching it up; only the next occurrence is affected, not
+# every future one like the bare-integer case above.
 CELERY_BEAT_SCHEDULE = {
     "send-service-reminders": {
         "task": "tasks.send_due_reminders_task",
