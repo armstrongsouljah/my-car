@@ -1,4 +1,4 @@
-from datetime import MAXYEAR, MINYEAR, date
+from datetime import MAXYEAR, MINYEAR, date, timedelta
 
 from dateutil.relativedelta import relativedelta
 from django.db.models import Count, Sum
@@ -25,9 +25,36 @@ from utils.Exception import CustomValidation
 from utils.Views import SmartAPIView, SmartDetailView, SmartPaginationAPIView
 
 
+def _period_range(period):
+    """
+    Calendar-aligned start/end dates (inclusive) for `period` — "week" is
+    Monday-Sunday of the current ISO week, not a rolling trailing-7-days
+    window, so it stays consistent with how the analytics endpoint already
+    treats "year" (a calendar year, see ExpenseAnalyticsView) rather than
+    introducing a second, different notion of "period" on the same page.
+    """
+    today = timezone.localdate()
+    if period == "week":
+        start = today - timedelta(days=today.weekday())
+        end = start + timedelta(days=6)
+    elif period == "month":
+        start = today.replace(day=1)
+        end = start + relativedelta(months=1) - timedelta(days=1)
+    elif period == "year":
+        start = today.replace(month=1, day=1)
+        end = today.replace(month=12, day=31)
+    else:
+        raise CustomValidation(
+            "Invalid period — use week, month, or year.", field="period", status_code=status.HTTP_400_BAD_REQUEST
+        )
+    return start, end
+
+
 class ExpenseListCreateView(SmartPaginationAPIView):
     """
-    GET  — expense log for the owner's cars (?car=<uuid>, ?category=fuel).
+    GET  — expense log for the owner's cars (?car=<uuid>, ?category=fuel,
+           ?period=week|month|year — a calendar-aligned window, see
+           _period_range).
     POST — log a garage visit, modification parts, fuel expense, and so on.
     """
     model = Expense
@@ -64,6 +91,10 @@ class ExpenseListCreateView(SmartPaginationAPIView):
         category = QueryParams.get_str(self.request, "category")
         if category:
             queryset = queryset.filter(category=category)
+        period = QueryParams.get_str(self.request, "period")
+        if period:
+            start, end = _period_range(period)
+            queryset = queryset.filter(expense_date__gte=start, expense_date__lte=end)
         start_date = QueryParams.get_str(self.request, "start_date")
         if start_date:
             queryset = queryset.filter(expense_date__gte=start_date)
