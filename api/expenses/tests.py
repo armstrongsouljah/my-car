@@ -112,9 +112,10 @@ class TestExpenseListPeriodFilter:
 
     def test_week_includes_today_excludes_last_week(self, owner, car):
         today = timezone.localdate()
-        in_week = Expense.objects.create(car=car, category="fuel", amount=10, expense_date=today)
+        week_start = today - relativedelta(days=today.weekday())
+        in_week = Expense.objects.create(car=car, category="fuel", amount=10, expense_date=week_start)
         last_week = Expense.objects.create(
-            car=car, category="fuel", amount=10, expense_date=today - relativedelta(weeks=1, days=1)
+            car=car, category="fuel", amount=10, expense_date=week_start - relativedelta(days=1)
         )
 
         client = APIClient()
