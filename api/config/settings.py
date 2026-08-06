@@ -315,30 +315,42 @@ if CELERY_BROKER_URL.startswith("rediss://"):
 
 # Daily reminder sweep — emails owners whose cars are due (or soon due) for
 # service or a general inspection.
+#
+# All entries use crontab (wall-clock), never a bare integer-seconds interval.
+# beat's PersistentScheduler tracks "when did this last run" in a shelve file
+# at /tmp/celerybeat-schedule inside the beat pod — ephemeral storage, wiped
+# on every pod restart. The `beat` Deployment uses `strategy: Recreate` and
+# gets redeployed on every merge to main (see .github/workflows/deploy.yml),
+# so that file rarely if ever survives 24 hours. A bare-integer schedule's
+# next-due time is `last_run_at + interval`; once last_run_at resets to "now"
+# on every restart, a task can go long stretches without ever actually firing
+# (this is exactly what broke weekly mileage reminders — see #76). crontab
+# instead computes the next due wall-clock time on every beat startup, so it
+# self-heals across restarts regardless of how often they happen.
 CELERY_BEAT_SCHEDULE = {
     "send-service-reminders": {
         "task": "tasks.send_due_reminders_task",
-        "schedule": 60 * 60 * 24,  # once a day
+        "schedule": crontab(hour=8, minute=0),
     },
     "send-mileage-reminders": {
         "task": "tasks.send_mileage_reminders_task",
-        "schedule": 60 * 60 * 24,  # once a day; per-user cadence applied inside
+        "schedule": crontab(hour=8, minute=0),  # per-user cadence applied inside
     },
     "purge-deactivated-accounts": {
         "task": "tasks.purge_deactivated_accounts_task",
-        "schedule": 60 * 60 * 24,  # once a day
+        "schedule": crontab(hour=3, minute=0),
     },
     "send-account-deletion-reminders": {
         "task": "tasks.send_account_deletion_reminder_task",
-        "schedule": 60 * 60 * 24,  # once a day
+        "schedule": crontab(hour=8, minute=0),
     },
     "send-email-verification-reminders": {
         "task": "tasks.send_email_verification_reminder_task",
-        "schedule": 60 * 60 * 24,  # once a day
+        "schedule": crontab(hour=8, minute=0),
     },
     "purge-unverified-accounts": {
         "task": "tasks.purge_unverified_accounts_task",
-        "schedule": 60 * 60 * 24,  # once a day
+        "schedule": crontab(hour=3, minute=0),
     },
     "send-monthly-expense-reports": {
         "task": "tasks.send_monthly_expense_reports_task",
