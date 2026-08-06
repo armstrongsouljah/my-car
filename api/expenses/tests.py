@@ -103,6 +103,68 @@ class TestExpenseCurrencyConversion:
 
 
 @pytest.mark.django_db
+class TestExpenseListPeriodFilter:
+    """See #25 — a calendar-aligned window, not a rolling trailing window."""
+
+    def _ids(self, response):
+        rows = response.data["results"] if "results" in response.data else response.data
+        return {row["id"] for row in rows}
+
+    def test_week_includes_today_excludes_last_week(self, owner, car):
+        today = timezone.localdate()
+        week_start = today - relativedelta(days=today.weekday())
+        in_week = Expense.objects.create(car=car, category="fuel", amount=10, expense_date=week_start)
+        last_week = Expense.objects.create(
+            car=car, category="fuel", amount=10, expense_date=week_start - relativedelta(days=1)
+        )
+
+        client = APIClient()
+        client.force_authenticate(owner)
+        response = client.get("/api/v1/expenses/?period=week")
+
+        ids = self._ids(response)
+        assert str(in_week.id) in ids
+        assert str(last_week.id) not in ids
+
+    def test_month_includes_this_month_excludes_last_month(self, owner, car):
+        today = timezone.localdate()
+        this_month = Expense.objects.create(car=car, category="fuel", amount=10, expense_date=today.replace(day=1))
+        last_month = Expense.objects.create(
+            car=car, category="fuel", amount=10, expense_date=today.replace(day=1) - relativedelta(days=1)
+        )
+
+        client = APIClient()
+        client.force_authenticate(owner)
+        response = client.get("/api/v1/expenses/?period=month")
+
+        ids = self._ids(response)
+        assert str(this_month.id) in ids
+        assert str(last_month.id) not in ids
+
+    def test_year_includes_this_year_excludes_last_year(self, owner, car):
+        today = timezone.localdate()
+        this_year = Expense.objects.create(car=car, category="fuel", amount=10, expense_date=today.replace(month=1, day=1))
+        last_year = Expense.objects.create(
+            car=car, category="fuel", amount=10, expense_date=today.replace(month=1, day=1) - relativedelta(days=1)
+        )
+
+        client = APIClient()
+        client.force_authenticate(owner)
+        response = client.get("/api/v1/expenses/?period=year")
+
+        ids = self._ids(response)
+        assert str(this_year.id) in ids
+        assert str(last_year.id) not in ids
+
+    def test_invalid_period_is_rejected(self, owner, car):
+        client = APIClient()
+        client.force_authenticate(owner)
+        response = client.get("/api/v1/expenses/?period=fortnight")
+
+        assert response.status_code == 400
+
+
+@pytest.mark.django_db
 class TestExpenseAnalytics:
 
     def test_month_on_month_totals_and_change(self, owner, car):

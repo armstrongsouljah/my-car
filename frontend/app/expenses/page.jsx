@@ -8,7 +8,14 @@ import { trackSignal } from "@/lib/telemetry";
 import { CATEGORIES, CATEGORY_LABELS } from "@/lib/expenseCategories";
 import AuthGuard from "@/components/AuthGuard";
 import BottomNav from "@/components/BottomNav";
+import FilterChips from "@/components/FilterChips";
 import MonthChart, { monthLabel } from "@/components/MonthChart";
+
+const PERIODS = [
+  { value: "week", label: "This week" },
+  { value: "month", label: "This month" },
+  { value: "year", label: "This year" },
+];
 
 function ExpenseForm({ cars, expense = null, onSaved, onCancel }) {
   const isEdit = !!expense;
@@ -137,6 +144,9 @@ function Expenses() {
 
   const [cars, setCars] = useState([]);
   const [carFilter, setCarFilter] = useState("");
+  // Independent of yearFilter/analytics below — this only scopes the log
+  // list, not the month-on-month cards/chart above it (see #25).
+  const [periodFilter, setPeriodFilter] = useState("week");
   const [yearFilter, setYearFilter] = useState(currentYear);
   // Clamps how far back "‹" can go on the chart — null (still loading, or
   // never resolved) means don't clamp yet rather than trap the user behind
@@ -161,11 +171,11 @@ function Expenses() {
     api(`/expenses/analytics/?${carScope}year=${yearFilter}`)
       .then((data) => { if (!cancelled) { setAnalytics(data); setError(""); } })
       .catch((err) => { if (!cancelled) setError(err.message); });
-    api(`/expenses/${carFilter ? `?car=${carFilter}` : ""}`)
+    api(`/expenses/?${carScope}period=${periodFilter}`)
       .then((data) => { if (!cancelled) setExpenses(data.results || data); })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [carFilter, yearFilter]);
+  }, [carFilter, periodFilter, yearFilter]);
 
   useEffect(() => {
     api("/cars/").then((data) => setCars(data.results || data)).catch(() => {});
@@ -243,7 +253,14 @@ function Expenses() {
         </button>
       )}
 
-      <div className="mt-4 space-y-3">
+      <div className="mt-6 mb-2">
+        <p className="mb-2 text-[13px] font-semibold text-gray-500 dark:text-gray-400">Expense log</p>
+        <FilterChips options={PERIODS} value={periodFilter} onChange={setPeriodFilter} />
+      </div>
+
+      {/* Fixed-height + its own scroll container instead of letting the list
+          push the rest of the page down as more expenses get logged (#25). */}
+      <div className="max-h-[60vh] space-y-3 overflow-y-auto pb-1">
         {expenses.map((expense) => (
           <button
             key={expense.id}
@@ -267,7 +284,11 @@ function Expenses() {
             </div>
           </button>
         ))}
-        {expenses.length === 0 && <p className="text-center text-sm text-gray-400 dark:text-gray-500">No expenses logged yet.</p>}
+        {expenses.length === 0 && (
+          <p className="text-center text-sm text-gray-400 dark:text-gray-500">
+            No expenses logged {periodFilter === "week" ? "this week" : periodFilter === "month" ? "this month" : "this year"}.
+          </p>
+        )}
       </div>
 
       <BottomNav />
