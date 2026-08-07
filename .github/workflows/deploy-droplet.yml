@@ -1,0 +1,71 @@
+name: Deploy to DigitalOcean droplet (manual)
+
+# See issue #79 — this is the DigitalOcean migration target, kept as a
+# manual/opt-in trigger while GCP (deploy.yml) remains the live deploy path.
+# Once the droplet is the real cutover target, fold this into deploy.yml's
+# push-to-main trigger and remove the GKE-specific jobs there.
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - run: uv sync
+      - run: uv run pytest
+
+  test-frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run lint
+      - run: npm test
+
+  deploy:
+    needs: [test, test-frontend]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Builds happen on the droplet itself for now (proven working manually —
+      # a full `docker compose build` takes a few minutes on the 2 vCPU box).
+      # Switching to "build in CI, push to a registry, `docker compose pull`
+      # on the droplet" is a worthwhile follow-up once this path is trusted,
+      # but isn't a blocker for the initial cutover.
+      - name: Sync source to the droplet
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.DROPLET_HOST }}
+          username: deploy
+          key: ${{ secrets.DROPLET_SSH_KEY }}
+          source: "api,frontend,docker-compose.yml"
+          target: /home/deploy/my-car
+          strip_components: 0
+
+      - name: Build and deploy
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.DROPLET_HOST }}
+          username: deploy
+          key: ${{ secrets.DROPLET_SSH_KEY }}
+          script: |
+            set -e
+            cd /home/deploy/my-car
+            docker compose build
+            docker compose run --rm api python manage.py migrate
+            docker compose up -d
+            docker image prune -f
