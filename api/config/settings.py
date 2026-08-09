@@ -15,10 +15,10 @@ DEBUG = config("DEBUG", default=False, cast=bool)
 
 ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1", cast=Csv())
 
-# The GKE ingress (GCLB) terminates TLS at the edge and forwards plain HTTP to
-# the container, so Django must be told to trust X-Forwarded-Proto to know a
-# request was actually HTTPS (otherwise CSRF's Origin check rejects same-origin
-# admin logins).
+# Caddy (see Caddyfile/docker-compose.prod.yml) terminates TLS at the edge and
+# forwards plain HTTP to the container, so Django must be told to trust
+# X-Forwarded-Proto to know a request was actually HTTPS (otherwise CSRF's
+# Origin check rejects same-origin admin logins).
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 CSRF_TRUSTED_ORIGINS = config("CSRF_TRUSTED_ORIGINS", default="", cast=Csv())
@@ -29,11 +29,12 @@ CSRF_TRUSTED_ORIGINS = config("CSRF_TRUSTED_ORIGINS", default="", cast=Csv())
 # All default to "on unless DEBUG", so local HTTP development keeps working
 # while any deployed environment is hardened without needing extra env vars.
 #
-# The Gateway already redirects HTTP->HTTPS at the edge; SECURE_SSL_REDIRECT is
-# the backstop for anything that reaches the pod over plain HTTP anyway, and it
-# reads the proxy header set above to avoid a redirect loop.
+# Caddy already redirects HTTP->HTTPS at the edge; SECURE_SSL_REDIRECT is the
+# backstop for anything that reaches the container over plain HTTP anyway, and
+# it reads the proxy header set above to avoid a redirect loop.
 SECURE_SSL_REDIRECT = config("SECURE_SSL_REDIRECT", default=not DEBUG, cast=bool)
-# Kubernetes probes hit the pod directly over HTTP and must not be redirected.
+# Docker's healthcheck (see docker-compose.yml) hits the container directly
+# over plain HTTP and must not be redirected.
 SECURE_REDIRECT_EXEMPT = [r"^health/$"]
 
 SESSION_COOKIE_SECURE = config("SESSION_COOKIE_SECURE", default=not DEBUG, cast=bool)
@@ -210,9 +211,10 @@ REST_FRAMEWORK = {
         "auth_password_reset_confirm": config("AUTH_PASSWORD_RESET_CONFIRM_THROTTLE", default="10/hour"),
     },
     # Client IP is read from X-Forwarded-For, which the caller can spoof unless
-    # we know how many proxies sit in front of us. Behind the GKE Gateway the
-    # header is "<client>, <gclb>", so NUM_PROXIES=2 picks the real client.
-    # Left unset for local runs, where there is no proxy at all.
+    # we know how many proxies sit in front of us. Behind Caddy (see Caddyfile/
+    # docker-compose.prod.yml) the header is just "<client>" — one hop — so
+    # NUM_PROXIES=1 picks the real client. Left unset for local runs, where
+    # there is no proxy at all.
     "NUM_PROXIES": config("NUM_PROXIES", default=None, cast=lambda v: int(v) if v not in (None, "") else None),
 }
 

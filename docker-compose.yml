@@ -35,6 +35,11 @@ services:
       # (see .env.example) rather than editing this file. The Postgres
       # password below is still dev-only — never reuse it for a deployment.
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,0.0.0.0,api,host.docker.internal}
+      # Blank locally (no proxy in front). A deployment behind Caddy must set
+      # this to 1 — see the REST_FRAMEWORK["NUM_PROXIES"] comment in
+      # settings.py for why an unset value here is a rate-limit bypass, not
+      # just a missing nice-to-have.
+      NUM_PROXIES: ${NUM_PROXIES:-}
       DATABASE_URL: postgresql://mycar:mycar@db:5432/mycar
       REDIS_URL: redis://redis:6379/1
       CELERY_BROKER_URL: redis://redis:6379/0
