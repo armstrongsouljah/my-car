@@ -121,20 +121,27 @@ GET|POST   /api/v1/expenses/             GET   /api/v1/expenses/analytics/
 
 ## Deployment
 
-Deploys to a single self-managed **DigitalOcean droplet** running Postgres, Redis, and the app itself as plain Docker containers via Compose, with **Caddy** in front as the reverse proxy and automatic Let's Encrypt TLS terminator (`app.glavbox.com` / `api.glavbox.com`). Moved off GCP (GKE/Cloud SQL/Memorystore) in August 2026 — each of those was billed as a separate managed service, which added up to a lot more than one droplet running the same workload for a project this size.
+Deploys to a single self-managed **DigitalOcean droplet** running Postgres, Redis, and the app itself as plain Docker containers via Compose, with **Caddy** in front as the reverse proxy and automatic Let's Encrypt TLS terminator. Moved off GCP (GKE/Cloud SQL/Memorystore) in August 2026 — each of those was billed as a separate managed service, which added up to a lot more than one droplet running the same workload for a project this size.
 
-- `docker-compose.yml` — the base stack (`db`, `redis`, `api`, `worker`, `beat`, `frontend`); dev-safe defaults (`ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS`, port bindings) that a deployment overrides via `.env`, never by editing the file.
-- `docker-compose.prod.yml` — override that adds `caddy` (`docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d`).
-- `Caddyfile` — routes the two domains to the `frontend`/`api` containers.
+Two environments, one droplet, one Caddy instance:
 
-Pushing to `main` triggers `.github/workflows/deploy-droplet.yml`:
+| | prod | dev |
+|---|---|---|
+| Domains | `app.glavbox.com` / `api.glavbox.com` | `dev.glavbox.com` / `api-dev.glavbox.com` |
+| Deploy trigger | pushing a `v*` release tag | every push to `main` |
+| Droplet path | `/home/deploy/my-car` | `/home/deploy/my-car-dev` |
+| Services | full stack (`db`, `redis`, `api`, `worker`, `beat`, `frontend`) | `worker`/`beat` dropped — see below |
+
+- `docker-compose.yml` — the base stack; dev-safe defaults (`ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS`, port bindings) that a deployment overrides via `.env`, never by editing the file. `worker`/`beat` are gated behind Compose's `full` profile — set `COMPOSE_PROFILES=full` in `.env` to include them (see `.env.example`; local dev sets this by default). The droplet's dev stack deliberately omits it: two full stacks were pushing the 2GB droplet into swap, and dev doesn't need async email/reminder features for QA/preview.
+- `docker-compose.prod.yml` — override that adds `caddy` (`docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d`), used for the prod deploy only. The dev stack runs without it — it's reached through *prod's* Caddy instance instead, which proxies to dev's host-published ports (one public IP, one Caddy, one place TLS certs live).
+- `Caddyfile` — routes all four domains; the two dev ones go through `host.docker.internal` since the dev stack is a separate Compose project (own network) that Caddy can't reach by Docker service-name DNS.
+
+Pushing to `main` or a `v*` tag triggers `.github/workflows/deploy-droplet.yml`:
 
 1. **test** / **test-frontend** — `uv run pytest`, `npm run lint`, `npm test`, `npm run build`
-2. **deploy** — syncs `api/`, `frontend/`, and the compose/Caddy files to the droplet over SSH, builds the images there, runs migrations, and brings the stack up (`docker compose up -d --wait`, gated on the `api` container's healthcheck)
+2. **deploy-dev** (push to `main`) / **deploy-prod** (push a `v*` tag) — syncs source to the corresponding droplet directory over SSH, builds the images there, runs migrations, and brings that stack up (`docker compose up -d --wait`, gated on the `api` container's healthcheck)
 
-Single environment for now — every push to `main` deploys straight to production. Splitting this into a dev/prod promotion flow (main → dev, release tag → prod) is tracked in #81.
-
-Required repository configuration (Settings → Secrets and variables → Actions → Secrets):
+Required repository configuration (Settings → Secrets and variables → Actions → Secrets) — same droplet, same key, both deploy jobs share these:
 
 | Type   | Name                                        |
 |--------|----------------------------------------------|

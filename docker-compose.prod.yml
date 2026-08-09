@@ -16,6 +16,12 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
+    # Lets the Caddyfile's dev.glavbox.com/api-dev.glavbox.com blocks reach
+    # the dev stack's containers by name — see docker-compose.yml's caddy_net
+    # comment for why this has to be a shared network, not a host-port route.
+    networks:
+      - default
+      - caddy_net
     depends_on:
       - api
       - frontend

@@ -5,3 +5,21 @@ app.glavbox.com {
 api.glavbox.com {
 	reverse_proxy api:8001
 }
+
+# The dev stack (see #81) is a separate Docker Compose project — its own
+# containers, its own default network — running alongside this one on the
+# same droplet, not this project's `frontend`/`api` services under different
+# names. Reached via the shared external `caddy_net` network instead (see
+# docker-compose.yml's caddy_net comment for why), using the dev stack's
+# actual container names — Compose only auto-registers the short "service
+# name" alias (`frontend`, `api`, used above) on a project's own default
+# network, not on a shared external one, so the full container name
+# (<project>-<service>-1, stable as long as neither stack scales past one
+# replica) is what's resolvable here.
+dev.glavbox.com {
+	reverse_proxy my-car-dev-frontend-1:3000
+}
+
+api-dev.glavbox.com {
+	reverse_proxy my-car-dev-api-1:8001
+}
