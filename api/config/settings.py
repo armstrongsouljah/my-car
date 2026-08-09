@@ -219,6 +219,14 @@ REST_FRAMEWORK = {
 }
 
 # ---------------------------------------------------------------------------
+# App version — see #74. Set by the deploy workflow: the release tag itself
+# for a prod deploy (e.g. "v1.2.3"), "dev-<short sha>" for a dev deploy.
+# Exposed via GET /health/ so "what's actually deployed" is answerable
+# without checking git — see config/urls.py.
+# ---------------------------------------------------------------------------
+APP_VERSION = config("APP_VERSION", default="dev")
+
+# ---------------------------------------------------------------------------
 # AI assistant (Gemini)
 # ---------------------------------------------------------------------------
 GEMINI_API_KEY = config("GEMINI_API_KEY", default="")

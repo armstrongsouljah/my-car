@@ -405,6 +405,10 @@ function Settings() {
         onCancel={() => setConfirmDeactivate(false)}
       />
 
+      <p className="pt-2 text-center text-[12px] text-gray-400 dark:text-gray-500">
+        GlavBox {process.env.NEXT_PUBLIC_APP_VERSION || "dev"}
+      </p>
+
       <BottomNav />
     </main>
   );

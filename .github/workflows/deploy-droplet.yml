@@ -105,6 +105,11 @@ jobs:
           script: |
             set -e
             cd /home/deploy/my-car-dev
+            # See #74 — surfaced via GET /health/ and the Settings page
+            # footer, so "what's actually deployed" is answerable without
+            # checking git.
+            export APP_VERSION="dev-$(echo ${{ github.sha }} | cut -c1-7)"
+            export NEXT_PUBLIC_APP_VERSION="$APP_VERSION"
             # No docker-compose.prod.yml here — the dev stack doesn't run its
             # own Caddy. It's reached through the *prod* stack's Caddy
             # instance, proxying to this stack's host-published ports (see
@@ -122,6 +127,10 @@ jobs:
     concurrency:
       group: deploy-droplet-prod
       cancel-in-progress: false
+    # Scoped up from the workflow-level `contents: read` just for this job's
+    # `gh release create` step below — nothing else here needs it.
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -169,6 +178,11 @@ jobs:
           script: |
             set -e
             cd /home/deploy/my-car
+            # See #74 — surfaced via GET /health/ and the Settings page
+            # footer, so "what's actually deployed" is answerable without
+            # checking git. The pushed tag itself, e.g. "v1.2.3".
+            export APP_VERSION="${{ github.ref_name }}"
+            export NEXT_PUBLIC_APP_VERSION="$APP_VERSION"
             # -f twice: docker-compose.yml (base, dev-safe defaults) +
             # docker-compose.prod.yml (adds Caddy). The droplet's own .env
             # supplies the production ALLOWED_HOSTS/CORS_ALLOWED_ORIGINS/etc.
@@ -180,3 +194,12 @@ jobs:
             # the api container's healthcheck (GET /health/) doesn't pass.
             $COMPOSE up -d --wait --wait-timeout 120
             docker image prune -f
+
+      # Idempotent against re-runs (e.g. a retried deploy) — `gh release
+      # create` errors if the release already exists, so check first.
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "${{ github.ref_name }}" --repo "${{ github.repository }}" \
+            || gh release create "${{ github.ref_name }}" --repo "${{ github.repository }}" --generate-notes

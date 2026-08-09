@@ -134,7 +134,7 @@ Two environments, one droplet, one Caddy instance:
 
 - `docker-compose.yml` — the base stack; dev-safe defaults (`ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS`, port bindings) that a deployment overrides via `.env`, never by editing the file. `worker`/`beat` are gated behind Compose's `full` profile — set `COMPOSE_PROFILES=full` in `.env` to include them (see `.env.example`; local dev sets this by default). The droplet's dev stack deliberately omits it: two full stacks were pushing the 2GB droplet into swap, and dev doesn't need async email/reminder features for QA/preview.
 - `docker-compose.prod.yml` — override that adds `caddy` (`docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d`), used for the prod deploy only. The dev stack runs without it — it's reached through *prod's* Caddy instance instead, which proxies to dev's host-published ports (one public IP, one Caddy, one place TLS certs live).
-- `Caddyfile` — routes all four domains; the two dev ones go through `host.docker.internal` since the dev stack is a separate Compose project (own network) that Caddy can't reach by Docker service-name DNS.
+- `Caddyfile` — routes all four domains; the two dev ones reach the dev stack (a separate Compose project, own default network) over the shared external `caddy_net` network, by that stack's actual container names rather than Docker service-name DNS.
 
 Pushing to `main` or a `v*` tag triggers `.github/workflows/deploy-droplet.yml`:
 
@@ -146,6 +146,17 @@ Required repository configuration (Settings → Secrets and variables → Action
 | Type   | Name                                        |
 |--------|----------------------------------------------|
 | Secret | `DROPLET_HOST`, `DROPLET_SSH_KEY`, `DROPLET_SSH_FINGERPRINT` (a dedicated deploy keypair, not anyone's personal key) |
+
+### Cutting a release (see #74)
+
+Prod only deploys on a version tag — merging to `main` alone just updates dev. To ship to prod:
+
+```sh
+git tag v1.2.3
+git push origin v1.2.3
+```
+
+This triggers `deploy-prod`, which builds and deploys `/home/deploy/my-car` with `APP_VERSION`/`NEXT_PUBLIC_APP_VERSION` set to the tag, then runs `gh release create --generate-notes` to publish a GitHub release with notes generated from the commits/PRs since the last tag. The version is surfaced at `GET /health/` and in the Settings page footer, so what's actually deployed is answerable without checking git. Dev deploys get `dev-<short sha>` instead, computed automatically on every push to `main`.
 
 ## Roadmap
 
