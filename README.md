@@ -2,7 +2,7 @@
 
 A monolith repository for **GlavBox** — a mobile-first app where car owners register and track as many cars as they like, log service history with smart interval reminders, record general inspections, and track car-related expenses with month-on-month analytics.
 
-> The product was renamed from "My Car" to GlavBox. Infrastructure identifiers created under the old name (the `mycar-gke` cluster, the `my-car/` repo path, the `admin@mycar.com` seeded super admin address) are retained as-is — renaming them is a live-infra change, not a text rename, so it's tracked separately rather than done silently here. `DEFAULT_FROM_EMAIL` (all outgoing app email) is a required env var — see `.env.example` — since `mycar.com` isn't a domain we control.
+> The product was renamed from "My Car" to GlavBox. Infrastructure identifiers created under the old name (the `my-car/` repo path, the `admin@mycar.com` seeded super admin address, container/service names like `my-car-api`) are retained as-is — renaming them isn't worth the churn. `DEFAULT_FROM_EMAIL` (all outgoing app email) is a required env var — see `.env.example` — since `mycar.com` isn't a domain we control.
 
 ## Stack
 
@@ -13,14 +13,16 @@ A monolith repository for **GlavBox** — a mobile-first app where car owners re
 | Database   | PostgreSQL 17                                               |
 | Cache      | Redis (car information caching via `django-redis`)          |
 | Async      | Celery worker + beat (OTP/welcome emails, daily reminder sweep) |
-| Deployment | GitHub Actions → Artifact Registry → GKE (`mycar-gke`) |
+| Deployment | GitHub Actions → self-managed DigitalOcean droplet (Docker Compose + Caddy) |
 
 ## Repository layout
 
 ```
 my-car/
 ├── docker-compose.yml        # db, redis, api, worker, beat, frontend
-├── .github/workflows/        # CI: test → build/push images → deploy to GKE
+├── docker-compose.prod.yml   # production override — adds Caddy (reverse proxy + TLS)
+├── Caddyfile                 # app.glavbox.com / api.glavbox.com routing
+├── .github/workflows/        # CI: test → deploy to the droplet over SSH
 ├── api/                      # Django REST Framework monolith
 │   ├── config/               # settings, urls, celery app
 │   ├── utils/                # shared craft: Views, Serializers, QueryParams,
@@ -119,19 +121,24 @@ GET|POST   /api/v1/expenses/             GET   /api/v1/expenses/analytics/
 
 ## Deployment
 
-Deploys to **Google Kubernetes Engine** (Autopilot), with Postgres on Cloud SQL and Redis on Memorystore. See [docs/deploy-gke.md](docs/deploy-gke.md) for the full setup (first-time provisioning via `scripts/deploy-gke.sh`, and the one-time Workload Identity Federation setup for CI).
+Deploys to a single self-managed **DigitalOcean droplet** running Postgres, Redis, and the app itself as plain Docker containers via Compose, with **Caddy** in front as the reverse proxy and automatic Let's Encrypt TLS terminator (`app.glavbox.com` / `api.glavbox.com`). Moved off GCP (GKE/Cloud SQL/Memorystore) in August 2026 — each of those was billed as a separate managed service, which added up to a lot more than one droplet running the same workload for a project this size.
 
-Pushing to `main` triggers `.github/workflows/deploy.yml`:
+- `docker-compose.yml` — the base stack (`db`, `redis`, `api`, `worker`, `beat`, `frontend`); dev-safe defaults (`ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS`, port bindings) that a deployment overrides via `.env`, never by editing the file.
+- `docker-compose.prod.yml` — override that adds `caddy` (`docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d`).
+- `Caddyfile` — routes the two domains to the `frontend`/`api` containers.
 
-1. **test** — `uv sync` + `pytest`
-2. **build-and-push** — builds `api/` and `frontend/` images and pushes them to **Artifact Registry**
-3. **deploy** — re-runs the migrate Job, then rolls the new images out to the `api`, `worker`, `beat`, and `frontend` Deployments on GKE
+Pushing to `main` triggers `.github/workflows/deploy-droplet.yml`:
 
-Required repository configuration (Settings → Secrets and variables → Actions → Secrets; auth itself is via Workload Identity Federation, no long-lived keys):
+1. **test** / **test-frontend** — `uv run pytest`, `npm run lint`, `npm test`, `npm run build`
+2. **deploy** — syncs `api/`, `frontend/`, and the compose/Caddy files to the droplet over SSH, builds the images there, runs migrations, and brings the stack up (`docker compose up -d --wait`, gated on the `api` container's healthcheck)
+
+Single environment for now — every push to `main` deploys straight to production. Splitting this into a dev/prod promotion flow (main → dev, release tag → prod) is tracked in #81.
+
+Required repository configuration (Settings → Secrets and variables → Actions → Secrets):
 
 | Type   | Name                                        |
 |--------|----------------------------------------------|
-| Secret | `GCP_PROJECT_ID`, `GCP_REGION`, `GCP_CLUSTER`, `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_SERVICE_ACCOUNT`, `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_GOOGLE_CLIENT_ID`, `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME`, `NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET`, `NEXT_PUBLIC_TELEMETRYDECK_APP_ID` |
+| Secret | `DROPLET_HOST`, `DROPLET_SSH_KEY`, `DROPLET_SSH_FINGERPRINT` (a dedicated deploy keypair, not anyone's personal key) |
 
 ## Roadmap
 

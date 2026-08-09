@@ -1,10 +1,13 @@
-name: Deploy to DigitalOcean droplet (manual)
+name: Deploy to DigitalOcean droplet
 
-# See issue #79 — this is the DigitalOcean migration target, kept as a
-# manual/opt-in trigger while GCP (deploy.yml) remains the live deploy path.
-# Once the droplet is the real cutover target, fold this into deploy.yml's
-# push-to-main trigger and remove the GKE-specific jobs there.
+# See issue #79 — GCP (GKE/Cloud SQL/Memorystore) is fully decommissioned as
+# of 2026-08-08; this droplet is the only deployment target now. Runs on
+# every push to main (single-environment for now — see #81 for splitting
+# this into a dev/prod promotion flow instead), plus workflow_dispatch for a
+# manual re-run without needing an empty commit.
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 # Unspecified scopes become `none` once this block exists — these jobs only
