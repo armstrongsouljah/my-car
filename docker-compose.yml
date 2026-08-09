@@ -83,6 +83,11 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+    # See the top-level `networks:` comment — only load-bearing for the
+    # droplet's dev stack, harmless (unused) for prod and local dev.
+    networks:
+      - default
+      - caddy_net
 
   # Gated behind the "full" profile — `docker compose up` skips
   # profile-tagged services unless that profile is active. Local dev and the
@@ -131,7 +136,27 @@ services:
       - "127.0.0.1:${FRONTEND_HOST_PORT:-3000}:3000"
     depends_on:
       - api
+    networks:
+      - default
+      - caddy_net
 
 volumes:
   postgres_data:
   media_data:
+
+# caddy_net is a pre-created (`docker network create caddy_net`), external
+# network shared between the prod and dev Compose projects on the droplet —
+# the only way for prod's Caddy to reach dev's containers by Docker's
+# embedded DNS. They're otherwise on entirely separate default networks, one
+# per Compose project, and a container in one can't resolve a service name in
+# the other. Host-published ports don't help either unless bound to 0.0.0.0,
+# which is a real public-exposure risk — Docker's port publishing bypasses
+# UFW entirely, so a port bound to anything but 127.0.0.1 is reachable from
+# the open internet regardless of firewall rules (confirmed during the
+# original migration). This is the network-level fix instead.
+# No-op locally: nothing here reaches for caddy_net unless it's actually been
+# created, and nothing tries to until docker-compose.prod.yml's caddy service
+# does.
+networks:
+  caddy_net:
+    external: true
