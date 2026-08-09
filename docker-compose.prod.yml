@@ -1,0 +1,25 @@
+# Production override — used alongside docker-compose.yml, never alone:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Only adds the reverse proxy/TLS terminator; every other production-vs-dev
+# difference (ALLOWED_HOSTS, CORS_ALLOWED_ORIGINS, port binding) lives in
+# docker-compose.yml itself via ${VAR:-dev-default} so there's nothing here
+# that could silently diverge from what dev actually runs. See #79.
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+      - frontend
+
+volumes:
+  caddy_data:
+  caddy_config:

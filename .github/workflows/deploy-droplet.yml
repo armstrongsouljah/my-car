@@ -1,0 +1,129 @@
+name: Deploy to DigitalOcean droplet (manual)
+
+# See issue #79 — this is the DigitalOcean migration target, kept as a
+# manual/opt-in trigger while GCP (deploy.yml) remains the live deploy path.
+# Once the droplet is the real cutover target, fold this into deploy.yml's
+# push-to-main trigger and remove the GKE-specific jobs there.
+on:
+  workflow_dispatch:
+
+# Unspecified scopes become `none` once this block exists — these jobs only
+# ever need to read the repo (checkout); nothing here pushes commits, opens
+# PRs, or touches packages/deployments via the GitHub API itself.
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@e58605a9b6da7c637471fab8847a5e5a6b8df081 # v5
+        with:
+          python-version: "3.12"
+      - run: uv sync
+      - run: uv run pytest
+
+  test-frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      # Build-time NEXT_PUBLIC_* values are safe (public by design, not
+      # secrets — see #75) but CI doesn't need real ones to prove the build
+      # itself succeeds; a broken build fails here instead of only being
+      # discovered after the droplet already has new source synced to it.
+      - run: npm run build
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
+          NEXT_PUBLIC_GOOGLE_CLIENT_ID: ci-placeholder
+          NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: ci-placeholder
+          NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET: ci-placeholder
+          NEXT_PUBLIC_TELEMETRYDECK_APP_ID: ci-placeholder
+
+  deploy:
+    needs: [test, test-frontend]
+    runs-on: ubuntu-latest
+    # A second workflow_dispatch fired mid-deploy must queue behind this one,
+    # not race it — both would `cd` into the same /home/deploy/my-car and run
+    # migrate/up concurrently otherwise.
+    concurrency:
+      group: deploy-droplet
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      # Removes only the managed source directories before the fresh copy —
+      # api/scp-action overlays files but never deletes ones no longer present
+      # in the source, so a file removed from git would otherwise linger on
+      # the droplet indefinitely (and could still be picked up by the next
+      # build). Scoped to exactly what the sync step below re-populates;
+      # .env, the Caddyfile*, and Docker's named volumes (Postgres/Redis/media
+      # data, Caddy's cert storage) are never touched.
+      #
+      # *Caddyfile is git-tracked and synced too (see the sync step below),
+      # so it's safe to include here — but it isn't, on purpose: it basically
+      # never changes, and re-adding it to this rm list is harmless either way.
+      - name: Clear stale managed source on the droplet
+        uses: appleboy/ssh-action@55dabf81b49d4120609345970c91507e2d734799 # v1.0.0
+        with:
+          host: ${{ secrets.DROPLET_HOST }}
+          username: deploy
+          key: ${{ secrets.DROPLET_SSH_KEY }}
+          fingerprint: ${{ secrets.DROPLET_SSH_FINGERPRINT }}
+          script: rm -rf /home/deploy/my-car/api /home/deploy/my-car/frontend
+
+      # Builds happen on the droplet itself for now (proven working manually —
+      # a full `docker compose build` takes a few minutes on the 2 vCPU box).
+      # Switching to "build in CI, push to a registry, `docker compose pull`
+      # on the droplet" is a worthwhile follow-up once this path is trusted,
+      # but isn't a blocker for the initial cutover.
+      - name: Sync source to the droplet
+        uses: appleboy/scp-action@917f8b81dfc1ccd331fef9e2d61bdc6c8be94634 # v0.1.7
+        with:
+          host: ${{ secrets.DROPLET_HOST }}
+          username: deploy
+          key: ${{ secrets.DROPLET_SSH_KEY }}
+          fingerprint: ${{ secrets.DROPLET_SSH_FINGERPRINT }}
+          source: "api,frontend,docker-compose.yml,docker-compose.prod.yml,Caddyfile"
+          target: /home/deploy/my-car
+          strip_components: 0
+
+      - name: Build and deploy
+        uses: appleboy/ssh-action@55dabf81b49d4120609345970c91507e2d734799 # v1.0.0
+        with:
+          host: ${{ secrets.DROPLET_HOST }}
+          username: deploy
+          key: ${{ secrets.DROPLET_SSH_KEY }}
+          fingerprint: ${{ secrets.DROPLET_SSH_FINGERPRINT }}
+          script: |
+            set -e
+            cd /home/deploy/my-car
+            # -f twice: docker-compose.yml (base, dev-safe defaults) +
+            # docker-compose.prod.yml (adds Caddy). The droplet's own .env
+            # supplies the production ALLOWED_HOSTS/CORS_ALLOWED_ORIGINS/etc.
+            # that override the base file's dev defaults — see #79/#80.
+            COMPOSE="docker compose -f docker-compose.yml -f docker-compose.prod.yml"
+            $COMPOSE build
+            $COMPOSE run --rm api python manage.py migrate
+            # --wait fails the step (instead of reporting false success) if
+            # the api container's healthcheck (GET /health/) doesn't pass.
+            $COMPOSE up -d --wait --wait-timeout 120
+            docker image prune -f
