@@ -224,7 +224,10 @@ REST_FRAMEWORK = {
 # Exposed via GET /health/ so "what's actually deployed" is answerable
 # without checking git — see config/urls.py.
 # ---------------------------------------------------------------------------
-APP_VERSION = config("APP_VERSION", default="dev")
+# `or "dev"` also catches a present-but-empty APP_VERSION=, e.g. from
+# .env.example copied as-is — decouple returns "" for that case rather than
+# falling back to `default`, which a bare `config(..., default="dev")` misses.
+APP_VERSION = config("APP_VERSION", default="dev") or "dev"
 
 # ---------------------------------------------------------------------------
 # AI assistant (Gemini)

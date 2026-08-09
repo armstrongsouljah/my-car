@@ -1,3 +1,7 @@
+import os
+import subprocess
+import sys
+
 import pytest
 from django.test import override_settings
 from rest_framework.test import APIClient
@@ -16,6 +20,23 @@ class TestHealth:
         assert response.json() == {"status": "ok", "version": "v1.2.3"}
 
     def test_defaults_to_dev_when_unset(self):
-        response = APIClient().get("/health/")
+        # settings.APP_VERSION is resolved once at import time from the
+        # process environment, so override_settings can't exercise the real
+        # default — and this process's own env may already have APP_VERSION
+        # set. Check the actual default in a clean subprocess instead.
+        env = {k: v for k, v in os.environ.items() if k != "APP_VERSION"}
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                "import django; django.setup(); "
+                "from django.conf import settings; "
+                "print(settings.APP_VERSION)",
+            ],
+            env={**env, "DJANGO_SETTINGS_MODULE": "config.test_settings"},
+            capture_output=True,
+            text=True,
+            check=True,
+        )
 
-        assert response.json()["version"] == "dev"
+        assert result.stdout.strip() == "dev"

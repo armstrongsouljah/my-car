@@ -97,18 +97,27 @@ jobs:
 
       - name: Build and deploy
         uses: appleboy/ssh-action@55dabf81b49d4120609345970c91507e2d734799 # v1.0.0
+        env:
+          # Interpolating `${{ }}` expressions straight into `script:` lets
+          # GitHub expand them into the shell source before it's parsed —
+          # safe here since github.sha is a git-generated hex string, but
+          # routed through `envs:`/a quoted shell var anyway for consistency
+          # with the tag-based prod job below, where the equivalent value
+          # (a tag name) *is* attacker-influenceable.
+          DEPLOY_SHA: ${{ github.sha }}
         with:
           host: ${{ secrets.DROPLET_HOST }}
           username: deploy
           key: ${{ secrets.DROPLET_SSH_KEY }}
           fingerprint: ${{ secrets.DROPLET_SSH_FINGERPRINT }}
+          envs: DEPLOY_SHA
           script: |
             set -e
             cd /home/deploy/my-car-dev
             # See #74 — surfaced via GET /health/ and the Settings page
             # footer, so "what's actually deployed" is answerable without
             # checking git.
-            export APP_VERSION="dev-$(echo ${{ github.sha }} | cut -c1-7)"
+            export APP_VERSION="dev-$(echo "$DEPLOY_SHA" | cut -c1-7)"
             export NEXT_PUBLIC_APP_VERSION="$APP_VERSION"
             # No docker-compose.prod.yml here — the dev stack doesn't run its
             # own Caddy. It's reached through the *prod* stack's Caddy
@@ -127,10 +136,6 @@ jobs:
     concurrency:
       group: deploy-droplet-prod
       cancel-in-progress: false
-    # Scoped up from the workflow-level `contents: read` just for this job's
-    # `gh release create` step below — nothing else here needs it.
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -170,18 +175,26 @@ jobs:
 
       - name: Build and deploy
         uses: appleboy/ssh-action@55dabf81b49d4120609345970c91507e2d734799 # v1.0.0
+        env:
+          # `${{ }}` expressions in `script:` get expanded into the shell
+          # source before it's parsed — a `v*` tag is pushed by anyone with
+          # tag-push access, so a tag name containing shell metacharacters
+          # interpolated directly here could run arbitrary commands in the
+          # SSH session. Routed through `envs:`/a quoted shell var instead.
+          DEPLOY_TAG: ${{ github.ref_name }}
         with:
           host: ${{ secrets.DROPLET_HOST }}
           username: deploy
           key: ${{ secrets.DROPLET_SSH_KEY }}
           fingerprint: ${{ secrets.DROPLET_SSH_FINGERPRINT }}
+          envs: DEPLOY_TAG
           script: |
             set -e
             cd /home/deploy/my-car
             # See #74 — surfaced via GET /health/ and the Settings page
             # footer, so "what's actually deployed" is answerable without
             # checking git. The pushed tag itself, e.g. "v1.2.3".
-            export APP_VERSION="${{ github.ref_name }}"
+            export APP_VERSION="$DEPLOY_TAG"
             export NEXT_PUBLIC_APP_VERSION="$APP_VERSION"
             # -f twice: docker-compose.yml (base, dev-safe defaults) +
             # docker-compose.prod.yml (adds Caddy). The droplet's own .env
@@ -195,11 +208,26 @@ jobs:
             $COMPOSE up -d --wait --wait-timeout 120
             docker image prune -f
 
+  release:
+    needs: [deploy-prod]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    # Scoped up from the workflow-level `contents: read` — only this job's
+    # `gh release create` needs it; deploy-prod's SSH/SCP steps don't, so
+    # they stay read-only in their own job.
+    permissions:
+      contents: write
+    steps:
       # Idempotent against re-runs (e.g. a retried deploy) — `gh release
-      # create` errors if the release already exists, so check first.
+      # create` errors if the release already exists, so check first. This
+      # step runs on the GH-hosted runner (not over SSH), so a `${{ }}`
+      # expression interpolated straight into `run:` here would expand into
+      # shell source that can see GH_TOKEN — routed through env vars instead.
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_REPO: ${{ github.repository }}
         run: |
-          gh release view "${{ github.ref_name }}" --repo "${{ github.repository }}" \
-            || gh release create "${{ github.ref_name }}" --repo "${{ github.repository }}" --generate-notes
+          gh release view "$RELEASE_TAG" --repo "$RELEASE_REPO" \
+            || gh release create "$RELEASE_TAG" --repo "$RELEASE_REPO" --generate-notes
