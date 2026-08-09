@@ -1,0 +1,7 @@
+app.glavbox.com {
+	reverse_proxy frontend:3000
+}
+
+api.glavbox.com {
+	reverse_proxy api:8001
+}

@@ -31,14 +31,15 @@ services:
     environment: &api_env
       SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in your .env (see .env.example)}
       DEBUG: ${DEBUG:-True}
-      # Local Compose only: everything here is a throwaway dev stack. Never
-      # reuse this file's values (or its Postgres password) for a deployment.
-      ALLOWED_HOSTS: "localhost,127.0.0.1,0.0.0.0,api,host.docker.internal"
+      # Defaults match local Compose; a deployment overrides these via .env
+      # (see .env.example) rather than editing this file. The Postgres
+      # password below is still dev-only — never reuse it for a deployment.
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,0.0.0.0,api,host.docker.internal}
       DATABASE_URL: postgresql://mycar:mycar@db:5432/mycar
       REDIS_URL: redis://redis:6379/1
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
-      CORS_ALLOWED_ORIGINS: "http://localhost:3000,http://127.0.0.1:3000"
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@mycar.com}
       # Deliberately no default. Left empty, seed_admin generates a random
@@ -56,7 +57,7 @@ services:
       OTP_EXPIRY_MINUTES: ${OTP_EXPIRY_MINUTES:-10}
       SUPPORT_REQUEST_THROTTLE: ${SUPPORT_REQUEST_THROTTLE:-5/hour}
     ports:
-      - "8001:8001"
+      - "127.0.0.1:8001:8001"
     volumes:
       - media_data:/app/media
     depends_on:
@@ -64,6 +65,14 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    # Lets a deploy step (`docker compose up -d --wait`) fail loudly instead
+    # of reporting success while gunicorn is up but the app itself is broken.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health/')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   worker:
     build: ./api
@@ -100,7 +109,7 @@ services:
         NEXT_PUBLIC_TELEMETRYDECK_APP_ID: ${NEXT_PUBLIC_TELEMETRYDECK_APP_ID}
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     depends_on:
       - api
 
