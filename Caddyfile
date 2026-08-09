@@ -5,3 +5,18 @@ app.glavbox.com {
 api.glavbox.com {
 	reverse_proxy api:8001
 }
+
+# The dev stack (see #81) is a separate Docker Compose project — its own
+# containers, its own network — running alongside this one on the same
+# droplet, not this project's `frontend`/`api` services under different
+# names. Caddy can't reach it by Docker service-name DNS across that project
+# boundary, so these go through the dev stack's host-published ports instead
+# (host.docker.internal needs docker-compose.prod.yml's extra_hosts entry to
+# resolve on Linux — it isn't automatic like it is on Docker Desktop).
+dev.glavbox.com {
+	reverse_proxy host.docker.internal:3001
+}
+
+api-dev.glavbox.com {
+	reverse_proxy host.docker.internal:8002
+}

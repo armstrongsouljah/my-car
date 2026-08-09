@@ -16,6 +16,12 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
+    # Lets the Caddyfile's dev.glavbox.com/dev-api.glavbox.com blocks reach
+    # the separate dev Compose project's host-published ports (see #81) —
+    # "host.docker.internal" only resolves inside a container automatically
+    # on Docker Desktop; on Linux (the droplet) it needs this explicit entry.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       - api
       - frontend

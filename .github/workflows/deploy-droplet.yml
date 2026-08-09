@@ -1,13 +1,15 @@
 name: Deploy to DigitalOcean droplet
 
-# See issue #79 — GCP (GKE/Cloud SQL/Memorystore) is fully decommissioned as
-# of 2026-08-08; this droplet is the only deployment target now. Runs on
-# every push to main (single-environment for now — see #81 for splitting
-# this into a dev/prod promotion flow instead), plus workflow_dispatch for a
-# manual re-run without needing an empty commit.
+# See #79 (migration) / #81 (this dev/prod split). Same droplet, same SSH
+# credentials, two independent Docker Compose projects in separate
+# directories: pushing to main deploys /home/deploy/my-car-dev (fast
+# feedback, no gate — dev.glavbox.com/dev-api.glavbox.com), pushing a
+# `v*` release tag deploys /home/deploy/my-car (app.glavbox.com/
+# api.glavbox.com), a deliberate promotion step rather than every merge.
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   workflow_dispatch:
 
 # Unspecified scopes become `none` once this block exists — these jobs only
@@ -59,14 +61,66 @@ jobs:
           NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET: ci-placeholder
           NEXT_PUBLIC_TELEMETRYDECK_APP_ID: ci-placeholder
 
-  deploy:
+  deploy-dev:
     needs: [test, test-frontend]
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    # A second workflow_dispatch fired mid-deploy must queue behind this one,
-    # not race it — both would `cd` into the same /home/deploy/my-car and run
-    # migrate/up concurrently otherwise.
     concurrency:
-      group: deploy-droplet
+      group: deploy-droplet-dev
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      # See the prod job below for why this rm precedes the sync, and why
+      # it's scoped to exactly these two directories.
+      - name: Clear stale managed source on the droplet
+        uses: appleboy/ssh-action@55dabf81b49d4120609345970c91507e2d734799 # v1.0.0
+        with:
+          host: ${{ secrets.DROPLET_HOST }}
+          username: deploy
+          key: ${{ secrets.DROPLET_SSH_KEY }}
+          fingerprint: ${{ secrets.DROPLET_SSH_FINGERPRINT }}
+          script: rm -rf /home/deploy/my-car-dev/api /home/deploy/my-car-dev/frontend
+
+      - name: Sync source to the droplet
+        uses: appleboy/scp-action@917f8b81dfc1ccd331fef9e2d61bdc6c8be94634 # v0.1.7
+        with:
+          host: ${{ secrets.DROPLET_HOST }}
+          username: deploy
+          key: ${{ secrets.DROPLET_SSH_KEY }}
+          fingerprint: ${{ secrets.DROPLET_SSH_FINGERPRINT }}
+          source: "api,frontend,docker-compose.yml"
+          target: /home/deploy/my-car-dev
+          strip_components: 0
+
+      - name: Build and deploy
+        uses: appleboy/ssh-action@55dabf81b49d4120609345970c91507e2d734799 # v1.0.0
+        with:
+          host: ${{ secrets.DROPLET_HOST }}
+          username: deploy
+          key: ${{ secrets.DROPLET_SSH_KEY }}
+          fingerprint: ${{ secrets.DROPLET_SSH_FINGERPRINT }}
+          script: |
+            set -e
+            cd /home/deploy/my-car-dev
+            # No docker-compose.prod.yml here — the dev stack doesn't run its
+            # own Caddy. It's reached through the *prod* stack's Caddy
+            # instance, proxying to this stack's host-published ports (see
+            # Caddyfile's dev.glavbox.com/dev-api.glavbox.com blocks) — one
+            # public IP, one Caddy, one place TLS certs live.
+            docker compose build
+            docker compose run --rm api python manage.py migrate
+            docker compose up -d --wait --wait-timeout 120
+            docker image prune -f
+
+  deploy-prod:
+    needs: [test, test-frontend]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-droplet-prod
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -78,12 +132,8 @@ jobs:
       # in the source, so a file removed from git would otherwise linger on
       # the droplet indefinitely (and could still be picked up by the next
       # build). Scoped to exactly what the sync step below re-populates;
-      # .env, the Caddyfile*, and Docker's named volumes (Postgres/Redis/media
+      # .env, the Caddyfile, and Docker's named volumes (Postgres/Redis/media
       # data, Caddy's cert storage) are never touched.
-      #
-      # *Caddyfile is git-tracked and synced too (see the sync step below),
-      # so it's safe to include here — but it isn't, on purpose: it basically
-      # never changes, and re-adding it to this rm list is harmless either way.
       - name: Clear stale managed source on the droplet
         uses: appleboy/ssh-action@55dabf81b49d4120609345970c91507e2d734799 # v1.0.0
         with:
