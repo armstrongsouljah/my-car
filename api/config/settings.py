@@ -219,6 +219,17 @@ REST_FRAMEWORK = {
 }
 
 # ---------------------------------------------------------------------------
+# App version — see #74. Set by the deploy workflow: the release tag itself
+# for a prod deploy (e.g. "v1.2.3"), "dev-<short sha>" for a dev deploy.
+# Exposed via GET /health/ so "what's actually deployed" is answerable
+# without checking git — see config/urls.py.
+# ---------------------------------------------------------------------------
+# `or "dev"` also catches a present-but-empty APP_VERSION=, e.g. from
+# .env.example copied as-is — decouple returns "" for that case rather than
+# falling back to `default`, which a bare `config(..., default="dev")` misses.
+APP_VERSION = config("APP_VERSION", default="dev") or "dev"
+
+# ---------------------------------------------------------------------------
 # AI assistant (Gemini)
 # ---------------------------------------------------------------------------
 GEMINI_API_KEY = config("GEMINI_API_KEY", default="")

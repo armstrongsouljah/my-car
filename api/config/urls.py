@@ -8,7 +8,7 @@ API_PREFIX = "api/v1/"
 
 
 def health(_request):
-    return JsonResponse({"status": "ok"})
+    return JsonResponse({"status": "ok", "version": settings.APP_VERSION})
 
 
 urlpatterns = [
