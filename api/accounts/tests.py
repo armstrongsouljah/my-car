@@ -1,12 +1,15 @@
 import re
 from datetime import timedelta
+from unittest.mock import patch
 
 import pytest
+from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
 
 from accounts.models import EmailVerificationOTP, PasswordResetOTP, User
+from accounts.serializers import _country_from_google_locale
 from utils import Constants
 
 
@@ -1401,3 +1404,60 @@ class TestOTPStorage:
         from django.contrib import admin
 
         assert EmailVerificationOTP not in admin.site._registry
+
+
+class TestCountryFromGoogleLocale:
+    """See #65 — Google sign-in has no country picker, so currency is
+    derived from the ID token's locale claim instead of a user-supplied
+    country field."""
+
+    def test_extracts_the_region_subtag(self):
+        assert _country_from_google_locale("en-US") == "US"
+        assert _country_from_google_locale("en_GB") == "GB"
+
+    def test_blank_for_a_region_less_locale(self):
+        assert _country_from_google_locale("en") == ""
+        assert _country_from_google_locale("") == ""
+
+    def test_blank_for_a_region_currency_doesnt_know(self):
+        assert _country_from_google_locale("en-ZZ") == ""
+
+
+@pytest.mark.django_db
+class TestGoogleAuthCurrencyFromLocale:
+    """See #65."""
+
+    def _post(self, client, locale):
+        payload = {"email": "googler@example.com", "given_name": "Ada", "locale": locale}
+        with override_settings(GOOGLE_OAUTH_CLIENT_ID="test-client-id"):
+            with patch("accounts.serializers.id_token.verify_oauth2_token", return_value=payload):
+                return client.post(reverse("auth-google"), {"id_token": "fake-token"})
+
+    def test_sets_country_and_currency_from_a_regioned_locale(self, client):
+        response = self._post(client, "en-US")
+
+        assert response.status_code == 200
+        user = User.objects.get(email="googler@example.com")
+        assert user.country == "US"
+        assert user.currency == "USD"
+
+    def test_leaves_country_and_currency_blank_for_a_regionless_locale(self, client):
+        response = self._post(client, "en")
+
+        assert response.status_code == 200
+        user = User.objects.get(email="googler@example.com")
+        assert user.country == ""
+        assert user.currency == ""
+
+    def test_does_not_override_an_existing_users_country_on_repeat_login(self, client):
+        user = User.objects.create_user(email="googler@example.com", password="str0ng-pass-123")
+        user.country = "KE"
+        user.currency = "KES"
+        user.save(update_fields=["country", "currency"])
+
+        response = self._post(client, "en-US")
+
+        assert response.status_code == 200
+        user.refresh_from_db()
+        assert user.country == "KE"
+        assert user.currency == "KES"

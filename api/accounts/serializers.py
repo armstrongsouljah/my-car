@@ -1,3 +1,5 @@
+import re
+
 from django.conf import settings
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
@@ -308,6 +310,17 @@ class ResetPasswordSerializer(serializers.Serializer):
 # Google OAuth — frontend sends the Google ID token; we verify it here
 # ---------------------------------------------------------------------------
 
+def _country_from_google_locale(locale):
+    """See #65. `locale` is a BCP 47 tag (e.g. "en-US"); the region subtag,
+    when present, is the last "-"/"_"-separated part. Returns "" if there's
+    no region subtag or it's not one Constants.COUNTRY_TO_CURRENCY knows."""
+    parts = re.split(r"[-_]", locale) if locale else []
+    if len(parts) < 2:
+        return ""
+    region = parts[-1].upper()
+    return region if region in Constants.COUNTRY_TO_CURRENCY else ""
+
+
 class GoogleAuthSerializer(serializers.Serializer):
     """
     Accepts a Google ID token (obtained client-side via Google Sign-In / One Tap).
@@ -347,12 +360,22 @@ class GoogleAuthSerializer(serializers.Serializer):
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
 
+        # See #65 — regular signup derives currency from a country field the
+        # user picks; Google sign-in has no equivalent step, so it's derived
+        # from the ID token's `locale` claim (e.g. "en-US") instead. Many
+        # locales omit the region ("en", "fr") or don't reflect actual
+        # residence, so this only covers a subset of Google sign-ups — a
+        # real fix needs IP geolocation (#65 tier 2), tracked separately.
+        country = _country_from_google_locale(payload.get("locale", ""))
+
         user, created = User.objects.get_or_create(
             email=email,
             defaults={
                 "first_name": payload.get("given_name", ""),
                 "last_name": payload.get("family_name", ""),
                 "is_email_verified": True,
+                "country": country,
+                "currency": Constants.COUNTRY_TO_CURRENCY.get(country, ""),
             },
         )
 
