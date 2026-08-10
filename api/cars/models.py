@@ -60,6 +60,17 @@ class Car(models.Model):
             label = f"{label} — {self.registration_number}"
         return label
 
+    def save(self, *args, **kwargs):
+        # See #94 — only on creation, not every save: an owner clearing
+        # their photo_url on an existing car via an edit is a deliberate
+        # "remove my photo" action, not something to silently revert. Guarded
+        # on settings.DEFAULT_PHOTO_URL being set so an environment that
+        # hasn't configured one (e.g. a fresh local dev box) just leaves
+        # photo_url blank, same as before #94, rather than "setting" it to "".
+        if self._state.adding and not self.photo_url and settings.DEFAULT_PHOTO_URL:
+            self.photo_url = settings.DEFAULT_PHOTO_URL
+        super().save(*args, **kwargs)
+
     def record_odometer(self, odometer_km, allow_decrease=False):
         """
         Moves the odometer forward; readings never go backwards by default.
