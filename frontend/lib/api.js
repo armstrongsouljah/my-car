@@ -1,4 +1,4 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001/api/v1";
 // Prefer an explicit media origin when the API URL doesn't follow the
 // `.../api/v{n}` convention (custom proxy path, versionless API, etc.) —
 // falls back to stripping that suffix for the common case.
