@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import AuthGuard from "@/components/AuthGuard";
@@ -79,7 +80,16 @@ function AddReminder() {
   }
 
   if (!carId) {
-    return <main className="p-6 text-sm text-gray-400 dark:text-gray-500">No car selected.</main>;
+    // See #97 — this used to be a dead end (no link out) for any caller
+    // that reaches this page without a car param.
+    return (
+      <main className="p-6 text-center text-sm text-gray-400 dark:text-gray-500">
+        <p className="mb-3">No car selected.</p>
+        <Link href="/reminders" className="font-medium text-gray-600 underline underline-offset-2 dark:text-gray-300">
+          Pick a car to add a reminder for
+        </Link>
+      </main>
+    );
   }
   if (error) return <main className="p-6"><p className="rounded-xl bg-red-50 dark:bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-400">{error}</p></main>;
   if (!car || !catalog) return <main className="flex justify-center p-10"><Spinner /></main>;

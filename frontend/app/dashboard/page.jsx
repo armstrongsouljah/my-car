@@ -145,7 +145,13 @@ function Dashboard() {
           ) : remindersError ? (
             <p className="card text-center text-sm text-gray-500 dark:text-gray-400">Couldn&apos;t load reminders right now.</p>
           ) : upcoming.length === 0 ? (
-            <Link href="/reminders/new" className="card block text-center text-sm text-gray-500 dark:text-gray-400">
+            // See #97 — reminders/new requires a car param; deep-link straight
+            // to it when there's exactly one obvious car, otherwise send them
+            // to /reminders, which already lets them pick one per car.
+            <Link
+              href={cars.length === 1 ? `/reminders/new?car=${cars[0].id}` : "/reminders"}
+              className="card block text-center text-sm text-gray-500 dark:text-gray-400"
+            >
               No reminders yet — add one to stay on top of maintenance.
             </Link>
           ) : (
