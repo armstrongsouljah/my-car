@@ -69,6 +69,18 @@ services:
       # See #74 — the deploy workflow exports this before `build`/`up` (the
       # release tag for prod, "dev-<short sha>" for dev); unset locally.
       APP_VERSION: ${APP_VERSION:-dev}
+      # Was missing from this list entirely -- CLOUDINARY_URL being in .env
+      # never actually reached the container, so utils.Cloudinary.delete_photos()
+      # has been silently no-op'ing (logs a warning, does nothing) in every
+      # Docker-based environment. Blank is still a valid, intentional value
+      # (see settings.py's comment on CLOUDINARY_URL) -- just needs to
+      # actually reach the container to be effective when it's set.
+      CLOUDINARY_URL: ${CLOUDINARY_URL:-}
+      # Destination account for the one-off migrate_cloudinary_assets
+      # command (see #48) -- blank outside of an actual migration run.
+      NEW_CLOUD_NAME: ${NEW_CLOUD_NAME:-}
+      NEW_CLOUDINARY_API_KEY: ${NEW_CLOUDINARY_API_KEY:-}
+      NEW_CLOUDINARY_API_SECRET: ${NEW_CLOUDINARY_API_SECRET:-}
     ports:
       - "127.0.0.1:${API_HOST_PORT:-8001}:8001"
     volumes:
