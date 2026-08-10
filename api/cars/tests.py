@@ -297,3 +297,80 @@ class TestBackfillDefaultCarPhoto:
         assert with_photo.photo_url == real_url
         assert null_photo.photo_url == TEST_DEFAULT_PHOTO_URL
         assert blank_photo.photo_url == TEST_DEFAULT_PHOTO_URL
+
+
+@pytest.mark.django_db
+class TestCarServiceHistoryReport:
+    """See #62 — shareable proof-of-upkeep PDF for a car."""
+
+    def test_builder_includes_service_records_inspections_and_maintenance_expenses(self, car):
+        from datetime import date
+
+        from cars.reports import build_service_history_report
+        from expenses.models import Expense
+        from inspections.models import Inspection
+        from services.models import ServiceRecord
+
+        ServiceRecord.objects.create(car=car, odometer_km=10000, garage_name="Joe's Garage")
+        Inspection.objects.create(car=car, inspection_date=date(2026, 1, 1))
+        Expense.objects.create(car=car, category="garage_visit", amount=50, expense_date=date(2026, 1, 1))
+        Expense.objects.create(car=car, category="modification_parts", amount=75, expense_date=date(2026, 1, 2))
+
+        report = build_service_history_report(car)
+
+        assert report["service_records"].count() == 1
+        assert report["inspections"].count() == 1
+        assert report["expenses"].count() == 2
+
+    def test_builder_excludes_non_maintenance_expense_categories(self, car):
+        from datetime import date
+
+        from cars.reports import build_service_history_report
+        from expenses.models import Expense
+
+        Expense.objects.create(car=car, category="fuel", amount=50, expense_date=date(2026, 1, 1))
+        Expense.objects.create(car=car, category="insurance", amount=200, expense_date=date(2026, 1, 1))
+        Expense.objects.create(car=car, category="tax_licensing", amount=80, expense_date=date(2026, 1, 1))
+
+        report = build_service_history_report(car)
+
+        assert report["expenses"].count() == 0
+
+    def test_builder_excludes_expenses_auto_generated_from_a_service_record(self, car):
+        from cars.reports import build_service_history_report
+        from services.models import ServiceRecord
+
+        # ServiceRecord.save() auto-creates a linked Expense when costed --
+        # must not appear a second time via the expenses list.
+        ServiceRecord.objects.create(car=car, odometer_km=10000, cost=50)
+
+        report = build_service_history_report(car)
+
+        assert report["service_records"].count() == 1
+        assert report["expenses"].count() == 0
+
+    def test_pdf_endpoint_returns_a_pdf(self, owner, car):
+        client = APIClient()
+        client.force_authenticate(owner)
+
+        response = client.get(f"/api/v1/cars/{car.pk}/service-history/pdf/")
+
+        assert response.status_code == 200
+        assert response["Content-Type"] == "application/pdf"
+        assert response.content.startswith(b"%PDF")
+
+    def test_pdf_endpoint_404s_for_another_owners_car(self, car):
+        other_owner = User.objects.create_user(email="other@example.com", password="str0ng-pass-123")
+        client = APIClient()
+        client.force_authenticate(other_owner)
+
+        response = client.get(f"/api/v1/cars/{car.pk}/service-history/pdf/")
+
+        assert response.status_code == 404
+
+    def test_pdf_endpoint_requires_authentication(self, car):
+        client = APIClient()
+
+        response = client.get(f"/api/v1/cars/{car.pk}/service-history/pdf/")
+
+        assert response.status_code == 401

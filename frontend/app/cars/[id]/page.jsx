@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { api, mediaUrl } from "@/lib/api";
+import { api, downloadFile, mediaUrl } from "@/lib/api";
 import { formatAmount } from "@/lib/currency";
 import AuthGuard from "@/components/AuthGuard";
 import BottomNav from "@/components/BottomNav";
@@ -217,8 +217,17 @@ function CarDetail() {
   const [deleteError, setDeleteError] = useState("");
   const [showPlate, setShowPlate] = useState(false);
   const [showVin, setShowVin] = useState(false);
+  const [downloadingHistory, setDownloadingHistory] = useState(false);
+  const [downloadError, setDownloadError] = useState("");
 
   const load = useCallback(() => {
+    // Reset before fetching, not just on id change — this component
+    // instance is reused across /cars/[id] navigations (see the reveal-
+    // toggle reset below), so without this a car-to-car transition would
+    // briefly keep rendering (and let "Download service history" act on)
+    // the previous car's stale data while the new fetch is still in flight.
+    setCar(null);
+    setError("");
     api(`/cars/${id}/`).then(setCar).catch((err) => setError(err.message));
     api(`/services/?car=${id}`).then((data) => setServicesData(data.results || data)).catch(() => {});
     api(`/inspections/?car=${id}`).then((data) => setInspections(data.results || data)).catch(() => {});
@@ -234,6 +243,20 @@ function CarDetail() {
     setShowPlate(false);
     setShowVin(false);
   }, [id]);
+
+  async function downloadHistory() {
+    setDownloadingHistory(true);
+    setDownloadError("");
+    try {
+      // See #62 — proof of upkeep for a buyer; an authenticated download
+      // the owner shares however they like, not a public link.
+      await downloadFile(`/cars/${id}/service-history/pdf/`, `glavbox-${car.make}-${car.model}-service-history.pdf`);
+    } catch (err) {
+      setDownloadError(err.message);
+    } finally {
+      setDownloadingHistory(false);
+    }
+  }
 
   async function deleteCar() {
     setRemoving(true);
@@ -318,6 +341,10 @@ function CarDetail() {
             <div><p className="text-gray-400 dark:text-gray-500">Odometer</p><p className="font-medium">{Number(car.current_odometer_km).toLocaleString()} km</p></div>
           </div>
           {car.notes && <div className="card text-sm text-gray-600 dark:text-gray-300">{car.notes}</div>}
+          {downloadError && <p className="rounded-xl bg-red-50 dark:bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-400">{downloadError}</p>}
+          <button className="btn-secondary" onClick={downloadHistory} disabled={downloadingHistory}>
+            {downloadingHistory ? "Preparing PDF…" : "Download service history"}
+          </button>
           {deleteError && <p className="rounded-xl bg-red-50 dark:bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-400">{deleteError}</p>}
           <button onClick={() => setConfirmRemove(true)} className="w-full rounded-xl border border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10 px-4 py-3 text-[15px] font-semibold text-red-600 dark:text-red-400">
             Remove car
