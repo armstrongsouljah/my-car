@@ -1,3 +1,7 @@
+import re
+
+from django.http import HttpResponse
+from django.template.loader import render_to_string
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
@@ -10,6 +14,7 @@ from utils.Views import SmartAPIView, SmartDetailView, SmartPaginationAPIView
 
 from cars.catalog import get_catalog
 from cars.models import Car
+from cars.reports import build_service_history_report
 from cars.serializers import (
     CarCreateSerializer,
     CarEditSerializer,
@@ -167,3 +172,36 @@ class CarDetailView(SmartDetailView):
     def handle_delete(self, model_instance):
         Cache.invalidate_car(model_instance.pk, model_instance.owner_id)
         model_instance.delete()
+
+
+class CarServiceHistoryReportPDFView(SmartAPIView):
+    """
+    GET /cars/<uuid:pk>/service-history/pdf/ — a shareable, printable record
+    of everything maintenance-relevant logged for this car (service records,
+    inspections, maintenance-flavored expenses) — see #62. For handing to a
+    buyer as proof of upkeep; the owner downloads and shares it however they
+    like, there's no separate public/no-login link.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk, **kwargs):
+        car = Car.objects.filter(pk=pk, owner=request.user).first()
+        if not car:
+            return self.not_found()
+
+        # Lazy import — see ExpenseMonthlyReportPDFView (expenses/views.py)
+        # for why: keeps this module import-safe (no WeasyPrint/Pango load)
+        # for every request that isn't downloading a PDF.
+        from weasyprint import HTML
+
+        report = build_service_history_report(car)
+        html = render_to_string("reports/car_service_history_report.html", {"report": report})
+        pdf_bytes = HTML(string=html).write_pdf()
+
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        # make/model are free-text fields with no character restrictions --
+        # strip down to a safe filename charset rather than trust them
+        # straight into a quoted header value.
+        safe_name = re.sub(r"[^A-Za-z0-9]+", "-", f"{car.make}-{car.model}").strip("-") or "car"
+        response["Content-Disposition"] = f'attachment; filename="glavbox-{safe_name}-service-history.pdf"'
+        return response
