@@ -1,0 +1,12 @@
+# Nothing here is needed inside the image, and .env especially must never
+# end up baked into a layer -- COPY . . in the Dockerfile would otherwise
+# pick up whatever real secrets happen to sit in a local dev .env. Build-time
+# NEXT_PUBLIC_* values come in as ARGs (see docker-compose.yml), not a
+# copied-in .env file.
+.env
+.env.*
+!.env.example
+
+node_modules/
+.next/
+.git/
