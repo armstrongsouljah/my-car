@@ -311,14 +311,19 @@ class ResetPasswordSerializer(serializers.Serializer):
 # ---------------------------------------------------------------------------
 
 def _country_from_google_locale(locale):
-    """See #65. `locale` is a BCP 47 tag (e.g. "en-US"); the region subtag,
-    when present, is the last "-"/"_"-separated part. Returns "" if there's
-    no region subtag or it's not one Constants.COUNTRY_TO_CURRENCY knows."""
-    parts = re.split(r"[-_]", locale) if locale else []
-    if len(parts) < 2:
-        return ""
-    region = parts[-1].upper()
-    return region if region in Constants.COUNTRY_TO_CURRENCY else ""
+    """See #65. `locale` is a BCP 47 tag (e.g. "en-US", or "en-US-u-hc-h12"
+    with a Unicode extension) -- the region, when present, is a 2-letter
+    subtag that comes before any extension singleton (a lone-character
+    subtag like the "u" above; nothing past it is a region). Returns "" if
+    there's no region subtag or it's not one Constants.COUNTRY_TO_CURRENCY
+    knows."""
+    for part in (re.split(r"[-_]", locale)[1:] if locale else []):
+        if len(part) == 1:
+            break
+        if len(part) == 2 and part.isalpha():
+            region = part.upper()
+            return region if region in Constants.COUNTRY_TO_CURRENCY else ""
+    return ""
 
 
 class GoogleAuthSerializer(serializers.Serializer):

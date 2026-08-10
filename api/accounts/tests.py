@@ -1419,6 +1419,14 @@ class TestCountryFromGoogleLocale:
         assert _country_from_google_locale("en") == ""
         assert _country_from_google_locale("") == ""
 
+    def test_extracts_the_region_ahead_of_a_unicode_extension(self):
+        assert _country_from_google_locale("en-US-u-hc-h12") == "US"
+
+    def test_blank_for_an_extension_only_locale(self):
+        # No real region subtag before the "u" extension singleton -- must
+        # not mistake the 2-letter extension key "hc" for one.
+        assert _country_from_google_locale("x-u-hc-h12") == ""
+
     def test_blank_for_a_region_currency_doesnt_know(self):
         assert _country_from_google_locale("en-ZZ") == ""
 
