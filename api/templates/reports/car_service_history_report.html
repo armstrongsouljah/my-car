@@ -145,7 +145,7 @@
         <td>{{ record.get_service_type_display }}</td>
         <td class="amount">{{ record.odometer_km|floatformat:0 }} km</td>
         <td>{{ record.garage_name|default:"—" }}</td>
-        <td class="amount">{% if record.cost %}{{ record.cost|currency:record.currency }}{% else %}—{% endif %}</td>
+        <td class="amount">{% if record.cost is not None %}{{ record.cost|currency:record.currency }}{% else %}—{% endif %}</td>
       </tr>
       {% endfor %}
     </tbody>
@@ -167,7 +167,7 @@
       <tr>
         <td>{{ inspection.inspection_date|date:"j M Y" }}</td>
         <td class="status status-{{ inspection.status }}">{{ inspection.get_status_display }}</td>
-        <td class="amount">{% if inspection.odometer_km %}{{ inspection.odometer_km|floatformat:0 }} km{% else %}—{% endif %}</td>
+        <td class="amount">{% if inspection.odometer_km is not None %}{{ inspection.odometer_km|floatformat:0 }} km{% else %}—{% endif %}</td>
         <td>{{ inspection.inspector_name|default:"—" }}</td>
         <td>{% if inspection.report %}On file{% else %}—{% endif %}</td>
       </tr>

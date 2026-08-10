@@ -314,12 +314,13 @@ class TestCarServiceHistoryReport:
         ServiceRecord.objects.create(car=car, odometer_km=10000, garage_name="Joe's Garage")
         Inspection.objects.create(car=car, inspection_date=date(2026, 1, 1))
         Expense.objects.create(car=car, category="garage_visit", amount=50, expense_date=date(2026, 1, 1))
+        Expense.objects.create(car=car, category="modification_parts", amount=75, expense_date=date(2026, 1, 2))
 
         report = build_service_history_report(car)
 
         assert report["service_records"].count() == 1
         assert report["inspections"].count() == 1
-        assert report["expenses"].count() == 1
+        assert report["expenses"].count() == 2
 
     def test_builder_excludes_non_maintenance_expense_categories(self, car):
         from datetime import date
@@ -329,6 +330,7 @@ class TestCarServiceHistoryReport:
 
         Expense.objects.create(car=car, category="fuel", amount=50, expense_date=date(2026, 1, 1))
         Expense.objects.create(car=car, category="insurance", amount=200, expense_date=date(2026, 1, 1))
+        Expense.objects.create(car=car, category="tax_licensing", amount=80, expense_date=date(2026, 1, 1))
 
         report = build_service_history_report(car)
 

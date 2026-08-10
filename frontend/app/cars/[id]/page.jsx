@@ -221,6 +221,13 @@ function CarDetail() {
   const [downloadError, setDownloadError] = useState("");
 
   const load = useCallback(() => {
+    // Reset before fetching, not just on id change — this component
+    // instance is reused across /cars/[id] navigations (see the reveal-
+    // toggle reset below), so without this a car-to-car transition would
+    // briefly keep rendering (and let "Download service history" act on)
+    // the previous car's stale data while the new fetch is still in flight.
+    setCar(null);
+    setError("");
     api(`/cars/${id}/`).then(setCar).catch((err) => setError(err.message));
     api(`/services/?car=${id}`).then((data) => setServicesData(data.results || data)).catch(() => {});
     api(`/inspections/?car=${id}`).then((data) => setInspections(data.results || data)).catch(() => {});
