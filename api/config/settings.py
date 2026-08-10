@@ -294,6 +294,15 @@ OTP_EXPIRY_MINUTES = config("OTP_EXPIRY_MINUTES", default=10, cast=int)
 # ---------------------------------------------------------------------------
 CLOUDINARY_URL = config("CLOUDINARY_URL", default="")
 
+# Destination account for the one-off cars.migrate_cloudinary_assets command
+# (see #48) -- separate from CLOUDINARY_URL above, which stays pointed at the
+# *current* (old) account until the migration is verified and everything
+# cuts over. Delete these three once the migration is done; nothing else
+# reads them.
+NEW_CLOUD_NAME = config("NEW_CLOUD_NAME", default="")
+NEW_CLOUDINARY_API_KEY = config("NEW_CLOUDINARY_API_KEY", default="")
+NEW_CLOUDINARY_API_SECRET = config("NEW_CLOUDINARY_API_SECRET", default="")
+
 # ---------------------------------------------------------------------------
 # Seeded super admin
 # ---------------------------------------------------------------------------

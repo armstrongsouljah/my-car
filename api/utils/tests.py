@@ -4,7 +4,7 @@ from decimal import Decimal
 import pytest
 
 from utils import Cache
-from utils.Cloudinary import _credentials_from_settings, _public_id_from_url, delete_photos
+from utils.Cloudinary import _credentials_from_settings, delete_photos, public_id_from_url
 from utils.Currency import convert_amount, format_amount, load_latest_rates
 
 
@@ -132,18 +132,18 @@ class TestPublicIdFromUrl:
 
     def test_flat_public_id(self):
         url = "https://res.cloudinary.com/soultech/image/upload/v1699999999/abc123.jpg"
-        assert _public_id_from_url(url) == "abc123"
+        assert public_id_from_url(url) == "abc123"
 
     def test_public_id_with_folder(self):
         url = "https://res.cloudinary.com/soultech/image/upload/v1699999999/car_photos/user1/abc123.png"
-        assert _public_id_from_url(url) == "car_photos/user1/abc123"
+        assert public_id_from_url(url) == "car_photos/user1/abc123"
 
     def test_public_id_with_transformations(self):
         url = "https://res.cloudinary.com/soultech/image/upload/e_improve,w_900,h_700/v1699999999/abc123.jpg"
-        assert _public_id_from_url(url) == "abc123"
+        assert public_id_from_url(url) == "abc123"
 
     def test_non_cloudinary_url_returns_none(self):
-        assert _public_id_from_url("https://example.com/photo.jpg") is None
+        assert public_id_from_url("https://example.com/photo.jpg") is None
 
 
 @pytest.mark.django_db
