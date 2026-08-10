@@ -157,9 +157,9 @@ class TestMigrateCloudinaryAssets:
             call_command("migrate_cloudinary_assets", "--execute")
 
         post.assert_called_once()
-        # Preserves the asset's basename, but under cars/ -- not double-nested
-        # under the old account's own car_photos/ prefix.
-        assert post.call_args.kwargs["data"]["public_id"] == "cars/abc123"
+        # Keyed on the car's own id, not the old account's basename -- see
+        # the collision-safety comment in the command itself.
+        assert post.call_args.kwargs["data"]["public_id"] == f"cars/{car.id}"
         car.refresh_from_db()
         assert car.photo_url == new_url
 
@@ -169,6 +169,23 @@ class TestMigrateCloudinaryAssets:
         car.save(update_fields=["photo_url"])
 
         with patch("requests.post", side_effect=requests.RequestException("boom")):
+            call_command("migrate_cloudinary_assets", "--execute", stderr=StringIO())
+
+        car.refresh_from_db()
+        assert car.photo_url == OLD_PHOTO_URL
+
+    @override_settings(**NEW_ACCOUNT_SETTINGS)
+    def test_a_malformed_response_leaves_the_row_untouched_and_does_not_crash_the_run(self, car):
+        # A 200 with an unexpected body (missing secure_url) raises KeyError,
+        # not requests.RequestException -- this must still be caught as a
+        # per-row failure, not propagate and take down the whole command.
+        car.photo_url = OLD_PHOTO_URL
+        car.save(update_fields=["photo_url"])
+        bad_response = Mock()
+        bad_response.raise_for_status = Mock()
+        bad_response.json.return_value = {}
+
+        with patch("requests.post", return_value=bad_response):
             call_command("migrate_cloudinary_assets", "--execute", stderr=StringIO())
 
         car.refresh_from_db()

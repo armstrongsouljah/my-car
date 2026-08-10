@@ -63,16 +63,17 @@ class Command(BaseCommand):
 
         migrated = failed = 0
         for car in todo:
-            public_id = public_id_from_url(car.photo_url)
-            if not public_id:
-                self.stderr.write(self.style.WARNING(f"car {car.id}: couldn't parse a public_id from {car.photo_url}, skipping"))
+            if not public_id_from_url(car.photo_url):
+                self.stderr.write(self.style.WARNING(f"car {car.id}: {car.photo_url} doesn't look like a Cloudinary URL, skipping"))
                 failed += 1
                 continue
 
-            # Just the asset's own basename under cars/ -- the old account's
-            # public_id may already carry its own folder prefix, which would
-            # otherwise double-nest under cars/cars/...
-            new_public_id = f"{DEST_FOLDER}/{public_id.rsplit('/', 1)[-1]}"
+            # car.id (a UUID, unique by construction) rather than the old
+            # account's own basename -- Cloudinary upload overwrites an
+            # existing asset at the same public_id by default, and nothing
+            # guarantees two cars' old random basenames can't collide. This
+            # makes that structurally impossible instead of just unlikely.
+            new_public_id = f"{DEST_FOLDER}/{car.id}"
 
             if not execute:
                 self.stdout.write(f"car {car.id}: would upload {car.photo_url} -> {new_public_id}")
@@ -80,7 +81,10 @@ class Command(BaseCommand):
 
             try:
                 secure_url = _upload_by_url(cloud_name, api_key, api_secret, car.photo_url, new_public_id)
-            except requests.RequestException as err:
+            except Exception as err:
+                # Broad on purpose: a malformed/unexpected response (missing
+                # secure_url, bad JSON) is exactly as "this row failed" as a
+                # network error, and must never take down the whole run.
                 self.stderr.write(self.style.ERROR(f"car {car.id}: upload failed ({err}), left untouched"))
                 failed += 1
                 continue
