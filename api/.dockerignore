@@ -1,0 +1,14 @@
+# Nothing here is needed inside the image, and .env especially must never
+# end up baked into a layer -- COPY . . in the Dockerfile would otherwise
+# pick up whatever real secrets happen to sit in a local dev .env.
+.env
+.env.*
+!.env.example
+
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+staticfiles/
+
+.git/
