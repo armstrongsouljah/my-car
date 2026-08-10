@@ -17,7 +17,9 @@ _PUBLIC_ID_RE = re.compile(r"/upload/(?:[^/]+/)?v\d+/(?P<public_id>.+)\.[a-zA-Z0
 DESTROY_TIMEOUT_SECONDS = 10
 
 
-def _public_id_from_url(url: str) -> str | None:
+def public_id_from_url(url: str) -> str | None:
+    """Shared with cars.management.commands.migrate_cloudinary_assets (#48)
+    -- not just this module's own delete_photos() anymore."""
     match = _PUBLIC_ID_RE.search(url)
     return match.group("public_id") if match else None
 
@@ -57,7 +59,7 @@ def delete_photos(urls: list[str]) -> None:
     cloud_name, api_key, api_secret = credentials
 
     for url in urls:
-        public_id = _public_id_from_url(url)
+        public_id = public_id_from_url(url)
         if not public_id:
             logger.warning("Could not parse a Cloudinary public_id from %s; skipping", url)
             continue
