@@ -10,6 +10,11 @@ from rest_framework.test import APIClient
 from accounts.models import User
 from cars.models import Car
 
+# A known test value, used via override_settings rather than whatever the
+# ambient environment's DEFAULT_PHOTO_URL happens (or doesn't happen) to be
+# -- same reasoning as the APP_VERSION test isolation elsewhere.
+TEST_DEFAULT_PHOTO_URL = "https://res.cloudinary.com/hi8kcag7/image/upload/v1/cars/default.jpg"
+
 
 @pytest.fixture
 def owner(db):
@@ -22,6 +27,36 @@ def owner(db):
 @pytest.fixture
 def car(owner):
     return Car.objects.create(owner=owner, make="Toyota", model="Corolla", current_odometer_km=50_000)
+
+
+@pytest.mark.django_db
+class TestDefaultCarPhoto:
+    """See #94 — every car gets a photo, one way or another."""
+
+    @override_settings(DEFAULT_PHOTO_URL=TEST_DEFAULT_PHOTO_URL)
+    def test_a_car_created_without_a_photo_gets_the_default(self, owner):
+        car = Car.objects.create(owner=owner, make="Toyota", model="Corolla")
+        assert car.photo_url == TEST_DEFAULT_PHOTO_URL
+
+    @override_settings(DEFAULT_PHOTO_URL=TEST_DEFAULT_PHOTO_URL)
+    def test_a_real_photo_url_is_not_overridden(self, owner):
+        real_url = "https://res.cloudinary.com/hi8kcag7/image/upload/v1/cars/abc.jpg"
+        car = Car.objects.create(owner=owner, make="Toyota", model="Corolla", photo_url=real_url)
+        assert car.photo_url == real_url
+
+    @override_settings(DEFAULT_PHOTO_URL=TEST_DEFAULT_PHOTO_URL)
+    def test_clearing_an_existing_cars_photo_on_update_is_not_reverted(self, car):
+        # A deliberate "remove my photo" via edit must stick -- the default
+        # only fills in a genuinely never-set photo, on creation.
+        car.photo_url = ""
+        car.save(update_fields=["photo_url"])
+        car.refresh_from_db()
+        assert car.photo_url == ""
+
+    @override_settings(DEFAULT_PHOTO_URL="")
+    def test_no_default_configured_leaves_photo_url_blank(self, owner):
+        car = Car.objects.create(owner=owner, make="Toyota", model="Corolla")
+        assert car.photo_url in (None, "")
 
 
 @pytest.mark.django_db
@@ -213,3 +248,46 @@ class TestMigrateCloudinaryAssets:
             call_command("migrate_cloudinary_assets", "--execute", "--limit=1")
 
         post.assert_called_once()
+
+
+@pytest.mark.django_db
+class TestBackfillDefaultCarPhoto:
+    """See #94 — Car.save() already covers every new car; this command is
+    only for rows that predate that."""
+
+    @override_settings(DEFAULT_PHOTO_URL=TEST_DEFAULT_PHOTO_URL)
+    def test_dry_run_does_not_touch_the_db(self, owner):
+        real_url = "https://res.cloudinary.com/hi8kcag7/image/upload/v1/cars/abc.jpg"
+        Car.objects.create(owner=owner, make="Toyota", model="Corolla", photo_url=real_url)
+        blank = Car.objects.create(owner=owner, make="Honda", model="Civic", photo_url="")
+        # Bypasses Car.save()'s own default-on-create so this row genuinely
+        # simulates a pre-#94 row with a null photo_url in the database.
+        Car.objects.filter(pk=blank.pk).update(photo_url=None)
+        stdout = StringIO()
+
+        call_command("backfill_default_car_photo", stdout=stdout)
+
+        assert "1 car(s)" in stdout.getvalue()
+        blank.refresh_from_db()
+        assert blank.photo_url is None
+
+    @override_settings(DEFAULT_PHOTO_URL=TEST_DEFAULT_PHOTO_URL)
+    def test_execute_backfills_only_photo_less_cars(self, owner):
+        real_url = "https://res.cloudinary.com/hi8kcag7/image/upload/v1/cars/abc.jpg"
+        with_photo = Car.objects.create(owner=owner, make="Toyota", model="Corolla", photo_url=real_url)
+        # Both bypass Car.save()'s own default-on-create, to genuinely
+        # simulate pre-#94 legacy rows rather than ones the model itself
+        # would already have filled in.
+        null_photo = Car.objects.create(owner=owner, make="Honda", model="Civic")
+        Car.objects.filter(pk=null_photo.pk).update(photo_url=None)
+        blank_photo = Car.objects.create(owner=owner, make="Ford", model="Focus")
+        Car.objects.filter(pk=blank_photo.pk).update(photo_url="")
+
+        call_command("backfill_default_car_photo", "--execute")
+
+        with_photo.refresh_from_db()
+        null_photo.refresh_from_db()
+        blank_photo.refresh_from_db()
+        assert with_photo.photo_url == real_url
+        assert null_photo.photo_url == TEST_DEFAULT_PHOTO_URL
+        assert blank_photo.photo_url == TEST_DEFAULT_PHOTO_URL

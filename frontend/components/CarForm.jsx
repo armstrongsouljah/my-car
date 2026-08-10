@@ -179,6 +179,14 @@ export default function CarForm({ car = null, onSaved }) {
           )}
           <input type="file" accept="image/*" className="hidden" onChange={pickPhoto} />
         </label>
+        {/* See #94 — a car without a photo still gets one (a shared
+            default), not left blank; only relevant while nothing's picked
+            yet, hence gated on !photoPreview rather than shown always. */}
+        {!photoPreview && (
+          <p className="mt-1 text-[12px] text-gray-400 dark:text-gray-500">
+            Skip this and a default photo gets used — add your own anytime.
+          </p>
+        )}
       </div>
 
       {/* Brand / model */}

@@ -311,7 +311,12 @@ class TestPurgeDeactivatedAccounts:
 
         assert cleaned_up == [photo_url]
 
-    def test_skips_cloudinary_cleanup_for_cars_without_photos(self, owner, monkeypatch):
+    def test_skips_cloudinary_cleanup_for_the_shared_default_photo(self, owner, monkeypatch):
+        # See #94 -- every car gets at least the default photo now, so
+        # there's no such thing as "a car without a photo" anymore. What
+        # this actually guards: destroying DEFAULT_PHOTO_URL here would take
+        # the default away from every *other* car relying on it too, not
+        # just this owner's.
         from cars.models import Car
         from tasks import purge_deactivated_accounts_task
 

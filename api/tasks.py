@@ -306,6 +306,7 @@ def purge_deactivated_accounts_task():
     hosted images), and a final "your data is gone" email goes out first —
     there's no address left to send to once the row is deleted.
     """
+    from django.conf import settings
     from django.utils import timezone
 
     from accounts.models import User
@@ -323,7 +324,14 @@ def purge_deactivated_accounts_task():
 
     count = 0
     for user in queryset:
-        delete_photos([car.photo_url for car in user.cars.all() if car.photo_url])
+        # See #94 — DEFAULT_PHOTO_URL is a shared asset every photo-less car
+        # points at, not something this owner uploaded; destroying it here
+        # would take the default photo away from every other car relying on
+        # it too.
+        delete_photos([
+            car.photo_url for car in user.cars.all()
+            if car.photo_url and car.photo_url != settings.DEFAULT_PHOTO_URL
+        ])
         send_account_deleted_email(email=user.email, first_name=user.first_name)
         user.delete()
         count += 1

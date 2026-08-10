@@ -303,6 +303,12 @@ NEW_CLOUD_NAME = config("NEW_CLOUD_NAME", default="")
 NEW_CLOUDINARY_API_KEY = config("NEW_CLOUDINARY_API_KEY", default="")
 NEW_CLOUDINARY_API_SECRET = config("NEW_CLOUDINARY_API_SECRET", default="")
 
+# See #94 — every car gets a photo, one way or another; this is what a car
+# created without one gets (Car.save()), and what
+# cars.backfill_default_car_photo sets on pre-#94 rows that predate that.
+# Env-configured, not hardcoded, so it can change without a code deploy.
+DEFAULT_PHOTO_URL = config("DEFAULT_PHOTO_URL", default="")
+
 # ---------------------------------------------------------------------------
 # Seeded super admin
 # ---------------------------------------------------------------------------
