@@ -179,12 +179,14 @@ export default function CarForm({ car = null, onSaved }) {
           )}
           <input type="file" accept="image/*" className="hidden" onChange={pickPhoto} />
         </label>
-        {/* See #94 — a car without a photo still gets one (a shared
-            default), not left blank; only relevant while nothing's picked
-            yet, hence gated on !photoPreview rather than shown always. */}
+        {/* See #94 — the backend fills in a shared default when a car is
+            created without a photo, if one's configured (DEFAULT_PHOTO_URL
+            isn't exposed to the frontend, hence "may" rather than a hard
+            promise). Only relevant while nothing's picked yet, hence gated
+            on !photoPreview rather than shown always. */}
         {!photoPreview && (
           <p className="mt-1 text-[12px] text-gray-400 dark:text-gray-500">
-            Skip this and a default photo gets used — add your own anytime.
+            Skip this and a default photo may be used — add your own anytime.
           </p>
         )}
       </div>

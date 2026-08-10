@@ -3,7 +3,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 import requests
-from django.core.management import call_command
+from django.core.management import CommandError, call_command
 from django.test import override_settings
 from rest_framework.test import APIClient
 
@@ -159,11 +159,10 @@ class TestMigrateCloudinaryAssets:
         # silently make this branch untestable.
         car.photo_url = OLD_PHOTO_URL
         car.save(update_fields=["photo_url"])
-        stderr = StringIO()
 
-        call_command("migrate_cloudinary_assets", stderr=stderr)
+        with pytest.raises(CommandError, match="NEW_CLOUD_NAME"):
+            call_command("migrate_cloudinary_assets")
 
-        assert "NEW_CLOUD_NAME" in stderr.getvalue()
         car.refresh_from_db()
         assert car.photo_url == OLD_PHOTO_URL
 
@@ -254,6 +253,13 @@ class TestMigrateCloudinaryAssets:
 class TestBackfillDefaultCarPhoto:
     """See #94 — Car.save() already covers every new car; this command is
     only for rows that predate that."""
+
+    @override_settings(DEFAULT_PHOTO_URL="")
+    def test_without_a_default_configured_errors_and_touches_nothing(self, owner):
+        Car.objects.create(owner=owner, make="Toyota", model="Corolla")
+
+        with pytest.raises(CommandError, match="DEFAULT_PHOTO_URL"):
+            call_command("backfill_default_car_photo", "--execute")
 
     @override_settings(DEFAULT_PHOTO_URL=TEST_DEFAULT_PHOTO_URL)
     def test_dry_run_does_not_touch_the_db(self, owner):

@@ -3,7 +3,7 @@ import time
 
 import requests
 from django.conf import settings
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 
 from cars.models import Car
 from utils.Cloudinary import public_id_from_url
@@ -41,10 +41,7 @@ class Command(BaseCommand):
         api_key = settings.NEW_CLOUDINARY_API_KEY
         api_secret = settings.NEW_CLOUDINARY_API_SECRET
         if not (cloud_name and api_key and api_secret):
-            self.stderr.write(self.style.ERROR(
-                "NEW_CLOUD_NAME / NEW_CLOUDINARY_API_KEY / NEW_CLOUDINARY_API_SECRET must all be set."
-            ))
-            return
+            raise CommandError("NEW_CLOUD_NAME / NEW_CLOUDINARY_API_KEY / NEW_CLOUDINARY_API_SECRET must all be set.")
 
         # Idempotent: a car whose photo_url already points at the new
         # account (e.g. left over from a previous partial run) is untouched,

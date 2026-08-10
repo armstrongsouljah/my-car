@@ -1,5 +1,5 @@
 from django.conf import settings
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.db.models import Q
 
 from cars.models import Car
@@ -20,8 +20,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         if not settings.DEFAULT_PHOTO_URL:
-            self.stderr.write(self.style.ERROR("DEFAULT_PHOTO_URL must be set."))
-            return
+            raise CommandError("DEFAULT_PHOTO_URL must be set.")
 
         qs = Car.objects.filter(Q(photo_url__isnull=True) | Q(photo_url=""))
         count = qs.count()

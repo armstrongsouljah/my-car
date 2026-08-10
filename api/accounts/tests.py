@@ -311,6 +311,7 @@ class TestPurgeDeactivatedAccounts:
 
         assert cleaned_up == [photo_url]
 
+    @override_settings(DEFAULT_PHOTO_URL="https://res.cloudinary.com/hi8kcag7/image/upload/v1/cars/default.jpg")
     def test_skips_cloudinary_cleanup_for_the_shared_default_photo(self, owner, monkeypatch):
         # See #94 -- every car gets at least the default photo now, so
         # there's no such thing as "a car without a photo" anymore. What
@@ -320,7 +321,13 @@ class TestPurgeDeactivatedAccounts:
         from cars.models import Car
         from tasks import purge_deactivated_accounts_task
 
-        Car.objects.create(owner=owner, make="Toyota", model="Corolla")
+        car = Car.objects.create(owner=owner, make="Toyota", model="Corolla")
+        # Confirms this test actually exercises the exclusion -- without a
+        # real (non-blank) photo_url here, the cleanup list would end up
+        # empty for the unrelated reason that delete_photos() already skips
+        # falsy URLs, not because DEFAULT_PHOTO_URL was specifically excluded.
+        assert car.photo_url == "https://res.cloudinary.com/hi8kcag7/image/upload/v1/cars/default.jpg"
+
         owner.deactivate()
         User.objects.filter(pk=owner.pk).update(
             deactivated_at=timezone.now() - timedelta(days=Constants.ACCOUNT_DELETION_GRACE_DAYS)
