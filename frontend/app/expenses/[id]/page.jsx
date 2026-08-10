@@ -15,6 +15,13 @@ function EditExpense() {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    // Reset before fetching, not just on id change — navigating directly
+    // between two /expenses/[id] URLs (e.g. the browser's own back/forward,
+    // not our in-app "‹ Back") reuses this same mounted route rather than
+    // remounting it, so without this the previous expense's data (and the
+    // ExpenseForm state keyed to it below) would hang around mid-fetch.
+    setExpense(null);
+    setError("");
     api(`/expenses/${id}/`).then(setExpense).catch((err) => setError(err.message));
   }, [id]);
 
@@ -25,7 +32,7 @@ function EditExpense() {
       {error && <p className="rounded-xl bg-red-50 dark:bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-400">{error}</p>}
       {!expense && !error && <div className="flex justify-center py-6"><Spinner /></div>}
       {/* Edit mode never renders/uses the car picker, so no need to fetch cars here. */}
-      {expense && <ExpenseForm cars={[]} expense={expense} onSaved={() => router.replace("/expenses")} />}
+      {expense && <ExpenseForm key={id} cars={[]} expense={expense} onSaved={() => router.replace("/expenses")} />}
       <BottomNav />
     </main>
   );
