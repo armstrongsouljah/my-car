@@ -3,7 +3,13 @@
 // deliberately doesn't try to cache or replay API responses. It exists to
 // satisfy PWA installability and give navigation a network-first fallback
 // instead of a browser error page when the connection drops mid-use.
-const CACHE_NAME = "glavbox-shell-v1";
+// Bumped v1 -> v2: an earlier version of this worker (before it was scoped
+// to navigations only) cached every same-origin GET, including JS chunks.
+// Browsers that installed that version are still carrying those stale
+// chunk entries under this cache name — bumping it is what makes the
+// `activate` handler's existing cleanup below actually purge them, instead
+// of treating the poisoned cache as still-current because the name matched.
+const CACHE_NAME = "glavbox-shell-v2";
 const APP_SHELL = ["/", "/icons/icon-192.png", "/icons/icon-512.png"];
 
 self.addEventListener("install", (event) => {
