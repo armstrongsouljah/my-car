@@ -295,6 +295,9 @@ function CarDetail() {
                   {record.garage_name ? ` · ${record.garage_name}` : ""}
                   {record.display_cost != null ? ` · ${formatAmount(record.display_cost, record.display_currency)}` : ""}
                 </p>
+                {record.description && (
+                  <p className="mt-0.5 truncate text-[13px] text-gray-400 dark:text-gray-500">{record.description}</p>
+                )}
                 {(record.next_due_odometer_km || record.next_due_date) && (
                   <p className="mt-1 text-[13px] text-gray-400 dark:text-gray-500">
                     Next due:{" "}
@@ -328,6 +331,9 @@ function CarDetail() {
                   <p className="text-gray-500 dark:text-gray-400">{inspection.inspection_date}</p>
                 </div>
                 {inspection.inspector_name && <p className="mt-1 text-gray-500 dark:text-gray-400">{inspection.inspector_name}</p>}
+                {inspection.notes && (
+                  <p className="mt-0.5 truncate text-[13px] text-gray-400 dark:text-gray-500">{inspection.notes}</p>
+                )}
                 {inspection.next_inspection_date && (
                   <p className="mt-1 text-[13px] text-gray-400 dark:text-gray-500">Next inspection: {inspection.next_inspection_date}</p>
                 )}

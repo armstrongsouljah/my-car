@@ -331,6 +331,50 @@ class TestServiceRecordCurrency:
 
 
 @pytest.mark.django_db
+class TestServiceRecordListDescription:
+    """See #114 -- the list endpoint used to omit `description` entirely,
+    so an "Other"-typed record (or really any record) showed up with no
+    indication of what was actually done."""
+
+    def test_list_endpoint_includes_description(self, car, client):
+        ServiceRecord.objects.create(
+            car=car, odometer_km=41000, interval_km=5000, description="Replaced worn CV joint boot",
+        )
+
+        client.force_authenticate(car.owner)
+        response = client.get(f"/api/v1/services/?car={car.id}")
+        row = (response.data["results"] if "results" in response.data else response.data)[0]
+
+        assert row["description"] == "Replaced worn CV joint boot"
+
+
+@pytest.mark.django_db
+class TestServiceRecordListOrdering:
+    """See #114 -- SmartPaginationAPIView's default cursor pagination
+    unconditionally orders by `-created_at`, which silently overrode
+    ServiceRecord.Meta.ordering. A backdated/late-entered record (or one
+    imported from #103's historical import) should still sort by when the
+    service actually happened, not by row-creation order."""
+
+    def test_orders_by_service_date_not_creation_order(self, car, client):
+        # Created first (earlier created_at) but the *later* service_date.
+        recent_service = ServiceRecord.objects.create(
+            car=car, odometer_km=41000, interval_km=5000, service_date=date(2026, 6, 1), description="Recent",
+        )
+        # Created second (later created_at) but the *earlier* service_date --
+        # e.g. a backdated entry logged after the fact.
+        older_service = ServiceRecord.objects.create(
+            car=car, odometer_km=30000, interval_km=5000, service_date=date(2023, 1, 1), description="Backdated",
+        )
+
+        client.force_authenticate(car.owner)
+        response = client.get(f"/api/v1/services/?car={car.id}")
+        rows = response.data["results"] if "results" in response.data else response.data
+
+        assert [row["id"] for row in rows] == [str(recent_service.id), str(older_service.id)]
+
+
+@pytest.mark.django_db
 class TestRemindersViewCaching:
 
     def test_response_is_cached_across_requests(self, car, client):

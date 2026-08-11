@@ -15,7 +15,22 @@ from services.serializers import (
 from utils import Cache, Constants, QueryParams
 from utils.Currency import load_latest_rates
 from utils.Exception import CustomValidation
-from utils.Views import SmartAPIView, SmartDetailView, SmartPaginationAPIView
+from utils.Views import CustomCursorPagination, SmartAPIView, SmartDetailView, SmartPaginationAPIView
+
+
+class ServiceRecordCursorPagination(CustomCursorPagination):
+    """
+    See #114 -- SmartPaginationAPIView's default pagination_class orders by
+    `-created_at` unconditionally (DRF's CursorPagination always applies its
+    own `ordering`, ignoring the model's own Meta.ordering), which silently
+    overrode ServiceRecord.Meta.ordering = ["-service_date", "-created_at"].
+    A service log entered late (e.g. backdated, or from #103's historical
+    import) was sorting by when the row was *created* rather than when the
+    service actually happened -- this restores that intent for this
+    endpoint specifically, without changing the shared default other list
+    views still rely on.
+    """
+    ordering = ("-service_date", "-created_at")
 
 
 class ServiceRecordListCreateView(SmartPaginationAPIView):
@@ -28,6 +43,7 @@ class ServiceRecordListCreateView(SmartPaginationAPIView):
     create_serializer = ServiceRecordCreateSerializer
     list_serializer = ServiceRecordListSerializer
     detail_serializer = ServiceRecordDetailSerializer
+    pagination_class = ServiceRecordCursorPagination
     permission_classes = [IsAuthenticated]
 
     def get_serializer_context(self):
