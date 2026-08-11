@@ -25,10 +25,6 @@ function Expenses() {
   // list, not the month-on-month cards/chart above it (see #25).
   const [periodFilter, setPeriodFilter] = useState("week");
   const [yearFilter, setYearFilter] = useState(currentYear);
-  // Clamps how far back "‹" can go on the chart — null (still loading, or
-  // never resolved) means don't clamp yet rather than trap the user behind
-  // a disabled button.
-  const [joinYear, setJoinYear] = useState(null);
   const [analytics, setAnalytics] = useState(null);
   const [expenses, setExpenses] = useState([]);
   const [error, setError] = useState("");
@@ -55,9 +51,6 @@ function Expenses() {
 
   useEffect(() => {
     api("/cars/").then((data) => setCars(data.results || data)).catch(() => {});
-    api("/auth/profile/")
-      .then((data) => { if (data.date_joined) setJoinYear(new Date(data.date_joined).getFullYear()); })
-      .catch(() => {});
   }, []);
 
   useEffect(() => load(), [load]);
@@ -108,7 +101,11 @@ function Expenses() {
           year={yearFilter}
           onPrevYear={() => setYearFilter((y) => y - 1)}
           onNextYear={() => setYearFilter((y) => y + 1)}
-          canGoPrev={joinYear === null || yearFilter > joinYear}
+          // No floor — imported historical service history (#103) can
+          // predate when the owner actually joined, so year-browsing isn't
+          // clamped to that anymore. A genuinely empty year just shows the
+          // existing "no expenses logged" state below.
+          canGoPrev
           canGoNext={yearFilter < currentYear}
         />
       </div>

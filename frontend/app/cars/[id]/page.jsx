@@ -345,6 +345,9 @@ function CarDetail() {
           <button className="btn-secondary" onClick={downloadHistory} disabled={downloadingHistory}>
             {downloadingHistory ? "Preparing PDF…" : "Download service history"}
           </button>
+          <Link href={`/cars/${id}/import-history`} className="btn-secondary block text-center">
+            Import service history
+          </Link>
           {deleteError && <p className="rounded-xl bg-red-50 dark:bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-400">{deleteError}</p>}
           <button onClick={() => setConfirmRemove(true)} className="w-full rounded-xl border border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10 px-4 py-3 text-[15px] font-semibold text-red-600 dark:text-red-400">
             Remove car
