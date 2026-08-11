@@ -279,29 +279,35 @@ function CarDetail() {
             <button className="btn-secondary" onClick={() => setShowForm(true)}>+ Log a service</button>
           )}
           {servicesData.length === 0 && !showForm && <p className="text-center text-sm text-gray-400 dark:text-gray-500">No services logged yet.</p>}
-          {servicesData.map((record) => (
-            <Link key={record.id} href={`/services/${record.id}`} className="card block text-sm active:scale-[0.99]">
-              <div className="flex items-center justify-between">
-                <p className="font-semibold">{record.service_type_display}</p>
-                <p className="text-gray-500 dark:text-gray-400">{record.service_date}</p>
-              </div>
-              <p className="mt-1 text-gray-500 dark:text-gray-400">
-                {Number(record.odometer_km).toLocaleString()} km
-                {record.garage_name ? ` · ${record.garage_name}` : ""}
-                {record.display_cost != null ? ` · ${formatAmount(record.display_cost, record.display_currency)}` : ""}
-              </p>
-              {(record.next_due_odometer_km || record.next_due_date) && (
-                <p className="mt-1 text-[13px] text-gray-400 dark:text-gray-500">
-                  Next due:{" "}
-                  {[
-                    record.next_due_odometer_km ? `${Number(record.next_due_odometer_km).toLocaleString()} km` : null,
-                    record.next_due_date,
-                  ].filter(Boolean).join(" or ")}{" "}
-                  — whichever comes first
+          {/* Fixed-height + its own scroll container instead of letting the
+              list push the tab switcher/log button off-screen as more
+              services get logged (#112) -- same pattern as the expense log
+              (#25, frontend/app/expenses/page.jsx). */}
+          <div className="max-h-[60vh] space-y-3 overflow-y-auto pb-1">
+            {servicesData.map((record) => (
+              <Link key={record.id} href={`/services/${record.id}`} className="card block text-sm active:scale-[0.99]">
+                <div className="flex items-center justify-between">
+                  <p className="font-semibold">{record.service_type_display}</p>
+                  <p className="text-gray-500 dark:text-gray-400">{record.service_date}</p>
+                </div>
+                <p className="mt-1 text-gray-500 dark:text-gray-400">
+                  {Number(record.odometer_km).toLocaleString()} km
+                  {record.garage_name ? ` · ${record.garage_name}` : ""}
+                  {record.display_cost != null ? ` · ${formatAmount(record.display_cost, record.display_currency)}` : ""}
                 </p>
-              )}
-            </Link>
-          ))}
+                {(record.next_due_odometer_km || record.next_due_date) && (
+                  <p className="mt-1 text-[13px] text-gray-400 dark:text-gray-500">
+                    Next due:{" "}
+                    {[
+                      record.next_due_odometer_km ? `${Number(record.next_due_odometer_km).toLocaleString()} km` : null,
+                      record.next_due_date,
+                    ].filter(Boolean).join(" or ")}{" "}
+                    — whichever comes first
+                  </p>
+                )}
+              </Link>
+            ))}
+          </div>
         </div>
       )}
 
@@ -313,23 +319,26 @@ function CarDetail() {
             <button className="btn-secondary" onClick={() => setShowForm(true)}>+ Log an inspection</button>
           )}
           {inspections.length === 0 && !showForm && <p className="text-center text-sm text-gray-400 dark:text-gray-500">No inspections logged yet.</p>}
-          {inspections.map((inspection) => (
-            <div key={inspection.id} className="card text-sm">
-              <div className="flex items-center justify-between">
-                <p className="font-semibold">{inspection.status_display}</p>
-                <p className="text-gray-500 dark:text-gray-400">{inspection.inspection_date}</p>
+          {/* Same fixed-height scroll container as the service list above (#112). */}
+          <div className="max-h-[60vh] space-y-3 overflow-y-auto pb-1">
+            {inspections.map((inspection) => (
+              <div key={inspection.id} className="card text-sm">
+                <div className="flex items-center justify-between">
+                  <p className="font-semibold">{inspection.status_display}</p>
+                  <p className="text-gray-500 dark:text-gray-400">{inspection.inspection_date}</p>
+                </div>
+                {inspection.inspector_name && <p className="mt-1 text-gray-500 dark:text-gray-400">{inspection.inspector_name}</p>}
+                {inspection.next_inspection_date && (
+                  <p className="mt-1 text-[13px] text-gray-400 dark:text-gray-500">Next inspection: {inspection.next_inspection_date}</p>
+                )}
+                {inspection.report_url && (
+                  <a href={inspection.report_url} target="_blank" rel="noreferrer" className="mt-2 inline-block text-[13px] font-medium underline">
+                    View report
+                  </a>
+                )}
               </div>
-              {inspection.inspector_name && <p className="mt-1 text-gray-500 dark:text-gray-400">{inspection.inspector_name}</p>}
-              {inspection.next_inspection_date && (
-                <p className="mt-1 text-[13px] text-gray-400 dark:text-gray-500">Next inspection: {inspection.next_inspection_date}</p>
-              )}
-              {inspection.report_url && (
-                <a href={inspection.report_url} target="_blank" rel="noreferrer" className="mt-2 inline-block text-[13px] font-medium underline">
-                  View report
-                </a>
-              )}
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       )}
 
