@@ -71,7 +71,7 @@ class ServiceRecordListSerializer(DisplayCostMixin, ListModelSerializer):
         model = ServiceRecord
         fields = (
             "id", "service_type_display", "service_date",
-            "odometer_km", "garage_name", "cost", "currency", "display_cost", "display_currency",
+            "odometer_km", "garage_name", "description", "cost", "currency", "display_cost", "display_currency",
             "next_due_odometer_km", "next_due_date",
         )
 

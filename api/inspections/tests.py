@@ -82,3 +82,18 @@ class TestInspectionListCaching:
         listing = client.get(reverse("inspection-list-create"), {"car": str(car.pk)})
         results = listing.data.get("results", listing.data)
         assert results == []
+
+
+@pytest.mark.django_db
+class TestInspectionListNotes:
+    """See #114 -- the list endpoint used to omit `notes` entirely, same
+    gap as ServiceRecordListSerializer's missing `description`."""
+
+    def test_list_endpoint_includes_notes(self, car, client):
+        Inspection.objects.create(car=car, inspection_date=date.today(), notes="Advisory on rear brake pad wear")
+
+        client.force_authenticate(car.owner)
+        response = client.get(reverse("inspection-list-create"), {"car": str(car.pk)})
+        results = response.data.get("results", response.data)
+
+        assert results[0]["notes"] == "Advisory on rear brake pad wear"

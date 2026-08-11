@@ -31,7 +31,7 @@ class InspectionListSerializer(ListModelSerializer):
         model = Inspection
         fields = (
             "id", "inspection_date", "status_display",
-            "inspector_name", "report_url", "next_inspection_date",
+            "inspector_name", "notes", "report_url", "next_inspection_date",
         )
 
     def get_report_url(self, instance):
@@ -46,4 +46,6 @@ class InspectionListSerializer(ListModelSerializer):
 
 class InspectionDetailSerializer(InspectionListSerializer):
     class Meta(InspectionListSerializer.Meta):
-        fields = InspectionListSerializer.Meta.fields + ("notes", "updated_at")
+        # "notes" is already in the list serializer's fields (see #114) --
+        # only "updated_at" is actually detail-only now.
+        fields = InspectionListSerializer.Meta.fields + ("updated_at",)
