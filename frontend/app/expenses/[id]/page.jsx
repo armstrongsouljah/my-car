@@ -27,12 +27,14 @@ function EditExpense() {
 
   return (
     <main className="px-4 pb-24 pt-6">
-      <button onClick={() => router.push("/expenses")} className="mb-4 text-sm text-gray-500 dark:text-gray-400">‹ Back</button>
+      {/* Reached from the expense log list (#120), not the analytics page --
+          back/save both return there rather than to /expenses. */}
+      <button onClick={() => router.push("/expenses/list")} className="mb-4 text-sm text-gray-500 dark:text-gray-400">‹ Back</button>
       <h1 className="mb-6 text-2xl font-bold">Edit expense</h1>
       {error && <p className="rounded-xl bg-red-50 dark:bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-400">{error}</p>}
       {!expense && !error && <div className="flex justify-center py-6"><Spinner /></div>}
       {/* Edit mode never renders/uses the car picker, so no need to fetch cars here. */}
-      {expense && <ExpenseForm key={id} cars={[]} expense={expense} onSaved={() => router.replace("/expenses")} />}
+      {expense && <ExpenseForm key={id} cars={[]} expense={expense} onSaved={() => router.replace("/expenses/list")} />}
       <BottomNav />
     </main>
   );
