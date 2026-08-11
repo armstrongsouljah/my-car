@@ -47,48 +47,59 @@ function Reminders() {
         <div className="card text-center text-sm text-gray-500 dark:text-gray-400">Add a car to start getting service and inspection reminders.</div>
       )}
 
-      <div className="space-y-4">
+      <div className="space-y-8">
         {data?.map((entry) => (
-          <div key={entry.car_id} className="card">
-            <Link href={`/cars/${entry.car_id}`} className="flex items-center justify-between">
-              <p className="font-semibold">{carLabel(entry)}</p>
+          <div key={entry.car_id}>
+            <Link href={`/cars/${entry.car_id}`} className="mb-3 flex items-center justify-between">
+              <div>
+                <p className="font-semibold">{carLabel(entry)}</p>
+                <p className="mt-0.5 text-[13px] text-gray-400 dark:text-gray-500">
+                  {entry.registration_number ? (
+                    <span className="select-none blur-[3px]">{entry.registration_number}</span>
+                  ) : (
+                    "No plate"
+                  )}{" "}
+                  · {Number(entry.current_odometer_km).toLocaleString()} km
+                </p>
+              </div>
               <span className="text-gray-300 dark:text-gray-600">›</span>
             </Link>
-            <p className="mt-0.5 text-[13px] text-gray-400 dark:text-gray-500">
-              {entry.registration_number ? (
-                <span className="select-none blur-[3px]">{entry.registration_number}</span>
-              ) : (
-                "No plate"
-              )}{" "}
-              · {Number(entry.current_odometer_km).toLocaleString()} km
-            </p>
-            {entry.reminders.length > 0 && (
-              <div className="mt-3 space-y-2">
-                {entry.reminders.map((reminder) => (
-                  <div key={reminder.kind} className="rounded-xl bg-gray-50 dark:bg-gray-800/60 p-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-[13px] text-gray-600 dark:text-gray-300">{reminder.message}</p>
-                      <StatusChip status={reminder.status} />
-                    </div>
-                    <div className="mt-2">
-                      <ProgressBar percent={reminder.progress_percent} status={reminder.status} />
-                    </div>
+
+            <div className="space-y-3">
+              {/* Above the list, not below it -- stays reachable regardless
+                  of how many reminders this car already has, same fix as
+                  the car detail page's "+ Log a service"/"+ Log an
+                  inspection" placement (#112 dealt with the equivalent
+                  push-down-the-page problem for those lists). */}
+              <Link href={`/reminders/new?car=${entry.car_id}`} className="btn-secondary block text-center">
+                + Add reminder
+              </Link>
+
+              {/* Flat .card rows directly here, not nested inside another
+                  wrapping card -- matches how every other list page (car
+                  detail's own service/inspection tabs, the expense log)
+                  renders its items (#118). Catalog reminders previously used
+                  a bare inset box instead of .card; brought in line with
+                  ReminderCard (custom reminders) and with how the car detail
+                  page already renders this same {kind, message, status}
+                  shape for its own single-car reminders block. */}
+              {entry.reminders.map((reminder) => (
+                <div key={reminder.kind} className="card">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-[13px] font-semibold capitalize">{reminder.kind}</p>
+                    <StatusChip status={reminder.status} />
                   </div>
-                ))}
-              </div>
-            )}
+                  <p className="mt-1 text-[13px] text-gray-500 dark:text-gray-400">{reminder.message}</p>
+                  <div className="mt-2">
+                    <ProgressBar percent={reminder.progress_percent} status={reminder.status} />
+                  </div>
+                </div>
+              ))}
 
-            {reminders[entry.car_id]?.length > 0 && (
-              <div className="mt-3 space-y-2">
-                {reminders[entry.car_id].map((reminder) => (
-                  <ReminderCard key={reminder.id} reminder={reminder} />
-                ))}
-              </div>
-            )}
-
-            <Link href={`/reminders/new?car=${entry.car_id}`} className="btn-secondary mt-3 block text-center">
-              + Add reminder
-            </Link>
+              {reminders[entry.car_id]?.map((reminder) => (
+                <ReminderCard key={reminder.id} reminder={reminder} />
+              ))}
+            </div>
           </div>
         ))}
       </div>
