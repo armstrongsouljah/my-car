@@ -248,6 +248,9 @@ ALLOWED_UPLOAD_CONTENT_TYPES = (
     "application/pdf",
 )
 
+# Receipt/invoice scan upload (#87) -- a single photo or screenshot, not a
+# multi-page document, so a generous cap for any real camera shot.
+EXPENSE_SCAN_MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 # ---------------------------------------------------------------------------
 # Email verification OTP
 # ---------------------------------------------------------------------------

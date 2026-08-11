@@ -5,19 +5,25 @@ import { api } from "@/lib/api";
 import { trackSignal } from "@/lib/telemetry";
 import { CATEGORIES } from "@/lib/expenseCategories";
 
-export default function ExpenseForm({ cars, expense = null, onSaved }) {
+// `initialValues` (see #87) prefills a *new* expense from a scanned
+// receipt -- unlike `expense`, it never switches the form into edit mode.
+// Only fields the scan was actually confident about are non-null, so a
+// missing field here just falls back to the normal blank/default same as
+// no scan happened at all.
+export default function ExpenseForm({ cars, expense = null, initialValues = null, onSaved }) {
   const isEdit = !!expense;
+  const seed = expense || initialValues;
   const initialCostPerLitre =
-    expense?.category === "fuel" && expense.litres > 0 ? (Number(expense.amount) / Number(expense.litres)).toFixed(2) : "";
+    seed?.category === "fuel" && seed.litres > 0 ? (Number(seed.amount) / Number(seed.litres)).toFixed(2) : "";
 
   const [form, setForm] = useState({
     car: expense?.car || cars[0]?.id || "",
-    category: expense?.category || "fuel",
-    amount: expense?.amount ?? "",
-    expense_date: expense?.expense_date || "",
-    vendor: expense?.vendor || "",
-    description: expense?.description || "",
-    odometer_km: expense?.odometer_km ?? "",
+    category: seed?.category || "fuel",
+    amount: seed?.amount ?? "",
+    expense_date: seed?.expense_date || "",
+    vendor: seed?.vendor || "",
+    description: seed?.description || "",
+    odometer_km: seed?.odometer_km ?? "",
     cost_per_litre: initialCostPerLitre,
   });
   const [error, setError] = useState("");

@@ -11,6 +11,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from cars.models import Car
+from expenses.extraction import ExtractionError, extract_expense
 from expenses.models import Expense
 from expenses.reports import build_all_time_report, build_monthly_report
 from expenses.serializers import (
@@ -18,6 +19,7 @@ from expenses.serializers import (
     ExpenseDetailSerializer,
     ExpenseEditSerializer,
     ExpenseListSerializer,
+    ExpenseScanRequestSerializer,
 )
 from utils import QueryParams
 from utils.Currency import convert_amount, load_latest_rates
@@ -102,6 +104,35 @@ class ExpenseListCreateView(SmartPaginationAPIView):
         if end_date:
             queryset = queryset.filter(expense_date__lte=end_date)
         return queryset
+
+
+class ExpenseScanView(SmartAPIView):
+    """
+    POST /expenses/scan/ -- multipart with `car` + `image` (a photo,
+    screenshot, or PDF of a receipt or invoice). Returns whatever fields
+    Gemini could confidently read (category/amount/expense_date/vendor/
+    description/odometer_km/litres) for the frontend to prefill a new
+    expense's form with -- see #87. Nothing is saved here; the owner still
+    reviews/edits and submits through the normal create endpoint.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, **kwargs):
+        serializer = ExpenseScanRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        car_id = serializer.validated_data["car"]
+        if not Car.objects.filter(pk=car_id, owner=request.user).exists():
+            raise CustomValidation(
+                "Car not found in your garage.", field="car", status_code=status.HTTP_404_NOT_FOUND,
+            )
+
+        try:
+            fields = extract_expense(serializer.validated_data["image"])
+        except ExtractionError as err:
+            raise CustomValidation(str(err), field="image", status_code=status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+        return Response(fields, status=status.HTTP_200_OK)
 
 
 class ExpenseDetailView(SmartDetailView):
