@@ -4,29 +4,17 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { formatAmount } from "@/lib/currency";
-import { CATEGORY_LABELS } from "@/lib/expenseCategories";
 import AuthGuard from "@/components/AuthGuard";
 import BottomNav from "@/components/BottomNav";
-import FilterChips from "@/components/FilterChips";
 import MonthChart, { monthLabel } from "@/components/MonthChart";
-
-const PERIODS = [
-  { value: "week", label: "This week" },
-  { value: "month", label: "This month" },
-  { value: "year", label: "This year" },
-];
 
 function Expenses() {
   const currentYear = new Date().getFullYear();
 
   const [cars, setCars] = useState([]);
   const [carFilter, setCarFilter] = useState("");
-  // Independent of yearFilter/analytics below — this only scopes the log
-  // list, not the month-on-month cards/chart above it (see #25).
-  const [periodFilter, setPeriodFilter] = useState("week");
   const [yearFilter, setYearFilter] = useState(currentYear);
   const [analytics, setAnalytics] = useState(null);
-  const [expenses, setExpenses] = useState([]);
   const [error, setError] = useState("");
 
   const load = useCallback(() => {
@@ -43,11 +31,8 @@ function Expenses() {
     api(`/expenses/analytics/?${carScope}year=${yearFilter}`)
       .then((data) => { if (!cancelled) { setAnalytics(data); setError(""); } })
       .catch((err) => { if (!cancelled) setError(err.message); });
-    api(`/expenses/?${carScope}period=${periodFilter}`)
-      .then((data) => { if (!cancelled) setExpenses(data.results || data); })
-      .catch(() => {});
     return () => { cancelled = true; };
-  }, [carFilter, periodFilter, yearFilter]);
+  }, [carFilter, yearFilter]);
 
   useEffect(() => {
     api("/cars/").then((data) => setCars(data.results || data)).catch(() => {});
@@ -112,51 +97,20 @@ function Expenses() {
         />
       </div>
 
+      {/* Analytics only here (see #120) — the raw expense log has its own
+          page now, reached via "View all" below, same pattern as the
+          dashboard's "Spending" summary linking out to this page. */}
       {cars.length === 0 ? (
-        <button className="btn-secondary mb-4" disabled>+ Log an expense</button>
+        <button className="btn-secondary mb-3" disabled>+ Log an expense</button>
       ) : (
-        <Link href="/expenses/new" className="btn-secondary mb-4 inline-block text-center">
+        <Link href="/expenses/new" className="btn-secondary mb-3 inline-block text-center">
           + Log an expense
         </Link>
       )}
 
-      <div className="mt-6 mb-2">
-        <p className="mb-2 text-[13px] font-semibold text-gray-500 dark:text-gray-400">Expense log</p>
-        <FilterChips options={PERIODS} value={periodFilter} onChange={setPeriodFilter} />
-      </div>
-
-      {/* Fixed-height + its own scroll container instead of letting the list
-          push the rest of the page down as more expenses get logged (#25). */}
-      <div className="max-h-[60vh] space-y-3 overflow-y-auto pb-1">
-        {expenses.map((expense) => (
-          <Link
-            key={expense.id}
-            href={`/expenses/${expense.id}`}
-            className="card flex items-center justify-between text-sm active:scale-[0.99]"
-          >
-            <div className="min-w-0">
-              <p className="font-semibold">{CATEGORY_LABELS[expense.category] || expense.category}</p>
-              <p className="text-gray-500 dark:text-gray-400">
-                {expense.expense_date}
-                {expense.vendor ? ` · ${expense.vendor}` : ""}
-                {expense.litres ? ` · ${expense.litres} L` : ""}
-              </p>
-              {expense.description && (
-                <p className="mt-0.5 truncate text-[13px] text-gray-400 dark:text-gray-500">{expense.description}</p>
-              )}
-            </div>
-            <div className="flex flex-shrink-0 items-center gap-2">
-              <p className="font-bold">{formatAmount(expense.display_amount, expense.display_currency)}</p>
-              <span className="text-gray-300 dark:text-gray-600">›</span>
-            </div>
-          </Link>
-        ))}
-        {expenses.length === 0 && (
-          <p className="text-center text-sm text-gray-400 dark:text-gray-500">
-            No expenses logged {periodFilter === "week" ? "this week" : periodFilter === "month" ? "this month" : "this year"}.
-          </p>
-        )}
-      </div>
+      <Link href="/expenses/list" className="block text-center text-sm font-medium text-gray-500 dark:text-gray-400">
+        View all expenses ›
+      </Link>
 
       <BottomNav />
     </main>
