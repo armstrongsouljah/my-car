@@ -154,7 +154,7 @@ function Dashboard() {
         <div className="mt-6">
           <div className="mb-2 flex items-center justify-between">
             <p className="font-semibold">Upcoming</p>
-            <Link href="/reminders" className="text-[13px] font-medium text-gray-500 dark:text-gray-400">See all</Link>
+            <Link href="/reminders" className="btn-chip">See all</Link>
           </div>
 
           {reminders === null && !remindersError ? (
@@ -198,7 +198,7 @@ function Dashboard() {
         <div className="mt-6">
           <div className="mb-2 flex items-center justify-between">
             <p className="font-semibold">Spending</p>
-            <Link href="/expenses" className="text-[13px] font-medium text-gray-500 dark:text-gray-400">See details</Link>
+            <Link href="/expenses" className="btn-chip">See details</Link>
           </div>
 
           {analytics === null && !analyticsError ? (

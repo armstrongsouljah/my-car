@@ -92,6 +92,14 @@
   .btn-secondary {
     @apply w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-[15px] font-semibold text-gray-900 active:scale-[0.99] dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100;
   }
+  /* Compact, inline counterpart to .btn-secondary -- for a secondary "see
+     more" action that sits next to a heading (e.g. "See all", "Monthly
+     reports") rather than as its own full-width row. Same bordered/
+     background treatment so it reads as a real tappable button, not a
+     plain text link, just sized to fit inline. */
+  .btn-chip {
+    @apply inline-flex items-center gap-1 rounded-full border border-gray-300 bg-white px-3 py-1.5 text-[13px] font-semibold text-gray-700 active:scale-95 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200;
+  }
   .card {
     @apply rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900;
   }
