@@ -84,6 +84,46 @@ services:
       # See #94 — what Car.save() sets photo_url to for a car created
       # without one. Blank leaves photo_url genuinely unset, same as before.
       DEFAULT_PHOTO_URL: ${DEFAULT_PHOTO_URL:-}
+      # Same "present in .env but never reached the container" gap as
+      # CLOUDINARY_URL above, audited and fixed for everything else
+      # settings.py reads via decouple's config() — this is why the AI
+      # assistant was silently broken in every deployment despite a real
+      # GEMINI_API_KEY being set in .env. Each fallback here mirrors that
+      # var's actual settings.py default exactly (not blank) wherever it's
+      # cast to int, since decouple's int cast raises on an empty string
+      # rather than falling back to the default -- a blank fallback here
+      # would crash Django at import time instead of just misconfiguring
+      # one feature.
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.6-flash}
+      ANON_THROTTLE: ${ANON_THROTTLE:-60/min}
+      USER_THROTTLE: ${USER_THROTTLE:-240/min}
+      ASSISTANT_CHAT_THROTTLE: ${ASSISTANT_CHAT_THROTTLE:-30/min}
+      AUTH_LOGIN_THROTTLE: ${AUTH_LOGIN_THROTTLE:-10/min}
+      AUTH_REGISTER_THROTTLE: ${AUTH_REGISTER_THROTTLE:-10/hour}
+      AUTH_VERIFY_OTP_THROTTLE: ${AUTH_VERIFY_OTP_THROTTLE:-10/hour}
+      AUTH_RESEND_OTP_THROTTLE: ${AUTH_RESEND_OTP_THROTTLE:-5/hour}
+      AUTH_PASSWORD_RESET_REQUEST_THROTTLE: ${AUTH_PASSWORD_RESET_REQUEST_THROTTLE:-5/hour}
+      AUTH_PASSWORD_RESET_CONFIRM_THROTTLE: ${AUTH_PASSWORD_RESET_CONFIRM_THROTTLE:-10/hour}
+      CAR_CACHE_TTL_SECONDS: ${CAR_CACHE_TTL_SECONDS:-86400}
+      CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-}
+      CELERY_BROKER_SSL_CA_CERTS: ${CELERY_BROKER_SSL_CA_CERTS:-}
+      JWT_ACCESS_MINUTES: ${JWT_ACCESS_MINUTES:-60}
+      JWT_REFRESH_DAYS: ${JWT_REFRESH_DAYS:-7}
+      # SECURE_SSL_REDIRECT/SESSION_COOKIE_SECURE/CSRF_COOKIE_SECURE/
+      # SECURE_HSTS_* are deliberately NOT here. Their settings.py defaults
+      # are dynamic (`not DEBUG`) — Compose can't compute that, only Python
+      # can at settings-import time. Adding e.g. `${SECURE_SSL_REDIRECT:-True}`
+      # would freeze that to prod's answer even for local dev (DEBUG=True),
+      # breaking plain-HTTP local testing; a blank fallback is worse, since
+      # decouple's bool cast treats a present-but-empty value as False
+      # outright rather than falling back to the default — silently
+      # disabling HTTPS redirect/secure cookies/HSTS in prod. Leaving these
+      # genuinely absent from the container's environment is what lets
+      # settings.py's own `not DEBUG` logic run correctly; only touch this
+      # if the goal is to actually override one of these per-environment,
+      # and if so, fix settings.py to treat blank specially first (see
+      # NUM_PROXIES's custom cast lambda for the pattern).
     ports:
       - "127.0.0.1:${API_HOST_PORT:-8001}:8001"
     volumes:
