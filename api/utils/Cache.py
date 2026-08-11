@@ -28,8 +28,13 @@ EXCHANGE_RATES_KEY = "expenses:exchange_rates"
 REMINDER_CATALOG_KEY = "reminders:catalog"
 REMINDER_LIST_KEY = "reminders:list:{owner_id}"
 SERVICE_DIGEST_KEY = "services:digest:{owner_id}"
-SERVICE_LIST_KEY = "services:list:{car_id}"
-INSPECTION_LIST_KEY = "inspections:list:{car_id}"
+# v2 (#114): response shape changed (added description/notes; service list
+# also switched cursor ordering from -created_at to -service_date) -- bumped
+# so a pre-deploy cached entry is simply unreachable under the new key
+# rather than served stale (missing fields, or a now-mismatched cursor)
+# until it naturally expires at midnight.
+SERVICE_LIST_KEY = "services:list:v2:{car_id}"
+INSPECTION_LIST_KEY = "inspections:list:v2:{car_id}"
 
 
 def _ttl():
