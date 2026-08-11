@@ -4,11 +4,13 @@ from unittest import mock
 
 import pytest
 from dateutil.relativedelta import relativedelta
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
 from rest_framework.test import APIClient
 
 from accounts.models import User
 from cars.models import Car
+from expenses.extraction import ExtractionError, _normalize, extract_expense
 from expenses.models import ExchangeRate, Expense
 from expenses.views import ExpenseAnalyticsView
 
@@ -851,3 +853,118 @@ class TestRefreshExchangeRatesTask:
         refresh_exchange_rates_task()
 
         assert Cache.get_exchange_rates() == {"USD": Decimal("1")}
+
+
+class TestNormalizeExpense:
+    """See #87 — only fields Gemini was actually confident about should
+    survive; anything else comes back None rather than a guess."""
+
+    def test_valid_category_passes_through(self):
+        result = _normalize({"category": "fuel", "amount": 45.5})
+        assert result["category"] == "fuel"
+        assert result["amount"] == 45.5
+
+    def test_unknown_category_becomes_none_rather_than_a_guess(self):
+        result = _normalize({"category": "not_a_real_category"})
+        assert result["category"] is None
+
+    def test_missing_fields_are_none_not_dropped_or_defaulted(self):
+        result = _normalize({})
+        assert result == {
+            "category": None, "amount": None, "expense_date": None,
+            "vendor": "", "description": "", "odometer_km": None, "litres": None,
+        }
+
+    def test_non_numeric_amount_becomes_none_rather_than_erroring(self):
+        result = _normalize({"amount": "not a number"})
+        assert result["amount"] is None
+
+
+class TestExtractExpense:
+    """See #87."""
+
+    def test_unsupported_file_type_raises(self):
+        upload = SimpleUploadedFile("receipt.txt", b"whatever", content_type="text/plain")
+        with pytest.raises(ExtractionError):
+            extract_expense(upload)
+
+    @mock.patch("expenses.extraction._call_gemini", return_value={"category": "fuel", "amount": 45})
+    def test_extracts_and_normalizes_the_gemini_response(self, mock_call):
+        upload = SimpleUploadedFile("receipt.jpg", b"fake-jpeg-bytes", content_type="image/jpeg")
+
+        result = extract_expense(upload)
+
+        assert result["category"] == "fuel"
+        assert result["amount"] == 45
+        mock_call.assert_called_once()
+
+    def test_not_configured_raises_a_friendly_error(self, settings):
+        settings.GEMINI_API_KEY = ""
+        upload = SimpleUploadedFile("receipt.jpg", b"fake-jpeg-bytes", content_type="image/jpeg")
+
+        with pytest.raises(ExtractionError):
+            extract_expense(upload)
+
+
+@pytest.mark.django_db
+class TestExpenseScanView:
+    """See #87."""
+
+    @mock.patch(
+        "expenses.views.extract_expense",
+        return_value={
+            "category": "fuel", "amount": 45, "expense_date": "2025-01-01",
+            "vendor": "Shell", "description": "Fuel", "odometer_km": None, "litres": 30,
+        },
+    )
+    def test_returns_extracted_fields(self, mock_extract, owner, car):
+        client = APIClient()
+        client.force_authenticate(owner)
+        upload = SimpleUploadedFile("receipt.jpg", b"fake-jpeg-bytes", content_type="image/jpeg")
+
+        response = client.post("/api/v1/expenses/scan/", {"car": str(car.id), "image": upload}, format="multipart")
+
+        assert response.status_code == 200
+        assert response.data["category"] == "fuel"
+        assert response.data["vendor"] == "Shell"
+
+    def test_rejects_a_car_the_owner_doesnt_own(self, owner, car):
+        client = APIClient()
+        client.force_authenticate(owner)
+        other_owner = User.objects.create_user(email="other-scan@example.com", password="str0ng-pass-123")
+        other_car = Car.objects.create(owner=other_owner, make="Honda", model="Civic")
+        upload = SimpleUploadedFile("receipt.jpg", b"fake-jpeg-bytes", content_type="image/jpeg")
+
+        response = client.post("/api/v1/expenses/scan/", {"car": str(other_car.id), "image": upload}, format="multipart")
+
+        assert response.status_code == 404
+
+    def test_rejects_an_unsupported_file_type(self, owner, car):
+        client = APIClient()
+        client.force_authenticate(owner)
+        upload = SimpleUploadedFile("receipt.txt", b"plain text", content_type="text/plain")
+
+        response = client.post("/api/v1/expenses/scan/", {"car": str(car.id), "image": upload}, format="multipart")
+
+        assert response.status_code == 400
+
+    def test_requires_authentication(self, car):
+        client = APIClient()
+        upload = SimpleUploadedFile("receipt.jpg", b"fake-jpeg-bytes", content_type="image/jpeg")
+
+        response = client.post("/api/v1/expenses/scan/", {"car": str(car.id), "image": upload}, format="multipart")
+
+        assert response.status_code == 401
+
+    @mock.patch(
+        "expenses.views.extract_expense",
+        side_effect=ExtractionError("Receipt scanning isn't configured on this server."),
+    )
+    def test_surfaces_extraction_errors_as_a_client_error(self, mock_extract, owner, car):
+        client = APIClient()
+        client.force_authenticate(owner)
+        upload = SimpleUploadedFile("receipt.jpg", b"fake-jpeg-bytes", content_type="image/jpeg")
+
+        response = client.post("/api/v1/expenses/scan/", {"car": str(car.id), "image": upload}, format="multipart")
+
+        assert response.status_code == 422

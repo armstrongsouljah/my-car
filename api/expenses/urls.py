@@ -8,11 +8,16 @@ from expenses.views import (
     ExpenseListCreateView,
     ExpenseMonthlyReportPDFView,
     ExpenseMonthlyReportView,
+    ExpenseScanView,
 )
 
 urlpatterns = [
     path("", ExpenseListCreateView.as_view(), name="expense-list-create"),
     path("analytics/", ExpenseAnalyticsView.as_view(), name="expense-analytics"),
+    # Listed before <uuid:pk>/ for clarity, though there's no actual
+    # ambiguity -- that converter only matches a UUID, so "scan" can never
+    # match it.
+    path("scan/", ExpenseScanView.as_view(), name="expense-scan"),
     # Listed before <int:year>-<int:month>/ for clarity, though there's no
     # actual ambiguity — that converter only matches digits, so "all-time"
     # can never match it.

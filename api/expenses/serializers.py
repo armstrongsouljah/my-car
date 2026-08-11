@@ -1,8 +1,10 @@
 from rest_framework import serializers
 
 from expenses.models import Expense
+from utils import Constants
 from utils.Currency import convert_amount
 from utils.Serializers import CreateModelSerializer, EditModelSerializer, ListModelSerializer
+from utils.Uploads import validate_upload_type
 
 
 class ExpenseCreateSerializer(CreateModelSerializer):
@@ -21,6 +23,20 @@ class ExpenseEditSerializer(EditModelSerializer):
             "category", "amount", "expense_date", "vendor",
             "description", "odometer_km", "litres",
         )
+
+
+class ExpenseScanRequestSerializer(serializers.Serializer):
+    """See #87 -- a photo/screenshot of a receipt or invoice to prefill a
+    new expense from. Same narrow images+PDF allowlist as support
+    attachments/inspection reports (utils.Uploads.validate_upload_type)."""
+    car = serializers.UUIDField()
+    image = serializers.FileField(validators=[validate_upload_type])
+
+    def validate_image(self, value):
+        if value.size > Constants.EXPENSE_SCAN_MAX_UPLOAD_BYTES:
+            max_mb = Constants.EXPENSE_SCAN_MAX_UPLOAD_BYTES // (1024 * 1024)
+            raise serializers.ValidationError(f"File is too large — max {max_mb}MB.")
+        return value
 
 
 class ExpenseListSerializer(ListModelSerializer):
