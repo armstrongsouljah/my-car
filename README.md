@@ -35,7 +35,9 @@ my-car/
 │   ├── inspections/          # general inspections + optional report upload
 │   ├── expenses/             # expense log + month-on-month analytics
 │   └── tasks.py              # celery tasks (emails, daily reminder sweep)
-└── frontend/                 # Next.js app (login/signup → dashboard)
+├── frontend/                 # Next.js app (login/signup → dashboard)
+└── mobile/                   # React Native + Expo native app (see #101) —
+                               # separate codebase, shares api/ as-is
 ```
 
 The `utils/` folder and the views/serializers follow the same craft style as `nivo-api`: `SmartAPIView` / `SmartPaginationAPIView` / `SmartDetailView` base views, `Create` / `Edit` / `List` / `Detail` serializer split, `CustomValidation` structured errors, and `QueryParams` helpers.
