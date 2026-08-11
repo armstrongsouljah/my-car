@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { api, mediaUrl } from "@/lib/api";
 import { formatAmount } from "@/lib/currency";
@@ -62,6 +62,23 @@ function Dashboard() {
   const [analytics, setAnalytics] = useState(null);
   const [analyticsError, setAnalyticsError] = useState(false);
   const [error, setError] = useState("");
+
+  // Hides the "+ Add car" FAB while actively scrolling down over content
+  // (see #119) -- reappears on any upward scroll, or once back near the
+  // top, rather than permanently sitting on top of whatever's in view.
+  const [hideAddCar, setHideAddCar] = useState(false);
+  const lastScrollY = useRef(0);
+
+  useEffect(() => {
+    lastScrollY.current = window.scrollY;
+    function handleScroll() {
+      const y = window.scrollY;
+      setHideAddCar(y > lastScrollY.current && y > 80);
+      lastScrollY.current = y;
+    }
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   useEffect(() => {
     api("/cars/")
@@ -197,12 +214,22 @@ function Dashboard() {
       {/* bottom-24 is sized to clear BottomNav's floating pill (bottom-4 + its own
           height) — if that nav's height or offset changes, update this too. */}
       <div className="pointer-events-none fixed inset-x-0 bottom-24 z-30 mx-auto flex w-full max-w-lg justify-end px-4">
+        {/* Solid brand emerald + a real label (see #119) -- previously
+            bg-gray-900/dark:bg-white, the exact same treatment as every
+            .btn-primary form-submit button elsewhere in the app, so it
+            read as just another button rather than the one persistent
+            primary action on this page. pointer-events toggles with
+            visibility so it's fully inert while hidden, not just
+            invisible underneath other content. */}
         <Link
           href="/cars/new"
           aria-label="Add a car"
-          className="pointer-events-auto flex h-14 w-14 items-center justify-center rounded-full bg-gray-900 text-2xl text-white shadow-lg active:scale-95 dark:bg-white dark:text-gray-900"
+          className={`flex items-center gap-1.5 rounded-full bg-brand-emphasis px-5 py-3.5 text-[15px] font-semibold text-white shadow-lg transition-all duration-300 active:scale-95 ${
+            hideAddCar ? "pointer-events-none translate-y-24 opacity-0" : "pointer-events-auto translate-y-0 opacity-100"
+          }`}
         >
-          +
+          <span className="text-xl leading-none">+</span>
+          Add car
         </Link>
       </div>
 
