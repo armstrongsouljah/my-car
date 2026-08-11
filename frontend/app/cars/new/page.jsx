@@ -13,7 +13,7 @@ function NewCar() {
       <button onClick={() => router.back()} className="mb-4 text-sm text-gray-500 dark:text-gray-400">‹ Back</button>
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold">Add a Car</h1>
-        <Link href="/cars/bulk" className="text-sm font-medium text-gray-500 dark:text-gray-400">
+        <Link href="/cars/bulk" className="btn-chip">
           Add multiple →
         </Link>
       </div>

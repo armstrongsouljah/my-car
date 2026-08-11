@@ -47,7 +47,7 @@ function Expenses() {
     <main className="px-4 pb-24 pt-6">
       <div className="mb-4 flex items-center justify-between">
         <h1 className="text-2xl font-bold">Expenses</h1>
-        <Link href="/expenses/reports" className="text-sm font-medium text-gray-500 dark:text-gray-400">
+        <Link href="/expenses/reports" className="btn-chip">
           Monthly reports ›
         </Link>
       </div>
@@ -98,19 +98,23 @@ function Expenses() {
       </div>
 
       {/* Analytics only here (see #120) — the raw expense log has its own
-          page now, reached via "View all" below, same pattern as the
-          dashboard's "Spending" summary linking out to this page. */}
-      {cars.length === 0 ? (
-        <button className="btn-secondary mb-3" disabled>+ Log an expense</button>
-      ) : (
-        <Link href="/expenses/new" className="btn-secondary mb-3 inline-block text-center">
-          + Log an expense
-        </Link>
-      )}
+          page now, reached via "View all expenses" below, same pattern as
+          the dashboard's "Spending" summary linking out to this page. Both
+          are real buttons, not a button next to a plain text link — one
+          shouldn't read as more actionable than the other. */}
+      <div className="space-y-3">
+        {cars.length === 0 ? (
+          <button className="btn-secondary" disabled>+ Log an expense</button>
+        ) : (
+          <Link href="/expenses/new" className="btn-secondary block text-center">
+            + Log an expense
+          </Link>
+        )}
 
-      <Link href="/expenses/list" className="block text-center text-sm font-medium text-gray-500 dark:text-gray-400">
-        View all expenses ›
-      </Link>
+        <Link href="/expenses/list" className="btn-secondary block text-center">
+          View all expenses
+        </Link>
+      </div>
 
       <BottomNav />
     </main>
