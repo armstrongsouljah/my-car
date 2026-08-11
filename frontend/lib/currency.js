@@ -31,3 +31,23 @@ export function formatAmount(amount, currencyCode) {
     return value.toLocaleString();
   }
 }
+
+// See #125 — for figures printed directly on/above a chart bar, where a
+// currency with a large everyday nominal amount (UGX, TZS, NGN, ...)
+// otherwise renders wider than the bar itself. 10,000 -> "10k", 1,000,000
+// -> "1m", and so on. Intl's own `notation: "compact"` does the rounding/
+// suffix math (and stays locale-correct for symbol placement); it just
+// defaults to an uppercase suffix (e.g. "10K"), so the trailing letter is
+// lowercased to match this app's own convention.
+export function formatAmountCompact(amount, currencyCode) {
+  const value = Number(amount) || 0;
+  const options = { notation: "compact", maximumFractionDigits: 1 };
+  try {
+    if (!currencyCode) throw new Error("no currency code");
+    return new Intl.NumberFormat(undefined, { ...options, style: "currency", currency: currencyCode })
+      .format(value)
+      .replace(/([KMB])$/, (letter) => letter.toLowerCase());
+  } catch {
+    return new Intl.NumberFormat(undefined, options).format(value).replace(/([KMB])$/, (letter) => letter.toLowerCase());
+  }
+}

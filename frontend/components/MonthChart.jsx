@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { formatAmount } from "@/lib/currency";
+import { formatAmount, formatAmountCompact } from "@/lib/currency";
 import { CATEGORIES, CATEGORY_COLOR_CLASS } from "@/lib/expenseCategories";
 
 const BAR_AREA_HEIGHT = 100; // px — the bar's own max height inside the chart's 150px row
@@ -103,8 +103,11 @@ export default function MonthChart({ months, currency, year, onPrevYear, onNextY
                     isSelected ? "bg-brand/10" : "hover:bg-gray-100 dark:hover:bg-gray-800/60"
                   }`}
                 >
+                  {/* Compact (10k/1m, see #125) -- full precision stays in
+                      aria-label above and the selected-month detail panel
+                      below, where there's room for it. */}
                   <p className="text-[10px] font-medium text-gray-500 dark:text-gray-400">
-                    {formatAmount(Math.round(month.total), currency)}
+                    {formatAmountCompact(Math.round(month.total), currency)}
                   </p>
                   <div
                     className="flex w-full max-w-[24px] flex-col justify-end gap-[2px] overflow-hidden rounded-t-[4px]"
