@@ -248,6 +248,22 @@ ALLOWED_UPLOAD_CONTENT_TYPES = (
     "application/pdf",
 )
 
+# Separate, narrower allowlist for the service-history import upload (#103)
+# -- a PDF, Word doc, or spreadsheet the owner already has, not a photo.
+# Deliberately not folded into ALLOWED_UPLOAD_EXTENSIONS above since that
+# set is specifically "images + PDF" for support attachments/inspection
+# reports; this one is "documents", a different shape entirely.
+HISTORY_IMPORT_UPLOAD_EXTENSIONS = (".pdf", ".docx", ".xlsx")
+HISTORY_IMPORT_UPLOAD_CONTENT_TYPES = (
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+)
+# Comfortably past any real invoice/log, generous enough for a scanned
+# multi-page PDF -- guards against something absurd rather than pinching
+# legitimate documents.
+HISTORY_IMPORT_MAX_UPLOAD_BYTES = 15 * 1024 * 1024
+
 # ---------------------------------------------------------------------------
 # Email verification OTP
 # ---------------------------------------------------------------------------

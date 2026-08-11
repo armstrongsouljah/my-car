@@ -22,6 +22,7 @@ urlpatterns = [
     path(f"{API_PREFIX}expenses/", include("expenses.urls")),
     path(f"{API_PREFIX}assistant/", include("assistant.urls")),
     path(f"{API_PREFIX}support/", include("support.urls")),
+    path(f"{API_PREFIX}history-import/", include("history_import.urls")),
 ]
 
 # Serve media files in development
