@@ -8,18 +8,9 @@ import { formatAmount } from "@/lib/currency";
 import AuthGuard from "@/components/AuthGuard";
 import BottomNav from "@/components/BottomNav";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import ServiceForm from "@/components/ServiceForm";
 import Spinner from "@/components/Spinner";
 import StatusChip from "@/components/StatusChip";
-
-const SERVICE_TYPES = [
-  ["minor_service", "Minor Service"],
-  ["major_service", "Major Service"],
-  ["oil_change", "Oil Change"],
-  ["brakes", "Brakes"],
-  ["tyres", "Tyres"],
-  ["battery", "Battery"],
-  ["other", "Other"],
-];
 
 const INSPECTION_STATUSES = [
   ["passed", "Passed"],
@@ -43,90 +34,6 @@ function RevealableValue({ value, revealed, onToggle, className = "" }) {
         {revealed ? "Hide" : "View"}
       </button>
     </span>
-  );
-}
-
-function ServiceForm({ carId, onSaved }) {
-  const [form, setForm] = useState({
-    service_type: "minor_service", service_date: "", odometer_km: "",
-    garage_name: "", cost: "", interval_km: "5000", interval_months: "6", description: "",
-  });
-  const [error, setError] = useState("");
-  const update = (key) => (event) => setForm({ ...form, [key]: event.target.value });
-
-  async function submit(event) {
-    event.preventDefault();
-    setError("");
-    try {
-      await api("/services/", {
-        method: "POST",
-        body: {
-          car: carId,
-          service_type: form.service_type,
-          service_date: form.service_date || undefined,
-          odometer_km: Number(form.odometer_km),
-          garage_name: form.garage_name,
-          cost: form.cost || null,
-          interval_km: form.interval_km ? Number(form.interval_km) : null,
-          interval_months: form.interval_months ? Number(form.interval_months) : null,
-          description: form.description,
-        },
-      });
-      onSaved();
-    } catch (err) {
-      setError(err.message);
-    }
-  }
-
-  return (
-    <form onSubmit={submit} className="card space-y-3">
-      <p className="font-semibold">Log a service</p>
-      {error && <p className="rounded-xl bg-red-50 dark:bg-red-500/10 p-2 text-sm text-red-700 dark:text-red-400">{error}</p>}
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="label">Type</label>
-          <select className="input" value={form.service_type} onChange={update("service_type")}>
-            {SERVICE_TYPES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="label">Date</label>
-          <input className="input" type="date" value={form.service_date} onChange={update("service_date")} />
-        </div>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="label">Odometer (km) *</label>
-          <input className="input" type="number" required min="0" value={form.odometer_km} onChange={update("odometer_km")} />
-        </div>
-        <div>
-          <label className="label">Cost</label>
-          <input className="input" type="number" step="0.01" min="0" value={form.cost} onChange={update("cost")} />
-        </div>
-      </div>
-      <div>
-        <label className="label">Garage</label>
-        <input className="input" value={form.garage_name} onChange={update("garage_name")} />
-      </div>
-      <div className="rounded-xl bg-gray-50 dark:bg-gray-800/60 p-3">
-        <p className="mb-2 text-[13px] font-medium text-gray-600 dark:text-gray-300">Next service — whichever comes first</p>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="label">After (km)</label>
-            <input className="input" type="number" min="0" value={form.interval_km} onChange={update("interval_km")} placeholder="5000" />
-          </div>
-          <div>
-            <label className="label">After (months)</label>
-            <input className="input" type="number" min="0" value={form.interval_months} onChange={update("interval_months")} placeholder="6" />
-          </div>
-        </div>
-      </div>
-      <div>
-        <label className="label">Notes</label>
-        <textarea className="input" rows={2} value={form.description} onChange={update("description")} />
-      </div>
-      <button className="btn-primary">Save service</button>
-    </form>
   );
 }
 
@@ -373,7 +280,7 @@ function CarDetail() {
           )}
           {servicesData.length === 0 && !showForm && <p className="text-center text-sm text-gray-400 dark:text-gray-500">No services logged yet.</p>}
           {servicesData.map((record) => (
-            <div key={record.id} className="card text-sm">
+            <Link key={record.id} href={`/services/${record.id}`} className="card block text-sm active:scale-[0.99]">
               <div className="flex items-center justify-between">
                 <p className="font-semibold">{record.service_type_display}</p>
                 <p className="text-gray-500 dark:text-gray-400">{record.service_date}</p>
@@ -393,7 +300,7 @@ function CarDetail() {
                   — whichever comes first
                 </p>
               )}
-            </div>
+            </Link>
           ))}
         </div>
       )}
