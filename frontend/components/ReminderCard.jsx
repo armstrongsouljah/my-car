@@ -1,4 +1,8 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
+import { api } from "@/lib/api";
 import ProgressBar from "@/components/ProgressBar";
 import StatusChip from "@/components/StatusChip";
 
@@ -12,28 +16,61 @@ function rangeLabel(reminder) {
   return null;
 }
 
-export default function ReminderCard({ reminder }) {
+// `onCompleted` (see #128) -- until now the only way to move a reminder's
+// baseline forward was editing it by hand on its own page. Card is a plain
+// div (not itself a Link, unlike before) so the "Mark as done" button can
+// sit alongside the title/progress area without nesting a <button> inside
+// an <a> -- the title/progress area is its own inner Link instead.
+export default function ReminderCard({ reminder, onCompleted }) {
   const range = rangeLabel(reminder);
+  const [completing, setCompleting] = useState(false);
+  const [error, setError] = useState("");
+
+  async function markDone() {
+    setError("");
+    setCompleting(true);
+    try {
+      const updated = await api(`/reminders/${reminder.id}/complete/`, { method: "POST" });
+      onCompleted?.(updated);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setCompleting(false);
+    }
+  }
 
   return (
-    <Link href={`/reminders/${reminder.id}/edit`} className="card block">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          {reminder.is_essential && <p className="text-[12px] font-semibold text-blue-600 dark:text-blue-400">Essential</p>}
-          <p className="font-semibold">{reminder.title}</p>
-        </div>
-        <StatusChip status={reminder.status} />
-      </div>
-      <p className="mt-1 text-[13px] text-gray-500 dark:text-gray-400">{reminder.message}</p>
-      <div className="mt-2">
-        <ProgressBar percent={reminder.progress_percent} status={reminder.status} />
-        {range && (
-          <div className="mt-1 flex justify-between text-[12px] text-gray-400 dark:text-gray-500">
-            <span>{range[0]}</span>
-            <span>{range[1]}</span>
+    <div className="card">
+      <Link href={`/reminders/${reminder.id}/edit`} className="block">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            {reminder.is_essential && <p className="text-[12px] font-semibold text-blue-600 dark:text-blue-400">Essential</p>}
+            <p className="font-semibold">{reminder.title}</p>
           </div>
-        )}
-      </div>
-    </Link>
+          <StatusChip status={reminder.status} />
+        </div>
+        <p className="mt-1 text-[13px] text-gray-500 dark:text-gray-400">{reminder.message}</p>
+        <div className="mt-2">
+          <ProgressBar percent={reminder.progress_percent} status={reminder.status} />
+          {range && (
+            <div className="mt-1 flex justify-between text-[12px] text-gray-400 dark:text-gray-500">
+              <span>{range[0]}</span>
+              <span>{range[1]}</span>
+            </div>
+          )}
+        </div>
+      </Link>
+
+      {error && <p className="mt-2 text-[12px] text-red-600 dark:text-red-400">{error}</p>}
+
+      <button
+        type="button"
+        onClick={markDone}
+        disabled={completing}
+        className="btn-chip mt-3 w-full justify-center disabled:opacity-60"
+      >
+        {completing ? "Marking done…" : "✓ Mark as done"}
+      </button>
+    </div>
   );
 }

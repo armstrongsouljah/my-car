@@ -270,6 +270,82 @@ class TestReminderListCaching:
         assert results == []
 
 
+@pytest.mark.django_db
+class TestReminderComplete:
+    """See #128 -- previously the only way to move a reminder's baseline
+    forward was editing it by hand (or, for oil-change reminders only,
+    logging a matching ServiceRecord)."""
+
+    def test_resets_baseline_to_today_and_current_odometer(self, car, client):
+        reminder = Reminder.objects.create(
+            car=car, title="Brake pad replacement",
+            tracking_method=Constants.REMINDER_TRACKING_METHOD_DATE_AND_MILEAGE,
+            interval_km=20000, interval_months=12,
+            baseline_odometer_km=10000, baseline_date=date(2025, 1, 1),
+        )
+        client.force_authenticate(car.owner)
+
+        response = client.post(reverse("reminder-complete", args=[reminder.pk]))
+
+        assert response.status_code == 200
+        reminder.refresh_from_db()
+        assert reminder.baseline_odometer_km == car.current_odometer_km
+        assert reminder.baseline_date == date.today()
+        assert reminder.next_due_odometer_km == car.current_odometer_km + 20000
+
+    def test_date_only_reminder_leaves_odometer_baseline_untouched(self, car, client):
+        reminder = Reminder.objects.create(
+            car=car, title="Insurance renewal",
+            tracking_method=Constants.REMINDER_TRACKING_METHOD_DATE,
+            interval_months=12, baseline_date=date(2025, 1, 1),
+        )
+        client.force_authenticate(car.owner)
+
+        client.post(reverse("reminder-complete", args=[reminder.pk]))
+
+        reminder.refresh_from_db()
+        assert reminder.baseline_odometer_km is None
+        assert reminder.baseline_date == date.today()
+
+    def test_response_reflects_the_now_ok_status(self, car, client):
+        reminder = Reminder.objects.create(
+            car=car, title="Brake pad replacement",
+            tracking_method=Constants.REMINDER_TRACKING_METHOD_MILEAGE,
+            interval_km=1000, baseline_odometer_km=car.current_odometer_km - 999,
+        )
+        client.force_authenticate(car.owner)
+
+        response = client.post(reverse("reminder-complete", args=[reminder.pk]))
+
+        assert response.data["status"] == "ok"
+
+    def test_rejects_a_reminder_the_owner_doesnt_own(self, car, client):
+        other_owner = User.objects.create_user(email="other@example.com", password="str0ng-pass-123")
+        other_car = Car.objects.create(owner=other_owner, make="Honda", model="Civic")
+        reminder = Reminder.objects.create(
+            car=other_car, title="Brake pad replacement",
+            tracking_method=Constants.REMINDER_TRACKING_METHOD_DATE, interval_months=12,
+            baseline_date=date(2025, 1, 1),
+        )
+        client.force_authenticate(car.owner)
+
+        response = client.post(reverse("reminder-complete", args=[reminder.pk]))
+
+        assert response.status_code == 404
+
+    def test_requires_authentication(self, car):
+        reminder = Reminder.objects.create(
+            car=car, title="Brake pad replacement",
+            tracking_method=Constants.REMINDER_TRACKING_METHOD_DATE, interval_months=12,
+            baseline_date=date(2025, 1, 1),
+        )
+        api = APIClient()
+
+        response = api.post(reverse("reminder-complete", args=[reminder.pk]))
+
+        assert response.status_code == 401
+
+
 class TestReminderCatalogCaching:
 
     @pytest.fixture(autouse=True)

@@ -283,6 +283,42 @@ class TestRemindersView:
 
 
 @pytest.mark.django_db
+class TestSendDueRemindersTask:
+    """See #128 -- the digest email's CTA used to link to the bare site
+    root; it should land the owner on the specific car it's about."""
+
+    def test_emails_a_car_scoped_link_not_the_bare_site_root(self, car):
+        from django.core import mail
+
+        from tasks import send_due_reminders_task
+
+        ServiceRecord.objects.create(
+            car=car, odometer_km=40000,
+            service_date=date.today() - relativedelta(months=7),
+            interval_km=5000, interval_months=6,
+        )
+
+        send_due_reminders_task()
+
+        assert len(mail.outbox) == 1
+        message = mail.outbox[0]
+        assert message.to == [car.owner.email]
+        car_url_fragment = f"/cars/{car.id}"
+        assert car_url_fragment in message.body
+        html_body = message.alternatives[0][0]
+        assert car_url_fragment in html_body
+
+    def test_no_email_when_nothing_is_due(self, car):
+        from django.core import mail
+
+        from tasks import send_due_reminders_task
+
+        send_due_reminders_task()
+
+        assert len(mail.outbox) == 0
+
+
+@pytest.mark.django_db
 class TestServiceRecordCurrency:
     """See #40 — cost is snapshotted with the owner's currency at creation
     and converted for display, same as Expense.amount."""
