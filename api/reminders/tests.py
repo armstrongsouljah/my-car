@@ -5,6 +5,7 @@ import pytest
 from dateutil.relativedelta import relativedelta
 from django.core.cache import cache
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from accounts.models import User
@@ -290,7 +291,7 @@ class TestReminderComplete:
         assert response.status_code == 200
         reminder.refresh_from_db()
         assert reminder.baseline_odometer_km == car.current_odometer_km
-        assert reminder.baseline_date == date.today()
+        assert reminder.baseline_date == timezone.localdate()
         assert reminder.next_due_odometer_km == car.current_odometer_km + 20000
 
     def test_date_only_reminder_leaves_odometer_baseline_untouched(self, car, client):
@@ -305,7 +306,7 @@ class TestReminderComplete:
 
         reminder.refresh_from_db()
         assert reminder.baseline_odometer_km is None
-        assert reminder.baseline_date == date.today()
+        assert reminder.baseline_date == timezone.localdate()
 
     def test_response_reflects_the_now_ok_status(self, car, client):
         reminder = Reminder.objects.create(

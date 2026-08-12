@@ -25,7 +25,10 @@ function EditReminder() {
   const [completedCount, setCompletedCount] = useState(0);
 
   const load = useCallback(() => {
-    api(`/reminders/${id}/`)
+    // Returned (not fire-and-forget) so markDone() below can await it --
+    // otherwise the ReminderDetailsForm remount races the refetch and can
+    // remount with the pre-completion baseline still in state.
+    return api(`/reminders/${id}/`)
       .then((data) => {
         setReminder(data);
         return api(`/cars/${data.car}/`);
@@ -40,7 +43,7 @@ function EditReminder() {
     setCompleting(true);
     try {
       await api(`/reminders/${id}/complete/`, { method: "POST" });
-      load(); // refetches so baseline_odometer_km/baseline_date shown below reflect the reset
+      await load(); // refetches so the remount below picks up the reset baseline, not the stale one
       setCompletedCount((count) => count + 1);
     } catch (err) {
       setError(err.message);
