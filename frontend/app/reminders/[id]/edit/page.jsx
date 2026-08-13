@@ -17,6 +17,7 @@ function EditReminder() {
   const [error, setError] = useState("");
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [removing, setRemoving] = useState(false);
+  const [confirmDone, setConfirmDone] = useState(false);
   const [completing, setCompleting] = useState(false);
   // ReminderDetailsForm seeds its own local state from `reminder` once on
   // mount (same pattern as ExpenseForm) -- bumping this forces a remount so
@@ -45,6 +46,7 @@ function EditReminder() {
       await api(`/reminders/${id}/complete/`, { method: "POST" });
       await load(); // refetches so the remount below picks up the reset baseline, not the stale one
       setCompletedCount((count) => count + 1);
+      setConfirmDone(false);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -72,9 +74,14 @@ function EditReminder() {
       <button onClick={() => router.back()} className="mb-4 text-sm text-gray-500 dark:text-gray-400">‹ Back</button>
       <h1 className="mb-4 text-2xl font-bold">{reminder.title}</h1>
 
-      <button onClick={markDone} disabled={completing} className="btn-secondary mb-4 disabled:opacity-60">
-        {completing ? "Marking done…" : "✓ Mark as done today"}
-      </button>
+      {/* Same restriction as ReminderCard.jsx (see #134 follow-up): only
+          shown once actually overdue, and gated behind a confirmation --
+          this overwrites the baseline with no undo. */}
+      {reminder.status === "overdue" && (
+        <button onClick={() => setConfirmDone(true)} className="btn-secondary mb-4">
+          ✓ Mark as done today
+        </button>
+      )}
 
       <ReminderDetailsForm
         key={completedCount}
@@ -101,6 +108,17 @@ function EditReminder() {
         cancelLabel="Keep reminder"
         onConfirm={remove}
         onCancel={() => setConfirmRemove(false)}
+      />
+
+      <ConfirmDialog
+        open={confirmDone}
+        loading={completing}
+        title="Mark this reminder as done?"
+        message={`"${reminder.title}" will be reset as if you just did it today -- this can't be undone.`}
+        confirmLabel="Mark as done"
+        cancelLabel="Cancel"
+        onConfirm={markDone}
+        onCancel={() => setConfirmDone(false)}
       />
 
       <BottomNav />
