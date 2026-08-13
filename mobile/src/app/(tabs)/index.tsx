@@ -76,23 +76,26 @@ export default function GarageScreen() {
           keyExtractor={(car) => car.id}
           contentContainerStyle={styles.list}
           renderItem={({ item }) => (
-            <ThemedView type="backgroundElement" style={styles.card}>
-              {item.photo_url ? (
-                <Image source={{ uri: mediaUrl(item.photo_url) ?? undefined }} style={styles.photo} />
-              ) : (
-                <View style={[styles.photo, styles.photoPlaceholder, { backgroundColor: theme.backgroundSelected }]}>
-                  <ThemedText type="title">🚗</ThemedText>
+            <Pressable onPress={() => router.push(`/car/${item.id}`)} accessibilityRole="button">
+              <ThemedView type="backgroundElement" style={styles.card}>
+                {item.photo_url ? (
+                  <Image source={{ uri: mediaUrl(item.photo_url) ?? undefined }} style={styles.photo} />
+                ) : (
+                  <View style={[styles.photo, styles.photoPlaceholder, { backgroundColor: theme.backgroundSelected }]}>
+                    <ThemedText type="title">🚗</ThemedText>
+                  </View>
+                )}
+                <View style={styles.cardBody}>
+                  <ThemedText type="smallBold">
+                    {item.make} {item.model} {item.year ? `(${item.year})` : ''}
+                  </ThemedText>
+                  <ThemedText type="small" themeColor="textSecondary">
+                    {Number(item.current_odometer_km).toLocaleString()} km
+                  </ThemedText>
                 </View>
-              )}
-              <View style={styles.cardBody}>
-                <ThemedText type="smallBold">
-                  {item.make} {item.model} {item.year ? `(${item.year})` : ''}
-                </ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">
-                  {Number(item.current_odometer_km).toLocaleString()} km
-                </ThemedText>
-              </View>
-            </ThemedView>
+                <MaterialCommunityIcons name="chevron-right" color={theme.textSecondary} size={22} />
+              </ThemedView>
+            </Pressable>
           )}
         />
       </SafeAreaView>
