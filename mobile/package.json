@@ -5,6 +5,7 @@
   "dependencies": {
     "@expo/ui": "~57.0.10",
     "@expo/vector-icons": "^15.0.2",
+    "@react-native-google-signin/google-signin": "^16.1.4",
     "expo": "~57.0.12",
     "expo-constants": "~57.0.10",
     "expo-device": "~57.0.1",
