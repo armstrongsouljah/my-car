@@ -1,7 +1,6 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import AuthGuard from "@/components/AuthGuard";
@@ -40,8 +39,17 @@ function AddReminder() {
   const [selected, setSelected] = useState(null);
   const [trackingMethod, setTrackingMethod] = useState("date_and_mileage");
 
+  // Only fetched when no ?car= is given -- lets this page double as a car
+  // picker (#133) instead of dead-ending, for the multi-car case where the
+  // Reminders page's single "+ Add reminder" button can't already know
+  // which car you mean.
+  const [pickerCars, setPickerCars] = useState(null);
+
   useEffect(() => {
-    if (!carId) return;
+    if (!carId) {
+      api("/cars/").then((data) => setPickerCars(data.results || data)).catch((err) => setError(err.message));
+      return;
+    }
     api(`/cars/${carId}/`).then(setCar).catch((err) => setError(err.message));
     api("/reminders/catalog/").then(setCatalog).catch((err) => setError(err.message));
   }, [carId]);
@@ -80,14 +88,37 @@ function AddReminder() {
   }
 
   if (!carId) {
-    // See #97 — this used to be a dead end (no link out) for any caller
-    // that reaches this page without a car param.
+    // A real picker (#133), not just a dead end back to /reminders -- the
+    // Reminders page's single "+ Add reminder" button lands here whenever
+    // it can't already tell which car you mean (more than one car).
+    if (error) return <main className="p-6"><p className="rounded-xl bg-red-50 dark:bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-400">{error}</p></main>;
+    if (!pickerCars) return <main className="flex justify-center p-10"><Spinner /></main>;
     return (
-      <main className="p-6 text-center text-sm text-gray-400 dark:text-gray-500">
-        <p className="mb-3">No car selected.</p>
-        <Link href="/reminders" className="font-medium text-gray-600 underline underline-offset-2 dark:text-gray-300">
-          Pick a car to add a reminder for
-        </Link>
+      <main className="px-4 pb-24 pt-6">
+        <h1 className="mb-4 text-2xl font-bold">Which car?</h1>
+        {pickerCars.length === 0 ? (
+          <p className="text-center text-sm text-gray-400 dark:text-gray-500">Add a car first to set up reminders for it.</p>
+        ) : (
+          <div className="space-y-2">
+            {pickerCars.map((entry) => (
+              <button
+                key={entry.id}
+                onClick={() => router.push(`/reminders/new?car=${entry.id}`)}
+                className="card flex w-full items-center justify-between gap-3 text-left"
+              >
+                <div>
+                  <p className="font-semibold">
+                    {entry.make} {entry.model}{entry.year ? ` (${entry.year})` : ""}
+                  </p>
+                  <p className="text-[13px] text-gray-500 dark:text-gray-400">
+                    {entry.registration_number || "No plate"} · {Number(entry.current_odometer_km).toLocaleString()} km
+                  </p>
+                </div>
+                <span className="text-gray-300 dark:text-gray-600">›</span>
+              </button>
+            ))}
+          </div>
+        )}
       </main>
     );
   }
