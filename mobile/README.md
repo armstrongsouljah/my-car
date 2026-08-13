@@ -32,6 +32,34 @@ runserver 8001` from `api/`), and for the web target specifically, its
 `CORS_ALLOWED_ORIGINS` needs to include whatever origin `expo start --web`
 picks (native targets aren't subject to CORS at all).
 
+## Building (EAS)
+
+`applicationId`/`bundleIdentifier` is locked in as `com.glavbox.app`
+(`app.json`) — permanent once a build is submitted, don't change it without
+publishing as a new app listing. `eas.json` defines three profiles:
+
+| Profile | Distribution | Use |
+|---|---|---|
+| `development` | internal | dev client build, for testing native code changes with fast refresh |
+| `preview` | internal | installable APK, for testing a real build without going through Play Store review |
+| `production` | store | what actually gets submitted to Play Console |
+
+One-time setup (needs an Expo account — not something this can do
+unattended):
+
+```bash
+npm install -g eas-cli   # or use `npx eas-cli` throughout instead
+eas login
+eas init                 # links this project to your Expo account, writes
+                          # extra.eas.projectId into app.json
+```
+
+Then, e.g. for a testable APK:
+
+```bash
+eas build --platform android --profile preview
+```
+
 ## Status
 
 Garage (cars list) and Settings (signed-in user + logout) are real,
