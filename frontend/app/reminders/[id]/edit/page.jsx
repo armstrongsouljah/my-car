@@ -89,6 +89,7 @@ function EditReminder() {
         reminder={reminder}
         editableMethod
         onSaved={() => router.replace("/reminders")}
+        onCancel={() => router.back()}
       />
 
       <button

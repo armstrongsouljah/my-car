@@ -31,7 +31,7 @@ function NewExpense() {
         </Link>
       )}
       {cars && cars.length > 0 && (
-        <ExpenseForm cars={cars} onSaved={() => router.replace("/expenses")} />
+        <ExpenseForm cars={cars} onSaved={() => router.replace("/expenses")} onCancel={() => router.push("/expenses")} />
       )}
       <BottomNav />
     </main>

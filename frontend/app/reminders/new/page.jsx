@@ -219,6 +219,7 @@ function AddReminder() {
             preset={selected.key ? selected : null}
             trackingMethod={trackingMethod}
             onSaved={() => router.replace("/reminders")}
+            onCancel={back}
           />
         </>
       )}

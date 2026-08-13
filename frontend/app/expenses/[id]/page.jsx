@@ -34,7 +34,15 @@ function EditExpense() {
       {error && <p className="rounded-xl bg-red-50 dark:bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-400">{error}</p>}
       {!expense && !error && <div className="flex justify-center py-6"><Spinner /></div>}
       {/* Edit mode never renders/uses the car picker, so no need to fetch cars here. */}
-      {expense && <ExpenseForm key={id} cars={[]} expense={expense} onSaved={() => router.replace("/expenses/list")} />}
+      {expense && (
+        <ExpenseForm
+          key={id}
+          cars={[]}
+          expense={expense}
+          onSaved={() => router.replace("/expenses/list")}
+          onCancel={() => router.push("/expenses/list")}
+        />
+      )}
       <BottomNav />
     </main>
   );

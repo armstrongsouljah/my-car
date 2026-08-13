@@ -37,7 +37,7 @@ function RevealableValue({ value, revealed, onToggle, className = "" }) {
   );
 }
 
-function InspectionForm({ carId, onSaved }) {
+function InspectionForm({ carId, onSaved, onCancel }) {
   const [form, setForm] = useState({
     inspection_date: "", odometer_km: "", status: "passed",
     inspector_name: "", notes: "", next_inspection_date: "",
@@ -106,6 +106,11 @@ function InspectionForm({ carId, onSaved }) {
         <textarea className="input" rows={2} value={form.notes} onChange={update("notes")} />
       </div>
       <button className="btn-primary">Save inspection</button>
+      {onCancel && (
+        <button type="button" onClick={onCancel} className="btn-secondary">
+          Cancel
+        </button>
+      )}
     </form>
   );
 }
@@ -283,7 +288,7 @@ function CarDetail() {
       {tab === "service" && (
         <div className="space-y-3">
           {showForm ? (
-            <ServiceForm carId={id} onSaved={() => { setShowForm(false); load(); }} />
+            <ServiceForm carId={id} onSaved={() => { setShowForm(false); load(); }} onCancel={() => setShowForm(false)} />
           ) : (
             <button className="btn-secondary" onClick={() => setShowForm(true)}>+ Log a service</button>
           )}
@@ -326,7 +331,7 @@ function CarDetail() {
       {tab === "inspections" && (
         <div className="space-y-3">
           {showForm ? (
-            <InspectionForm carId={id} onSaved={() => { setShowForm(false); load(); }} />
+            <InspectionForm carId={id} onSaved={() => { setShowForm(false); load(); }} onCancel={() => setShowForm(false)} />
           ) : (
             <button className="btn-secondary" onClick={() => setShowForm(true)}>+ Log an inspection</button>
           )}

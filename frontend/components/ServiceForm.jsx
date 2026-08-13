@@ -16,7 +16,12 @@ const SERVICE_TYPES = [
 // `record` (see #109) puts this in edit mode (PATCH) instead of create
 // (POST) -- `carId` is only needed for create, since PATCH targets the
 // record's own id and the backend doesn't accept reassigning `car`.
-export default function ServiceForm({ carId, record = null, onSaved }) {
+// `onCancel` (see #142) is optional -- the inline create flow on the car
+// detail page has no other way out of this form (it's a toggled panel, not
+// a page), so it needs one; the standalone edit page already has its own
+// page-level "‹ Back" and passes the same handler through here too, for a
+// closer-to-hand escape without scrolling back up.
+export default function ServiceForm({ carId, record = null, onSaved, onCancel }) {
   const isEdit = !!record;
   const [form, setForm] = useState({
     service_type: record?.service_type || "minor_service",
@@ -109,6 +114,11 @@ export default function ServiceForm({ carId, record = null, onSaved }) {
         <textarea className="input" rows={2} value={form.description} onChange={update("description")} />
       </div>
       <button className="btn-primary">{isEdit ? "Save changes" : "Save service"}</button>
+      {onCancel && (
+        <button type="button" onClick={onCancel} className="btn-secondary">
+          Cancel
+        </button>
+      )}
     </form>
   );
 }

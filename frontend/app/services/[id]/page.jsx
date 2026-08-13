@@ -50,7 +50,7 @@ function EditService() {
       {!record && !error && <div className="flex justify-center py-6"><Spinner /></div>}
       {record && (
         <>
-          <ServiceForm key={id} record={record} onSaved={() => router.replace(`/cars/${record.car}`)} />
+          <ServiceForm key={id} record={record} onSaved={() => router.replace(`/cars/${record.car}`)} onCancel={backToCar} />
           {deleteError && <p className="mt-4 rounded-xl bg-red-50 dark:bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-400">{deleteError}</p>}
           <button
             onClick={() => setConfirmRemove(true)}

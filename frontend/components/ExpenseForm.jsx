@@ -5,7 +5,8 @@ import { api } from "@/lib/api";
 import { trackSignal } from "@/lib/telemetry";
 import { CATEGORIES } from "@/lib/expenseCategories";
 
-export default function ExpenseForm({ cars, expense = null, onSaved }) {
+// `onCancel` (see #142) -- optional, matches ServiceForm's convention.
+export default function ExpenseForm({ cars, expense = null, onSaved, onCancel }) {
   const isEdit = !!expense;
   const initialCostPerLitre =
     expense?.category === "fuel" && expense.litres > 0 ? (Number(expense.amount) / Number(expense.litres)).toFixed(2) : "";
@@ -119,6 +120,11 @@ export default function ExpenseForm({ cars, expense = null, onSaved }) {
         <textarea className="input" rows={2} placeholder="What was this for?" value={form.description} onChange={update("description")} />
       </div>
       <button className="btn-primary">{isEdit ? "Save changes" : "Save expense"}</button>
+      {onCancel && (
+        <button type="button" onClick={onCancel} className="btn-secondary">
+          Cancel
+        </button>
+      )}
     </form>
   );
 }
