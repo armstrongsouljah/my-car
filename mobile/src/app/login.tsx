@@ -8,12 +8,13 @@ import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/hooks/use-theme';
 
 export default function LoginScreen() {
-  const { login } = useAuth();
+  const { login, loginWithGoogle } = useAuth();
   const theme = useTheme();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   async function submit() {
     setError('');
@@ -26,6 +27,18 @@ export default function LoginScreen() {
       setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function submitGoogle() {
+    setError('');
+    setGoogleLoading(true);
+    try {
+      await loginWithGoogle();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong');
+    } finally {
+      setGoogleLoading(false);
     }
   }
 
@@ -68,11 +81,30 @@ export default function LoginScreen() {
 
         <Pressable
           onPress={submit}
-          disabled={loading || !email || !password}
+          disabled={loading || googleLoading || !email || !password}
           accessibilityRole="button"
-          style={[styles.button, { backgroundColor: theme.brand, opacity: loading || !email || !password ? 0.6 : 1 }]}
+          style={[styles.button, { backgroundColor: theme.brand, opacity: loading || googleLoading || !email || !password ? 0.6 : 1 }]}
         >
           {loading ? <ActivityIndicator color="#fff" /> : <ThemedText style={styles.buttonText}>Sign in</ThemedText>}
+        </Pressable>
+
+        <ThemedView style={styles.dividerRow}>
+          <ThemedView style={[styles.dividerLine, { backgroundColor: theme.backgroundSelected }]} />
+          <ThemedText type="small" themeColor="textSecondary">or continue with</ThemedText>
+          <ThemedView style={[styles.dividerLine, { backgroundColor: theme.backgroundSelected }]} />
+        </ThemedView>
+
+        <Pressable
+          onPress={submitGoogle}
+          disabled={loading || googleLoading}
+          accessibilityRole="button"
+          style={[styles.googleButton, { borderColor: theme.backgroundSelected, opacity: loading || googleLoading ? 0.6 : 1 }]}
+        >
+          {googleLoading ? (
+            <ActivityIndicator color={theme.text} />
+          ) : (
+            <ThemedText style={styles.googleButtonText}>Continue with Google</ThemedText>
+          )}
         </Pressable>
       </ScrollView>
       </KeyboardAvoidingView>
@@ -116,6 +148,25 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: '#fff',
+    fontWeight: '600',
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    marginTop: Spacing.one,
+  },
+  dividerLine: {
+    flex: 1,
+    height: StyleSheet.hairlineWidth,
+  },
+  googleButton: {
+    borderWidth: 1,
+    borderRadius: Spacing.two,
+    paddingVertical: Spacing.three,
+    alignItems: 'center',
+  },
+  googleButtonText: {
     fontWeight: '600',
   },
 });

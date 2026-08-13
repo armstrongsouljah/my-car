@@ -11,13 +11,15 @@
     "preview": {
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://api-dev.glavbox.com/api/v1"
+        "EXPO_PUBLIC_API_URL": "https://api-dev.glavbox.com/api/v1",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "954298928692-50vk28fblbuu1bj3tp1e4crem07bm3ko.apps.googleusercontent.com"
       }
     },
     "production": {
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://api.glavbox.com/api/v1"
+        "EXPO_PUBLIC_API_URL": "https://api.glavbox.com/api/v1",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "954298928692-50vk28fblbuu1bj3tp1e4crem07bm3ko.apps.googleusercontent.com"
       }
     }
   },
