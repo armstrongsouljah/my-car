@@ -20,10 +20,10 @@ function AuthGate() {
   useEffect(() => {
     if (user === undefined) return; // still loading the stored session
 
-    const inTabs = segments[0] === '(tabs)';
-    if (!user && inTabs) {
+    const inApp = segments[0] === '(tabs)' || segments[0] === 'add-car';
+    if (!user && inApp) {
       router.replace('/login');
-    } else if (user && !inTabs) {
+    } else if (user && !inApp) {
       router.replace('/(tabs)');
     }
 
