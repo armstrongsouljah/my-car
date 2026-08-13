@@ -8,6 +8,7 @@ import { api, setTokens, setUser, isLoggedIn } from "@/lib/api";
 import { COUNTRIES, flagEmoji } from "@/lib/countries";
 
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+const HERO_IMAGE_URL = process.env.NEXT_PUBLIC_HERO_IMAGE_URL;
 const brandFont = Dancing_Script({ subsets: ["latin"], weight: ["700"] });
 
 // Module-scoped (not component refs): GIS's initialize() resets its client
@@ -282,7 +283,7 @@ function AuthPage() {
       <div className="relative h-80 overflow-hidden">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="https://res.cloudinary.com/soultech/image/upload/e_improve,w_900,h_700,c_fill,g_auto,q_auto,f_auto/v1784111131/MANSORY_P1100_Audi_RS6_Carbon_Turquoise_Madness_Part_2_zos9uq.jpg"
+          src={HERO_IMAGE_URL}
           alt=""
           className="absolute inset-0 h-full w-full object-cover"
         />
