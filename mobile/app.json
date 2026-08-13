@@ -40,6 +40,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "b5e04798-de03-4499-8907-13de54f39e40"
+      }
+    },
+    "owner": "soultech"
   }
 }

@@ -20,9 +20,10 @@ Native Android/iOS client for GlavBox/my-car — a separate codebase from
 
 ```bash
 npm install
-# .env is already committed with a working local default -- see its
-# comments about localhost vs 10.0.2.2 vs your LAN IP if you need to point
-# it at something other than an emulator on this same machine.
+cp .env.example .env   # already has a working local default -- see its
+                        # comments about localhost vs 10.0.2.2 vs your LAN IP
+                        # if you need to point it at something other than an
+                        # emulator on this same machine
 npx expo start
 ```
 
@@ -38,11 +39,17 @@ picks (native targets aren't subject to CORS at all).
 (`app.json`) — permanent once a build is submitted, don't change it without
 publishing as a new app listing. `eas.json` defines three profiles:
 
-| Profile | Distribution | Use |
-|---|---|---|
-| `development` | internal | dev client build, for testing native code changes with fast refresh |
-| `preview` | internal | installable APK, for testing a real build without going through Play Store review |
-| `production` | store | what actually gets submitted to Play Console |
+| Profile | Distribution | API URL | Use |
+|---|---|---|---|
+| `development` | internal | from `.env` (local dev default) | dev client build, for testing native code changes with fast refresh |
+| `preview` | internal | `api-dev.glavbox.com` | installable APK, for testing a real build without going through Play Store review |
+| `production` | store | `api.glavbox.com` | what actually gets submitted to Play Console |
+
+`preview`/`production` set their own `EXPO_PUBLIC_API_URL` via `eas.json`'s
+per-profile `env` (real HTTPS hosts, not `.env`'s `localhost` default) —
+those are standalone builds with no local dev server to reach, and Android
+refuses plain HTTP outright regardless (see `.env`'s comments if you ever
+hit a `CLEARTEXT communication ... not permitted` error on a real device).
 
 One-time setup (needs an Expo account — not something this can do
 unattended):
