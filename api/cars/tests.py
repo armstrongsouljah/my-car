@@ -130,6 +130,61 @@ class TestCarDetailPatchOdometer:
         assert "allow_odometer_decrease" not in response.data
 
 
+@pytest.mark.django_db
+class TestServiceDigestCacheInvalidation:
+    """
+    GET /services/reminders/ is cached until midnight (see utils.Cache's
+    SERVICE_DIGEST_KEY) -- create/update/delete on a car all used to leave
+    that cache untouched, so a deleted car kept showing on the Reminders
+    page (and 404d when tapped), a new car's reminders didn't show up, and
+    an odometer update that should have flipped a reminder's status didn't
+    show it until the cache naturally expired (see #134).
+    """
+
+    def _seed_stale_digest(self, owner):
+        from utils import Cache
+
+        Cache.set_service_digest(owner.pk, [{"car_id": "stale", "make": "Stale", "model": "Car"}])
+
+    def test_creating_a_car_invalidates_the_digest(self, owner):
+        from utils import Cache
+
+        self._seed_stale_digest(owner)
+        client = APIClient()
+        client.force_authenticate(owner)
+
+        response = client.post(
+            "/api/v1/cars/", {"make": "Toyota", "model": "Corolla", "registration_number": "TEST001"}, format="json"
+        )
+
+        assert response.status_code == 201
+        assert Cache.get_service_digest(owner.pk) is None
+
+    def test_deleting_a_car_invalidates_the_digest(self, owner, car):
+        from utils import Cache
+
+        self._seed_stale_digest(owner)
+        client = APIClient()
+        client.force_authenticate(owner)
+
+        response = client.delete(f"/api/v1/cars/{car.pk}/")
+
+        assert response.status_code == 200
+        assert Cache.get_service_digest(owner.pk) is None
+
+    def test_updating_a_car_invalidates_the_digest(self, owner, car):
+        from utils import Cache
+
+        self._seed_stale_digest(owner)
+        client = APIClient()
+        client.force_authenticate(owner)
+
+        response = client.patch(f"/api/v1/cars/{car.pk}/", {"current_odometer_km": 55_000}, format="json")
+
+        assert response.status_code == 200
+        assert Cache.get_service_digest(owner.pk) is None
+
+
 NEW_ACCOUNT_SETTINGS = {
     "NEW_CLOUD_NAME": "newcloud",
     "NEW_CLOUDINARY_API_KEY": "key123",

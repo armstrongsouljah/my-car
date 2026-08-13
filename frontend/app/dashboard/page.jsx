@@ -59,6 +59,13 @@ function Dashboard() {
   const [cars, setCars] = useState(null);
   const [reminders, setReminders] = useState(null);
   const [remindersError, setRemindersError] = useState(false);
+  // The generic service/inspection nudges (not backed by a Reminder row --
+  // see /cars/[id]'s own "Service"/"Inspection" cards) never showed up in
+  // "Upcoming" before, so an overdue one had no visibility here no matter
+  // how overdue. Already pre-filtered to non-"ok" statuses server-side
+  // (RemindersView), so it merges in with no extra filtering needed.
+  const [servicesData, setServicesData] = useState(null);
+  const [servicesError, setServicesError] = useState(false);
   const [analytics, setAnalytics] = useState(null);
   const [analyticsError, setAnalyticsError] = useState(false);
   const [error, setError] = useState("");
@@ -87,6 +94,9 @@ function Dashboard() {
     api("/reminders/")
       .then((data) => setReminders(data.results || data))
       .catch(() => setRemindersError(true));
+    api("/services/reminders/")
+      .then(setServicesData)
+      .catch(() => setServicesError(true));
     // Just the current month (see #63) — a full year-on-year chart belongs
     // on the dedicated Expenses page ("See details" below), not a
     // quick-glance dashboard tile.
@@ -96,7 +106,28 @@ function Dashboard() {
   }, []);
 
   const carById = Object.fromEntries((cars || []).map((car) => [car.id, car]));
-  const upcoming = [...(reminders || [])]
+
+  // Normalized to a common shape so the render below doesn't need to
+  // branch on which source an item came from -- a custom Reminder row
+  // (own id, links to its edit page) vs. a computed service/inspection
+  // nudge (no id of its own, links to the car instead).
+  const customItems = (reminders || []).map((reminder) => ({
+    key: reminder.id,
+    href: `/reminders/${reminder.id}/edit`,
+    title: reminder.title,
+    subtitle: `${carById[reminder.car] ? `${carById[reminder.car].make} ${carById[reminder.car].model} · ` : ""}${reminder.message}`,
+    status: reminder.status,
+  }));
+  const serviceItems = (servicesData || []).flatMap((entry) =>
+    entry.reminders.map((reminder) => ({
+      key: `${entry.car_id}-${reminder.kind}`,
+      href: `/cars/${entry.car_id}`,
+      title: reminder.kind === "service" ? "Service" : "Inspection",
+      subtitle: `${entry.make} ${entry.model} · ${reminder.message}`,
+      status: reminder.status,
+    }))
+  );
+  const upcoming = [...customItems, ...serviceItems]
     .sort((a, b) => (STATUS_PRIORITY[a.status] ?? 99) - (STATUS_PRIORITY[b.status] ?? 99))
     .slice(0, UPCOMING_COUNT);
 
@@ -157,9 +188,9 @@ function Dashboard() {
             <Link href="/reminders" className="btn-chip">See all</Link>
           </div>
 
-          {reminders === null && !remindersError ? (
+          {(reminders === null && servicesData === null) && !remindersError && !servicesError ? (
             <div className="flex justify-center py-4"><Spinner /></div>
-          ) : remindersError ? (
+          ) : remindersError && servicesError ? (
             <p className="card text-center text-sm text-gray-500 dark:text-gray-400">Couldn&apos;t load reminders right now.</p>
           ) : upcoming.length === 0 ? (
             // See #97 — reminders/new requires a car param; deep-link straight
@@ -173,20 +204,13 @@ function Dashboard() {
             </Link>
           ) : (
             <div className="space-y-2">
-              {upcoming.map((reminder) => (
-                <Link
-                  key={reminder.id}
-                  href={`/reminders/${reminder.id}/edit`}
-                  className="card flex items-center justify-between gap-3 py-3"
-                >
+              {upcoming.map((item) => (
+                <Link key={item.key} href={item.href} className="card flex items-center justify-between gap-3 py-3">
                   <div className="min-w-0">
-                    <p className="truncate font-semibold">{reminder.title}</p>
-                    <p className="truncate text-[13px] text-gray-500 dark:text-gray-400">
-                      {carById[reminder.car] ? `${carById[reminder.car].make} ${carById[reminder.car].model} · ` : ""}
-                      {reminder.message}
-                    </p>
+                    <p className="truncate font-semibold">{item.title}</p>
+                    <p className="truncate text-[13px] text-gray-500 dark:text-gray-400">{item.subtitle}</p>
                   </div>
-                  <StatusChip status={reminder.status} />
+                  <StatusChip status={item.status} />
                 </Link>
               ))}
             </div>
