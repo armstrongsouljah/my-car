@@ -1,12 +1,50 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, Modal, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, Image, Modal, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/lib/auth-context';
+import { mediaUrl } from '@/lib/api';
 import { useTheme } from '@/hooks/use-theme';
+
+const CLOUDINARY_CLOUD_NAME = process.env.EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME;
+const CLOUDINARY_UPLOAD_PRESET = process.env.EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
+
+// Uploads straight from the device to Cloudinary (unsigned preset) -- the
+// API never sees the file, only the resulting secure_url. Mirrors frontend/
+// components/CarForm.jsx's uploadToCloudinary, adapted for RN's FormData
+// (a {uri, type, name} object stands in for the browser's File/Blob).
+async function uploadToCloudinary(asset: ImagePicker.ImagePickerAsset) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30000);
+
+  const body = new FormData();
+  body.append('file', {
+    uri: asset.uri,
+    type: asset.mimeType || 'image/jpeg',
+    name: asset.fileName || 'photo.jpg',
+  } as unknown as Blob);
+  body.append('upload_preset', CLOUDINARY_UPLOAD_PRESET ?? '');
+
+  let res: Response;
+  try {
+    res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, {
+      method: 'POST',
+      body,
+      signal: controller.signal,
+    });
+  } catch (err) {
+    throw new Error(err instanceof Error && err.name === 'AbortError' ? 'Photo upload timed out. Please try again.' : 'Photo upload failed. Please try again.');
+  } finally {
+    clearTimeout(timeout);
+  }
+  if (!res.ok) throw new Error('Photo upload failed. Please try again.');
+  const data = await res.json();
+  return data.secure_url as string;
+}
 
 const OTHER = '__other__';
 
@@ -113,6 +151,8 @@ export function CarForm({ car = null, onSaved }: { car?: Car | null; onSaved: (c
   const [odometerKm, setOdometerKm] = useState(car?.current_odometer_km != null ? String(car.current_odometer_km) : '');
   const [vin, setVin] = useState(car?.vin ?? '');
   const [notes, setNotes] = useState(car?.notes ?? '');
+  const [photo, setPhoto] = useState<ImagePicker.ImagePickerAsset | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(mediaUrl(car?.photo_url));
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -151,26 +191,46 @@ export function CarForm({ car = null, onSaved }: { car?: Car | null; onSaved: (c
     setModel(value === OTHER ? '' : value);
   }
 
+  async function pickPhoto() {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      setError('Photo library access is needed to add a car photo.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.8,
+      allowsEditing: true,
+      aspect: [4, 3],
+    });
+    if (result.canceled || !result.assets[0]) return;
+    setPhoto(result.assets[0]);
+    setPhotoPreview(result.assets[0].uri);
+  }
+
   async function submit() {
     setError('');
     setLoading(true);
     try {
+      const fields: Record<string, unknown> = {
+        make: make.trim(),
+        model: model.trim(),
+        year: year ? Number(year) : null,
+        registration_number: registrationNumber,
+        color,
+        fuel_type: fuelType,
+        current_odometer_km: odometerKm ? Number(odometerKm) : 0,
+        vin,
+        notes,
+      };
+
+      if (photo) {
+        fields.photo_url = await uploadToCloudinary(photo);
+      }
+
       const path = isEdit ? `/cars/${car.id}/` : '/cars/';
       const method = isEdit ? 'PATCH' : 'POST';
-      const saved = await apiCall(path, {
-        method,
-        body: {
-          make: make.trim(),
-          model: model.trim(),
-          year: year ? Number(year) : null,
-          registration_number: registrationNumber,
-          color,
-          fuel_type: fuelType,
-          current_odometer_km: odometerKm ? Number(odometerKm) : 0,
-          vin,
-          notes,
-        },
-      });
+      const saved = await apiCall(path, { method, body: fields });
       onSaved(saved);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
@@ -188,6 +248,21 @@ export function CarForm({ car = null, onSaved }: { car?: Car | null; onSaved: (c
           {error}
         </ThemedText>
       ) : null}
+
+      <Pressable onPress={pickPhoto} accessibilityRole="button">
+        {photoPreview ? (
+          <Image source={{ uri: photoPreview }} style={styles.photo} />
+        ) : (
+          <View style={[styles.photo, styles.photoPlaceholder, { borderColor: theme.backgroundSelected }]}>
+            <ThemedText type="title" style={styles.photoPlaceholderEmoji}>
+              📷
+            </ThemedText>
+            <ThemedText type="small" themeColor="textSecondary">
+              Add a photo of your car
+            </ThemedText>
+          </View>
+        )}
+      </Pressable>
 
       <PickerField label="Brand" placeholder="Select a brand…" value={brandChoice} options={brandOptions} onSelect={pickBrand} />
       {brandChoice === OTHER && (
@@ -316,6 +391,21 @@ const styles = StyleSheet.create({
   error: {
     color: '#DC2626',
     textAlign: 'center',
+  },
+  photo: {
+    width: '100%',
+    height: 160,
+    borderRadius: Spacing.two,
+  },
+  photoPlaceholder: {
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.one,
+  },
+  photoPlaceholderEmoji: {
+    fontSize: 28,
   },
   input: {
     borderWidth: 1,

@@ -11,8 +11,8 @@ import { useAuth } from '@/lib/auth-context';
 // rather than following next-themes like the rest of the web app does.
 const BG = '#04120c';
 const SHEET_BG = '#0a1a14';
-const HERO_IMAGE =
-  'https://res.cloudinary.com/soultech/image/upload/e_improve,w_900,h_700,c_fill,g_auto,q_auto,f_auto/v1784111131/MANSORY_P1100_Audi_RS6_Carbon_Turquoise_Madness_Part_2_zos9uq.jpg';
+// Shared with frontend's NEXT_PUBLIC_HERO_IMAGE_URL -- see mobile/.env.
+const HERO_IMAGE = process.env.EXPO_PUBLIC_HERO_IMAGE_URL;
 
 export default function LoginScreen() {
   const { login, loginWithGoogle } = useAuth();
