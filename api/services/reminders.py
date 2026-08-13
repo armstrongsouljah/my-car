@@ -72,7 +72,14 @@ def _progress_percent(baseline_km, next_km, current_km, baseline_date, next_date
 def build_service_reminder(car, today=None):
     """Reminder payload for the car's next service, from its latest service record."""
     today = today or timezone.localdate()
-    record = car.service_records.order_by("-service_date", "-created_at").first()
+    # By odometer, not service_date -- a car's mileage only ever goes up, so
+    # the highest-odometer record is unambiguously the most recent one in
+    # the car's actual life, whereas service_date is user-entered and can
+    # be backdated/out of order (e.g. a minor service logged with a later
+    # calendar date than an earlier, higher-mileage full service). Using
+    # service_date let an older, lower-mileage record's own stale next-due
+    # threshold outrank a newer one that already covers the same interval.
+    record = car.service_records.order_by("-odometer_km", "-service_date").first()
 
     if record is None:
         if _within_new_car_grace_period(car, today):
