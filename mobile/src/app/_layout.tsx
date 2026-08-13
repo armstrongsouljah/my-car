@@ -34,6 +34,7 @@ function AuthGate() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="login" />
+      <Stack.Screen name="add-car" options={{ headerShown: true, title: 'Add car', presentation: 'modal' }} />
     </Stack>
   );
 }

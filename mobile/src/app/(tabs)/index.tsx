@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, Image, StyleSheet, View } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { ActivityIndicator, FlatList, Image, Pressable, StyleSheet, View } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -23,6 +24,7 @@ type Car = {
 export default function GarageScreen() {
   const { apiCall } = useAuth();
   const theme = useTheme();
+  const router = useRouter();
   const [cars, setCars] = useState<Car[] | null>(null);
   const [error, setError] = useState('');
 
@@ -40,9 +42,20 @@ export default function GarageScreen() {
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.container} edges={['top']}>
-        <ThemedText type="title" style={styles.header}>
-          Your Garage
-        </ThemedText>
+        <View style={styles.headerRow}>
+          <ThemedText type="title" style={styles.headerTitle}>
+            Your Garage
+          </ThemedText>
+          <Pressable
+            onPress={() => router.push('/add-car')}
+            accessibilityRole="button"
+            accessibilityLabel="Add car"
+            style={[styles.addButton, { backgroundColor: theme.brand }]}
+          >
+            <MaterialCommunityIcons name="plus" color="#fff" size={18} />
+            <ThemedText style={styles.addButtonText}>Add car</ThemedText>
+          </Pressable>
+        </View>
 
         {error ? <ThemedText style={styles.error}>{error}</ThemedText> : null}
 
@@ -91,11 +104,28 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
-    fontSize: 28,
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: Spacing.three,
     paddingTop: Spacing.two,
     paddingBottom: Spacing.three,
+  },
+  headerTitle: {
+    fontSize: 28,
+  },
+  addButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.half,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+    borderRadius: Spacing.four,
+  },
+  addButtonText: {
+    color: '#fff',
+    fontWeight: '600',
   },
   error: {
     color: '#DC2626',
