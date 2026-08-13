@@ -22,6 +22,10 @@ export default function ExpenseForm({ cars, expense = null, onSaved, onCancel })
     cost_per_litre: initialCostPerLitre,
   });
   const [error, setError] = useState("");
+  // See #143's review -- without this, Save then Cancel while the write is
+  // still in flight could close the form (and fire onCancel's navigation)
+  // before the record actually saved, or race onSaved with it.
+  const [saving, setSaving] = useState(false);
   // Editing an existing fuel expense without touching amount/category/cost
   // per litre should leave the stored litres exactly as they were, rather
   // than round-tripping through the rounded cost-per-litre display value.
@@ -41,6 +45,7 @@ export default function ExpenseForm({ cars, expense = null, onSaved, onCancel })
   async function submit(event) {
     event.preventDefault();
     setError("");
+    setSaving(true);
     try {
       const fields = {
         category: form.category,
@@ -62,6 +67,7 @@ export default function ExpenseForm({ cars, expense = null, onSaved, onCancel })
       onSaved();
     } catch (err) {
       setError(err.message);
+      setSaving(false);
     }
   }
 
@@ -119,9 +125,9 @@ export default function ExpenseForm({ cars, expense = null, onSaved, onCancel })
         <label className="label">Notes</label>
         <textarea className="input" rows={2} placeholder="What was this for?" value={form.description} onChange={update("description")} />
       </div>
-      <button className="btn-primary">{isEdit ? "Save changes" : "Save expense"}</button>
+      <button className="btn-primary" disabled={saving}>{isEdit ? "Save changes" : "Save expense"}</button>
       {onCancel && (
-        <button type="button" onClick={onCancel} className="btn-secondary">
+        <button type="button" onClick={onCancel} className="btn-secondary" disabled={saving}>
           Cancel
         </button>
       )}

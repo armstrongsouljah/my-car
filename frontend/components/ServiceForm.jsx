@@ -38,11 +38,16 @@ export default function ServiceForm({ carId, record = null, onSaved, onCancel })
     description: record?.description || "",
   });
   const [error, setError] = useState("");
+  // See #143's review -- without this, Save then Cancel while the write is
+  // still in flight could close the form (and fire onCancel's navigation)
+  // before the record actually saved, or race onSaved with it.
+  const [saving, setSaving] = useState(false);
   const update = (key) => (event) => setForm({ ...form, [key]: event.target.value });
 
   async function submit(event) {
     event.preventDefault();
     setError("");
+    setSaving(true);
     try {
       const fields = {
         service_type: form.service_type,
@@ -63,6 +68,7 @@ export default function ServiceForm({ carId, record = null, onSaved, onCancel })
       onSaved();
     } catch (err) {
       setError(err.message);
+      setSaving(false);
     }
   }
 
@@ -113,9 +119,9 @@ export default function ServiceForm({ carId, record = null, onSaved, onCancel })
         <label className="label">Notes</label>
         <textarea className="input" rows={2} value={form.description} onChange={update("description")} />
       </div>
-      <button className="btn-primary">{isEdit ? "Save changes" : "Save service"}</button>
+      <button className="btn-primary" disabled={saving}>{isEdit ? "Save changes" : "Save service"}</button>
       {onCancel && (
-        <button type="button" onClick={onCancel} className="btn-secondary">
+        <button type="button" onClick={onCancel} className="btn-secondary" disabled={saving}>
           Cancel
         </button>
       )}

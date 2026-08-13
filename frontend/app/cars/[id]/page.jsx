@@ -44,11 +44,15 @@ function InspectionForm({ carId, onSaved, onCancel }) {
   });
   const [file, setFile] = useState(null);
   const [error, setError] = useState("");
+  // See #143's review -- without this, Save then Cancel while the write is
+  // still in flight could close the panel before the record actually saved.
+  const [saving, setSaving] = useState(false);
   const update = (key) => (event) => setForm({ ...form, [key]: event.target.value });
 
   async function submit(event) {
     event.preventDefault();
     setError("");
+    setSaving(true);
     try {
       const body = new FormData();
       body.append("car", carId);
@@ -64,6 +68,7 @@ function InspectionForm({ carId, onSaved, onCancel }) {
       onSaved();
     } catch (err) {
       setError(err.message);
+      setSaving(false);
     }
   }
 
@@ -105,9 +110,9 @@ function InspectionForm({ carId, onSaved, onCancel }) {
         <label className="label">Notes</label>
         <textarea className="input" rows={2} value={form.notes} onChange={update("notes")} />
       </div>
-      <button className="btn-primary">Save inspection</button>
+      <button className="btn-primary" disabled={saving}>Save inspection</button>
       {onCancel && (
-        <button type="button" onClick={onCancel} className="btn-secondary">
+        <button type="button" onClick={onCancel} className="btn-secondary" disabled={saving}>
           Cancel
         </button>
       )}
