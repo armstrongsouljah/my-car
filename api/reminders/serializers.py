@@ -110,15 +110,24 @@ class ReminderListSerializer(ListModelSerializer):
 class ReminderDetailSerializer(ListModelSerializer):
     """Fields the edit form (ReminderDetailsForm.jsx) actually reads/writes —
     deliberately not a superset of ReminderListSerializer, which needs
-    computed status/progress fields the edit form doesn't render."""
+    computed message/progress fields the edit form doesn't render. `status`
+    is the one computed field this view does need -- it gates whether the
+    page's own "Mark as done" button shows at all (see #134 follow-up:
+    that action is a destructive, unconfirmed baseline overwrite with no
+    undo, so it's restricted to reminders that are actually overdue)."""
+
+    status = serializers.SerializerMethodField()
 
     class Meta:
         model = Reminder
         fields = (
             "id", "car", "catalog_key", "title", "tracking_method",
             "interval_km", "interval_months", "baseline_odometer_km",
-            "baseline_date", "notes",
+            "baseline_date", "notes", "status",
         )
+
+    def get_status(self, instance):
+        return evaluate_reminder(instance)["status"]
 
     @staticmethod
     def select_related_fields():

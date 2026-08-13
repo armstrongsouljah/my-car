@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import ProgressBar from "@/components/ProgressBar";
 import StatusChip from "@/components/StatusChip";
 
@@ -21,9 +22,15 @@ function rangeLabel(reminder) {
 // div (not itself a Link, unlike before) so the "Mark as done" button can
 // sit alongside the title/progress area without nesting a <button> inside
 // an <a> -- the title/progress area is its own inner Link instead.
+//
+// Restricted to overdue reminders and gated behind a confirmation (a
+// follow-up to #134) -- this overwrites the baseline with no undo, and an
+// unconfirmed button on every reminder regardless of status was too easy to
+// tap by accident.
 export default function ReminderCard({ reminder, onCompleted }) {
   const range = rangeLabel(reminder);
   const [completing, setCompleting] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [error, setError] = useState("");
 
   async function markDone() {
@@ -32,6 +39,7 @@ export default function ReminderCard({ reminder, onCompleted }) {
     try {
       const updated = await api(`/reminders/${reminder.id}/complete/`, { method: "POST" });
       onCompleted?.(updated);
+      setConfirmOpen(false);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -63,14 +71,26 @@ export default function ReminderCard({ reminder, onCompleted }) {
 
       {error && <p className="mt-2 text-[12px] text-red-600 dark:text-red-400">{error}</p>}
 
-      <button
-        type="button"
-        onClick={markDone}
-        disabled={completing}
-        className="btn-chip mt-3 w-full justify-center disabled:opacity-60"
-      >
-        {completing ? "Marking done…" : "✓ Mark as done"}
-      </button>
+      {reminder.status === "overdue" && (
+        <button
+          type="button"
+          onClick={() => setConfirmOpen(true)}
+          className="btn-chip mt-3 w-full justify-center"
+        >
+          ✓ Mark as done
+        </button>
+      )}
+
+      <ConfirmDialog
+        open={confirmOpen}
+        loading={completing}
+        title="Mark this reminder as done?"
+        message={`"${reminder.title}" will be reset as if you just did it today -- this can't be undone.`}
+        confirmLabel="Mark as done"
+        cancelLabel="Cancel"
+        onConfirm={markDone}
+        onCancel={() => setConfirmOpen(false)}
+      />
     </div>
   );
 }
