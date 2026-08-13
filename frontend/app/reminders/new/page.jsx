@@ -1,7 +1,6 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import AuthGuard from "@/components/AuthGuard";
@@ -40,10 +39,39 @@ function AddReminder() {
   const [selected, setSelected] = useState(null);
   const [trackingMethod, setTrackingMethod] = useState("date_and_mileage");
 
+  // Only fetched when no ?car= is given -- lets this page double as a car
+  // picker (#133) instead of dead-ending, for the multi-car case where the
+  // Reminders page's single "+ Add reminder" button can't already know
+  // which car you mean.
+  const [pickerCars, setPickerCars] = useState(null);
+
   useEffect(() => {
-    if (!carId) return;
-    api(`/cars/${carId}/`).then(setCar).catch((err) => setError(err.message));
-    api("/reminders/catalog/").then(setCatalog).catch((err) => setError(err.message));
+    // Reset the whole creation flow on every carId change, not just refetch
+    // -- otherwise switching cars via the in-page picker (browse A, back,
+    // pick B) can leave step/selected/trackingMethod from car A dangling,
+    // and ReminderDetailsForm would save car B's reminder using car A's
+    // stale preset/tracking choice.
+    let ignore = false;
+    setCar(null);
+    setCatalog(null);
+    setStep("browse");
+    setSelected(null);
+    setTrackingMethod("date_and_mileage");
+    setError("");
+
+    if (!carId) {
+      api("/cars/")
+        .then((data) => { if (!ignore) setPickerCars(data.results || data); })
+        .catch((err) => { if (!ignore) setError(err.message); });
+      return () => { ignore = true; };
+    }
+    api(`/cars/${carId}/`)
+      .then((data) => { if (!ignore) setCar(data); })
+      .catch((err) => { if (!ignore) setError(err.message); });
+    api("/reminders/catalog/")
+      .then((data) => { if (!ignore) setCatalog(data); })
+      .catch((err) => { if (!ignore) setError(err.message); });
+    return () => { ignore = true; };
   }, [carId]);
 
   const grouped = useMemo(() => {
@@ -80,14 +108,48 @@ function AddReminder() {
   }
 
   if (!carId) {
-    // See #97 — this used to be a dead end (no link out) for any caller
-    // that reaches this page without a car param.
+    // A real picker (#133), not just a dead end back to /reminders -- the
+    // Reminders page's single "+ Add reminder" button lands here whenever
+    // it can't already tell which car you mean (more than one car).
+    // BottomNav isn't rendered on this branch (this is a modal-ish flow,
+    // same as the carId-present view below), so the explicit "‹ Back" is
+    // the only way out -- kept visible across loading/error/empty too.
     return (
-      <main className="p-6 text-center text-sm text-gray-400 dark:text-gray-500">
-        <p className="mb-3">No car selected.</p>
-        <Link href="/reminders" className="font-medium text-gray-600 underline underline-offset-2 dark:text-gray-300">
-          Pick a car to add a reminder for
-        </Link>
+      <main className="px-4 pb-24 pt-6">
+        <button onClick={() => router.push("/reminders")} className="mb-4 text-sm text-gray-500 dark:text-gray-400">‹ Back</button>
+
+        {error ? (
+          <p className="rounded-xl bg-red-50 dark:bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-400">{error}</p>
+        ) : !pickerCars ? (
+          <div className="flex justify-center p-10"><Spinner /></div>
+        ) : (
+          <>
+            <h1 className="mb-4 text-2xl font-bold">Which car?</h1>
+            {pickerCars.length === 0 ? (
+              <p className="text-center text-sm text-gray-400 dark:text-gray-500">Add a car first to set up reminders for it.</p>
+            ) : (
+              <div className="space-y-2">
+                {pickerCars.map((entry) => (
+                  <button
+                    key={entry.id}
+                    onClick={() => router.push(`/reminders/new?car=${entry.id}`)}
+                    className="card flex w-full items-center justify-between gap-3 text-left"
+                  >
+                    <div>
+                      <p className="font-semibold">
+                        {entry.make} {entry.model}{entry.year ? ` (${entry.year})` : ""}
+                      </p>
+                      <p className="text-[13px] text-gray-500 dark:text-gray-400">
+                        {entry.registration_number || "No plate"} · {Number(entry.current_odometer_km).toLocaleString()} km
+                      </p>
+                    </div>
+                    <span className="text-gray-300 dark:text-gray-600">›</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
+        )}
       </main>
     );
   }
