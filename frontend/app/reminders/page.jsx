@@ -103,9 +103,18 @@ function Reminders() {
                     a bare inset box instead of .card; brought in line with
                     ReminderCard (custom reminders) and with how the car detail
                     page already renders this same {kind, message, status}
-                    shape for its own single-car reminders block. */}
+                    shape for its own single-car reminders block.
+
+                    Unlike a custom Reminder row, these are computed from
+                    ServiceRecord/Inspection history, not a DB row with an id
+                    -- there's no "mark done" endpoint that applies to them.
+                    The actual way to resolve one is logging the real service/
+                    inspection it's tracking (which resets its baseline
+                    automatically, see ServiceRecord.save()'s _sync_reminder),
+                    so this links to where that happens instead of leaving an
+                    overdue card with no action at all (see #134). */}
                 {entry.reminders.map((reminder) => (
-                  <div key={reminder.kind} className="card">
+                  <Link key={reminder.kind} href={`/cars/${entry.car_id}`} className="card block">
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-[13px] font-semibold capitalize">{reminder.kind}</p>
                       <StatusChip status={reminder.status} />
@@ -114,7 +123,10 @@ function Reminders() {
                     <div className="mt-2">
                       <ProgressBar percent={reminder.progress_percent} status={reminder.status} />
                     </div>
-                  </div>
+                    <p className="mt-2 text-[12px] font-medium text-brand">
+                      {reminder.kind === "service" ? "Log a service ›" : "Log an inspection ›"}
+                    </p>
+                  </Link>
                 ))}
 
                 {reminders[entry.car_id]?.map((reminder) => (

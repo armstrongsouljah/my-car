@@ -42,6 +42,10 @@ class CarListCreateView(SmartPaginationAPIView):
     def post_response(self, data, instance=None):
         if instance:
             Cache.invalidate_owner(instance.owner_id)
+            # Same staleness as the delete path (see #134) -- without this a
+            # newly added car's reminders digest doesn't show up on the
+            # Reminders/dashboard pages until the cache naturally expires.
+            Cache.invalidate_service_digest(instance.owner_id)
         return super().post_response(data, instance=instance)
 
     def filter_queryset(self, **kwargs):
@@ -167,10 +171,20 @@ class CarDetailView(SmartDetailView):
 
     def patch_response(self, instance, data):
         Cache.invalidate_car(instance.pk, instance.owner_id)
+        # An odometer update is exactly what flips a reminder's computed
+        # status (ok -> due_soon -> overdue) -- without this the digest
+        # (cached until midnight, see #134) can keep showing yesterday's
+        # status for a whole day after the reading that should have changed it.
+        Cache.invalidate_service_digest(instance.owner_id)
         return super().patch_response(instance, data)
 
     def handle_delete(self, model_instance):
         Cache.invalidate_car(model_instance.pk, model_instance.owner_id)
+        # Without this, a deleted car's entry in the /services/reminders/
+        # digest (Redis-cached until midnight) lingers until the cache
+        # naturally expires -- it keeps showing on the Reminders page, and
+        # navigating into it 404s (see #134).
+        Cache.invalidate_service_digest(model_instance.owner_id)
         model_instance.delete()
 
 

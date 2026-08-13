@@ -94,6 +94,19 @@ async function fetchWithAuthRetry(path, options = {}) {
   return response;
 }
 
+// Recursively collects every string leaf out of an error response body,
+// however deeply nested -- a flat {field: ["msg"]} shape was the only case
+// `Object.values(data).flat().join(" ")` handled correctly; one non-string
+// value anywhere in there (e.g. a nested {code, detail} object) got
+// coerced by .join() into the literal text "[object Object]" instead of
+// throwing or falling back to the generic message (see #134).
+function extractErrorMessages(value) {
+  if (typeof value === "string") return [value];
+  if (Array.isArray(value)) return value.flatMap(extractErrorMessages);
+  if (value && typeof value === "object") return Object.values(value).flatMap(extractErrorMessages);
+  return [];
+}
+
 export async function api(path, { method = "GET", body, isForm = false } = {}) {
   const headers = {};
   if (body && !isForm) headers["Content-Type"] = "application/json";
@@ -110,8 +123,8 @@ export async function api(path, { method = "GET", body, isForm = false } = {}) {
 
   if (!response.ok) {
     const message =
-      data?.detail ||
-      (data && typeof data === "object" ? Object.values(data).flat().join(" ") : null) ||
+      (typeof data?.detail === "string" && data.detail) ||
+      extractErrorMessages(data).join(" ") ||
       "Something went wrong";
     const error = new Error(message);
     error.status = response.status;
