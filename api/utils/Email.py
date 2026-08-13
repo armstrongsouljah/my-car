@@ -363,25 +363,33 @@ def send_support_request_email(support_request, attachments=None):
     msg.send()
 
 
-def send_reminder_email(email: str, first_name: str, car_label: str, reminders: list):
+def send_reminder_email(email: str, first_name: str, car_label: str, car_id: str, reminders: list):
     """
     Sends a service/inspection reminder digest for a single car.
     `reminders` is a list of dicts: {"kind", "status", "message"}.
+
+    These are computed per-car (build_car_reminders -- next-service and
+    next-inspection derived from the car's latest ServiceRecord/Inspection),
+    not individual `Reminder` rows, so they have no id of their own to link
+    to (see #128). The car detail page is the most specific place that
+    exists today -- it already renders the car's own reminders section --
+    so the CTA points there instead of the bare site root it used to.
     """
     from django.conf import settings
 
     name = _display_name(email, first_name)
     app_url = getattr(settings, "FRONTEND_URL", "http://localhost:3000")
+    car_url = f"{app_url}/cars/{car_id}"
 
     subject = f"Reminder: {car_label} needs attention"
-    context = {"name": name, "car_label": car_label, "reminders": reminders, "app_url": app_url}
+    context = {"name": name, "car_label": car_label, "reminders": reminders, "car_url": car_url}
 
     lines = "\n".join(f"- {r['message']}" for r in reminders)
     text_body = (
         f"Hi {name},\n\n"
         f"Your car {car_label} has the following reminders:\n\n"
         f"{lines}\n\n"
-        f"Open {app_url} to review your service history and book what's due."
+        f"Open {car_url} to review your service history and book what's due."
     )
     html_body = render_to_string("emails/service_reminder.html", context)
 

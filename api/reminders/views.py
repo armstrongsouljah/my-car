@@ -1,3 +1,4 @@
+from django.utils import timezone
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
@@ -10,6 +11,8 @@ from cars.models import Car
 from reminders.catalog import OIL_CHANGE_KEY, get_reminder_catalog
 from reminders.models import Reminder
 from reminders.serializers import (
+    METHODS_NEEDING_KM,
+    METHODS_NEEDING_MONTHS,
     ReminderCreateSerializer,
     ReminderEditSerializer,
     ReminderListSerializer,
@@ -100,6 +103,40 @@ class ReminderDetailView(SmartDetailView):
         Cache.invalidate_reminders(owner_id)
         if is_oil_change:
             Cache.invalidate_service_digest(owner_id)
+
+
+class ReminderCompleteView(SmartAPIView):
+    """
+    POST /reminders/<id>/complete/ -- resets the reminder's baseline to now
+    (today's date, and/or the car's current odometer, whichever this
+    reminder actually tracks), the same "last done" reset
+    ServiceRecord.save()'s _sync_reminder() already does automatically, but
+    only for oil-change reminders. This is that same reset available as an
+    explicit action for every reminder -- see #128, which found no "mark
+    this done" path existed anywhere except manually editing the baseline
+    fields by hand.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, **kwargs):
+        reminder = (
+            Reminder.objects.filter(pk=kwargs.get("pk"), car__owner=request.user)
+            .select_related("car")
+            .first()
+        )
+        if not reminder:
+            return self.not_found()
+
+        if reminder.tracking_method in METHODS_NEEDING_KM:
+            reminder.baseline_odometer_km = reminder.car.current_odometer_km
+        if reminder.tracking_method in METHODS_NEEDING_MONTHS:
+            reminder.baseline_date = timezone.localdate()
+        reminder.save()
+
+        Cache.invalidate_reminders(reminder.car.owner_id)
+
+        data = ReminderListSerializer(reminder, context=self.get_serializer_context()).data
+        return Response(data, status=status.HTTP_200_OK)
 
 
 class ReminderCatalogView(SmartAPIView):

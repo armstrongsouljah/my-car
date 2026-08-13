@@ -17,9 +17,18 @@ function EditReminder() {
   const [error, setError] = useState("");
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [removing, setRemoving] = useState(false);
+  const [completing, setCompleting] = useState(false);
+  // ReminderDetailsForm seeds its own local state from `reminder` once on
+  // mount (same pattern as ExpenseForm) -- bumping this forces a remount so
+  // a reset baseline actually shows up in the form after markDone(), not
+  // just in the read-only bits of this page.
+  const [completedCount, setCompletedCount] = useState(0);
 
   const load = useCallback(() => {
-    api(`/reminders/${id}/`)
+    // Returned (not fire-and-forget) so markDone() below can await it --
+    // otherwise the ReminderDetailsForm remount races the refetch and can
+    // remount with the pre-completion baseline still in state.
+    return api(`/reminders/${id}/`)
       .then((data) => {
         setReminder(data);
         return api(`/cars/${data.car}/`);
@@ -29,6 +38,19 @@ function EditReminder() {
   }, [id]);
 
   useEffect(() => { load(); }, [load]);
+
+  async function markDone() {
+    setCompleting(true);
+    try {
+      await api(`/reminders/${id}/complete/`, { method: "POST" });
+      await load(); // refetches so the remount below picks up the reset baseline, not the stale one
+      setCompletedCount((count) => count + 1);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setCompleting(false);
+    }
+  }
 
   async function remove() {
     setRemoving(true);
@@ -50,7 +72,12 @@ function EditReminder() {
       <button onClick={() => router.back()} className="mb-4 text-sm text-gray-500 dark:text-gray-400">‹ Back</button>
       <h1 className="mb-4 text-2xl font-bold">{reminder.title}</h1>
 
+      <button onClick={markDone} disabled={completing} className="btn-secondary mb-4 disabled:opacity-60">
+        {completing ? "Marking done…" : "✓ Mark as done today"}
+      </button>
+
       <ReminderDetailsForm
+        key={completedCount}
         car={car}
         reminder={reminder}
         editableMethod

@@ -37,6 +37,18 @@ function Reminders() {
       .catch((err) => setError(err.message));
   }, []);
 
+  // Patches a single reminder in place after it's marked done, rather than
+  // refetching the whole grouped structure -- see ReminderCard's onCompleted.
+  function updateReminder(updated) {
+    setReminders((current) => {
+      const next = { ...current };
+      for (const carId of Object.keys(next)) {
+        next[carId] = next[carId].map((reminder) => (reminder.id === updated.id ? updated : reminder));
+      }
+      return next;
+    });
+  }
+
   return (
     <main className="px-4 pb-24 pt-6">
       <h1 className="mb-6 text-2xl font-bold">Reminders</h1>
@@ -97,7 +109,7 @@ function Reminders() {
               ))}
 
               {reminders[entry.car_id]?.map((reminder) => (
-                <ReminderCard key={reminder.id} reminder={reminder} />
+                <ReminderCard key={reminder.id} reminder={reminder} onCompleted={updateReminder} />
               ))}
             </div>
           </div>

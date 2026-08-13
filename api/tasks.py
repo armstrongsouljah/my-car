@@ -199,6 +199,7 @@ def send_due_reminders_task():
             email=car.owner.email,
             first_name=car.owner.first_name,
             car_label=str(car),
+            car_id=str(car.pk),
             reminders=reminders,
         )
         sent += 1
