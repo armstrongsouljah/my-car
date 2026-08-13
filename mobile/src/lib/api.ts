@@ -105,6 +105,19 @@ async function fetchWithAuthRetry(path: string, options: RequestInit = {}) {
   return response;
 }
 
+// Recursively collects every string leaf out of an error response body,
+// however deeply nested -- mirrors frontend/lib/api.js's fix for the same
+// bug (see #134): a flat {field: ["msg"]} shape was the only case
+// Object.values(data).flat().join(' ') handled correctly; one non-string
+// value anywhere in there got coerced into the literal text "[object
+// Object]" instead of falling back to the generic message.
+function extractErrorMessages(value: unknown): string[] {
+  if (typeof value === 'string') return [value];
+  if (Array.isArray(value)) return value.flatMap(extractErrorMessages);
+  if (value && typeof value === 'object') return Object.values(value).flatMap(extractErrorMessages);
+  return [];
+}
+
 export async function api(path: string, { method = 'GET', body, isForm = false }: ApiOptions = {}) {
   const headers: Record<string, string> = {};
   if (body && !isForm) headers['Content-Type'] = 'application/json';
@@ -121,8 +134,8 @@ export async function api(path: string, { method = 'GET', body, isForm = false }
 
   if (!response.ok) {
     const message =
-      data?.detail ||
-      (data && typeof data === 'object' ? Object.values(data).flat().join(' ') : null) ||
+      (typeof data?.detail === 'string' && data.detail) ||
+      extractErrorMessages(data).join(' ') ||
       'Something went wrong';
     const error = new Error(message) as Error & { status?: number; data?: unknown };
     error.status = response.status;
