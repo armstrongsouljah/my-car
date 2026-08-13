@@ -28,6 +28,23 @@ type Reminder = {
   status: 'overdue' | 'due_soon' | 'ok';
 };
 
+// The generic service/inspection nudges (not backed by a Reminder row --
+// GET /services/reminders/, pre-filtered server-side to non-"ok" statuses).
+type ServiceDigestEntry = {
+  car_id: string;
+  make: string;
+  model: string;
+  reminders: { kind: 'service' | 'inspection'; status: 'overdue' | 'due_soon' | 'ok'; message: string }[];
+};
+
+type UpcomingItem = {
+  key: string;
+  carId: string;
+  title: string;
+  subtitle: string;
+  status: 'overdue' | 'due_soon' | 'ok';
+};
+
 type AnalyticsMonth = {
   total: number;
   change_percent_vs_previous_month: number | null;
@@ -47,6 +64,8 @@ export default function GarageScreen() {
   const [carsError, setCarsError] = useState('');
   const [reminders, setReminders] = useState<Reminder[] | null>(null);
   const [remindersError, setRemindersError] = useState(false);
+  const [servicesData, setServicesData] = useState<ServiceDigestEntry[] | null>(null);
+  const [servicesError, setServicesError] = useState(false);
   const [month, setMonth] = useState<AnalyticsMonth | null>(null);
   const [currency, setCurrency] = useState<string | null>(null);
   const [analyticsError, setAnalyticsError] = useState(false);
@@ -62,6 +81,9 @@ export default function GarageScreen() {
       apiCall('/reminders/')
         .then((data) => setReminders(data.results || data))
         .catch(() => setRemindersError(true));
+      apiCall('/services/reminders/')
+        .then((data) => setServicesData(data))
+        .catch(() => setServicesError(true));
       apiCall('/expenses/analytics/?months=1')
         .then((data) => {
           setMonth(data.months?.[0] ?? null);
@@ -71,10 +93,31 @@ export default function GarageScreen() {
     }, [apiCall])
   );
 
-  const upcoming = [...(reminders ?? [])]
+  const carById = Object.fromEntries((cars ?? []).map((car) => [car.id, car]));
+
+  // Normalized to a common shape so the render below doesn't need to branch
+  // on which source an item came from -- a custom Reminder row (its own id,
+  // opens the car it belongs to) vs. a computed service/inspection nudge
+  // (no id of its own, same "open the car" target either way here).
+  const customItems: UpcomingItem[] = (reminders ?? []).map((reminder) => ({
+    key: reminder.id,
+    carId: reminder.car,
+    title: reminder.title,
+    subtitle: `${carById[reminder.car] ? `${carById[reminder.car].make} ${carById[reminder.car].model} · ` : ''}${reminder.message}`,
+    status: reminder.status,
+  }));
+  const serviceItems: UpcomingItem[] = (servicesData ?? []).flatMap((entry) =>
+    entry.reminders.map((reminder) => ({
+      key: `${entry.car_id}-${reminder.kind}`,
+      carId: entry.car_id,
+      title: reminder.kind === 'service' ? 'Service' : 'Inspection',
+      subtitle: `${entry.make} ${entry.model} · ${reminder.message}`,
+      status: reminder.status,
+    }))
+  );
+  const upcoming = [...customItems, ...serviceItems]
     .sort((a, b) => (STATUS_PRIORITY[a.status] ?? 99) - (STATUS_PRIORITY[b.status] ?? 99))
     .slice(0, UPCOMING_COUNT);
-  const carById = Object.fromEntries((cars ?? []).map((car) => [car.id, car]));
 
   return (
     <ThemedView style={styles.container}>
@@ -134,11 +177,11 @@ export default function GarageScreen() {
                 </Pressable>
               </View>
 
-              {reminders === null && !remindersError ? (
+              {(reminders === null && servicesData === null) && !remindersError && !servicesError ? (
                 <View style={styles.loading}>
                   <ActivityIndicator color={theme.brand} />
                 </View>
-              ) : remindersError ? (
+              ) : remindersError && servicesError ? (
                 <ThemedView type="backgroundElement" style={styles.messageCard}>
                   <ThemedText type="small" themeColor="textSecondary">
                     Couldn’t load reminders right now.
@@ -152,23 +195,18 @@ export default function GarageScreen() {
                 </ThemedView>
               ) : (
                 <View style={styles.reminderList}>
-                  {upcoming.map((reminder) => (
-                    <Pressable
-                      key={reminder.id}
-                      onPress={() => router.push(`/car/${reminder.car}`)}
-                      accessibilityRole="button"
-                    >
+                  {upcoming.map((item) => (
+                    <Pressable key={item.key} onPress={() => router.push(`/car/${item.carId}`)} accessibilityRole="button">
                       <ThemedView type="backgroundElement" style={styles.reminderCard}>
                         <View style={styles.reminderBody}>
                           <ThemedText type="smallBold" numberOfLines={1}>
-                            {reminder.title}
+                            {item.title}
                           </ThemedText>
                           <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
-                            {carById[reminder.car] ? `${carById[reminder.car].make} ${carById[reminder.car].model} · ` : ''}
-                            {reminder.message}
+                            {item.subtitle}
                           </ThemedText>
                         </View>
-                        <StatusChip status={reminder.status} />
+                        <StatusChip status={item.status} />
                       </ThemedView>
                     </Pressable>
                   ))}
