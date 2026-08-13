@@ -207,14 +207,23 @@ function CarDetail() {
       </header>
 
       <div className="mb-4 space-y-2">
+        {/* Computed from history, not a Reminder row -- there's no "mark
+            done" that applies to these (see #134 follow-up). The actual
+            way to resolve one is logging the real service/inspection, so
+            tapping it jumps straight to that tab with the form already
+            open, instead of leaving an overdue card with no action. */}
         {car.reminders?.map((reminder) => (
-          <div key={reminder.kind} className="card flex items-center justify-between gap-3 py-3">
+          <button
+            key={reminder.kind}
+            onClick={() => { setTab(reminder.kind === "service" ? "service" : "inspections"); setShowForm(true); }}
+            className="card flex w-full items-center justify-between gap-3 py-3 text-left"
+          >
             <div>
               <p className="text-[13px] font-semibold capitalize">{reminder.kind}</p>
               <p className="text-[13px] text-gray-500 dark:text-gray-400">{reminder.message}</p>
             </div>
             <StatusChip status={reminder.status} />
-          </div>
+          </button>
         ))}
       </div>
 

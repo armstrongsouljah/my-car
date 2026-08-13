@@ -80,6 +80,27 @@ class TestServiceIntervals:
         reminder = build_service_reminder(car)
         assert reminder["status"] == Constants.REMINDER_STATUS_OK
 
+    def test_uses_the_highest_odometer_record_even_if_logged_with_an_earlier_date(self, car):
+        # A car's mileage only ever goes up; service_date is user-entered and
+        # can be out of order (e.g. a minor service backdated to a date
+        # after a higher-mileage full service was logged). The higher-
+        # odometer record's own interval should win regardless of which one
+        # has the later service_date -- see the ordering comment in
+        # build_service_reminder.
+        ServiceRecord.objects.create(
+            car=car, odometer_km=62124, service_date=date(2026, 7, 7),
+            interval_km=6000, interval_months=6,  # next due: 68124 km / 2027-01-07
+        )
+        ServiceRecord.objects.create(
+            car=car, odometer_km=56000, service_date=date(2026, 8, 11),
+            interval_km=3000,  # next due: 59000 km -- already behind current odometer
+        )
+        car.current_odometer_km = 62833
+
+        reminder = build_service_reminder(car)
+
+        assert reminder["status"] == Constants.REMINDER_STATUS_OK
+
 
 @pytest.mark.django_db
 class TestServiceExpenseSync:
