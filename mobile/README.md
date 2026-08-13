@@ -69,6 +69,9 @@ eas build --platform android --profile preview
 
 ## Status
 
-Garage (cars list) and Settings (signed-in user + logout) are real,
-API-wired screens. Reminders and Expenses are still placeholders. See #101
-for what's next.
+Garage (car pills + add/edit/delete + an Upcoming reminders and Spending
+summary, mirroring frontend/app/dashboard/page.jsx) and Settings
+(signed-in user + logout) are real, API-wired screens. The dedicated
+Reminders and Expenses tabs are still placeholders -- only their
+top-level summaries are wired in on the Garage tab so far. See #101 for
+what's next.
