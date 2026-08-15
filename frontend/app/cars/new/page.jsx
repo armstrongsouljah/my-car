@@ -17,7 +17,7 @@ function NewCar() {
           Add multiple →
         </Link>
       </div>
-      <CarForm onSaved={(car) => router.replace(`/cars/${car.id}`)} />
+      <CarForm onSaved={(car) => router.replace(`/cars/${car.id}`)} onCancel={() => router.back()} />
     </main>
   );
 }

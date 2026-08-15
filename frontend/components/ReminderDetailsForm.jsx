@@ -13,7 +13,10 @@ function todayLocal() {
   return new Date(now.getTime() - offsetMs).toISOString().slice(0, 10);
 }
 
-export default function ReminderDetailsForm({ car, reminder = null, preset = null, trackingMethod, editableMethod = false, onSaved }) {
+// `onCancel` (see #142) -- optional, matches ServiceForm's convention. Both
+// call sites already have their own page-level "‹ Back", passed straight
+// through here for a closer-to-hand escape right next to Save.
+export default function ReminderDetailsForm({ car, reminder = null, preset = null, trackingMethod, editableMethod = false, onSaved, onCancel }) {
   const isEdit = !!reminder;
   const isCustom = isEdit ? !reminder.catalog_key : !preset;
 
@@ -120,6 +123,11 @@ export default function ReminderDetailsForm({ car, reminder = null, preset = nul
       </div>
 
       <button className="btn-primary" disabled={loading}>{loading ? "Saving…" : "Save reminder"}</button>
+      {onCancel && (
+        <button type="button" onClick={onCancel} className="btn-secondary" disabled={loading}>
+          Cancel
+        </button>
+      )}
     </form>
   );
 }

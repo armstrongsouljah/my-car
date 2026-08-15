@@ -216,6 +216,9 @@ function BulkAddCars() {
         <button className="btn-primary w-full" disabled={loading}>
           {loading ? "Saving…" : "Add cars"}
         </button>
+        <button type="button" onClick={() => router.back()} className="btn-secondary w-full" disabled={loading}>
+          Cancel
+        </button>
       </form>
     </main>
   );

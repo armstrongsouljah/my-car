@@ -242,6 +242,14 @@ export default function ContactForm() {
           >
             {sending ? "Sending…" : "Send message"}
           </button>
+          <button
+            type="button"
+            onClick={goBack}
+            disabled={sending}
+            className="w-full rounded-full border border-white/10 bg-white/5 px-4 py-3.5 text-[15px] font-semibold text-white transition active:scale-[0.99] disabled:opacity-50"
+          >
+            Cancel
+          </button>
         </form>
       </div>
     </main>

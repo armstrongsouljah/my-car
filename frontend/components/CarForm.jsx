@@ -44,7 +44,10 @@ async function uploadToCloudinary(file) {
  * from the catalog range (min 1980). Photos upload directly to Cloudinary
  * from the browser; only the resulting URL is sent to the API.
  */
-export default function CarForm({ car = null, onSaved }) {
+// `onCancel` (see #142) -- optional, matches ServiceForm's convention. Both
+// call sites already have their own page-level "‹ Back", passed straight
+// through here.
+export default function CarForm({ car = null, onSaved, onCancel }) {
   const isEdit = !!car;
   const [catalog, setCatalog] = useState(null);
   const [form, setForm] = useState({
@@ -271,6 +274,11 @@ export default function CarForm({ car = null, onSaved }) {
       <button className="btn-primary" disabled={loading}>
         {loading ? "Saving…" : isEdit ? "Save changes" : "Add car"}
       </button>
+      {onCancel && (
+        <button type="button" onClick={onCancel} className="btn-secondary" disabled={loading}>
+          Cancel
+        </button>
+      )}
     </form>
   );
 }

@@ -37,18 +37,22 @@ function RevealableValue({ value, revealed, onToggle, className = "" }) {
   );
 }
 
-function InspectionForm({ carId, onSaved }) {
+function InspectionForm({ carId, onSaved, onCancel }) {
   const [form, setForm] = useState({
     inspection_date: "", odometer_km: "", status: "passed",
     inspector_name: "", notes: "", next_inspection_date: "",
   });
   const [file, setFile] = useState(null);
   const [error, setError] = useState("");
+  // See #143's review -- without this, Save then Cancel while the write is
+  // still in flight could close the panel before the record actually saved.
+  const [saving, setSaving] = useState(false);
   const update = (key) => (event) => setForm({ ...form, [key]: event.target.value });
 
   async function submit(event) {
     event.preventDefault();
     setError("");
+    setSaving(true);
     try {
       const body = new FormData();
       body.append("car", carId);
@@ -64,6 +68,7 @@ function InspectionForm({ carId, onSaved }) {
       onSaved();
     } catch (err) {
       setError(err.message);
+      setSaving(false);
     }
   }
 
@@ -105,7 +110,12 @@ function InspectionForm({ carId, onSaved }) {
         <label className="label">Notes</label>
         <textarea className="input" rows={2} value={form.notes} onChange={update("notes")} />
       </div>
-      <button className="btn-primary">Save inspection</button>
+      <button className="btn-primary" disabled={saving}>Save inspection</button>
+      {onCancel && (
+        <button type="button" onClick={onCancel} className="btn-secondary" disabled={saving}>
+          Cancel
+        </button>
+      )}
     </form>
   );
 }
@@ -283,7 +293,7 @@ function CarDetail() {
       {tab === "service" && (
         <div className="space-y-3">
           {showForm ? (
-            <ServiceForm carId={id} onSaved={() => { setShowForm(false); load(); }} />
+            <ServiceForm carId={id} onSaved={() => { setShowForm(false); load(); }} onCancel={() => setShowForm(false)} />
           ) : (
             <button className="btn-secondary" onClick={() => setShowForm(true)}>+ Log a service</button>
           )}
@@ -326,7 +336,7 @@ function CarDetail() {
       {tab === "inspections" && (
         <div className="space-y-3">
           {showForm ? (
-            <InspectionForm carId={id} onSaved={() => { setShowForm(false); load(); }} />
+            <InspectionForm carId={id} onSaved={() => { setShowForm(false); load(); }} onCancel={() => setShowForm(false)} />
           ) : (
             <button className="btn-secondary" onClick={() => setShowForm(true)}>+ Log an inspection</button>
           )}

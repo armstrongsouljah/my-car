@@ -23,7 +23,7 @@ function EditCar() {
       <h1 className="mb-6 text-2xl font-bold">Edit Car</h1>
       {error && <p className="rounded-xl bg-red-50 dark:bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-400">{error}</p>}
       {!car && !error && <div className="flex justify-center py-6"><Spinner /></div>}
-      {car && <CarForm car={car} onSaved={() => router.replace(`/cars/${id}`)} />}
+      {car && <CarForm car={car} onSaved={() => router.replace(`/cars/${id}`)} onCancel={() => router.push(`/cars/${id}`)} />}
     </main>
   );
 }
