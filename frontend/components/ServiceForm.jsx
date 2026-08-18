@@ -3,14 +3,57 @@
 import { useState } from "react";
 import { api } from "@/lib/api";
 
-const SERVICE_TYPES = [
-  ["minor_service", "Minor Service"],
-  ["major_service", "Major Service"],
-  ["oil_change", "Oil Change"],
-  ["brakes", "Brakes"],
-  ["tyres", "Tyres"],
-  ["battery", "Battery"],
-  ["other", "Other"],
+// Mirrors api/utils/Constants.py's SERVICE_TYPES exactly (see #148) --
+// grouped here only for the <optgroup> presentation below; the backend
+// stays a flat list since the grouping is cosmetic, not data.
+const SERVICE_TYPE_GROUPS = [
+  {
+    label: "General",
+    options: [
+      ["minor_service", "Minor Service"],
+      ["major_service", "Major Service"],
+      ["other", "Other"],
+    ],
+  },
+  {
+    label: "Fluids & Filters",
+    options: [
+      ["oil_change", "Oil Change"],
+      ["oil_filter", "Oil Filter"],
+      ["air_filter", "Engine Air Filter"],
+      ["cabin_filter", "Cabin/Pollen Filter"],
+      ["fuel_filter", "Fuel Filter"],
+      ["coolant", "Coolant/Antifreeze"],
+      ["brake_fluid", "Brake Fluid"],
+      ["power_steering_fluid", "Power Steering Fluid"],
+      ["washer_fluid", "Washer Fluid"],
+    ],
+  },
+  {
+    label: "Engine & Ignition",
+    options: [
+      ["spark_plugs", "Spark Plugs"],
+      ["timing_belt", "Timing Belt/Chain"],
+      ["drive_belt", "Drive/Serpentine Belt"],
+      ["battery", "Battery"],
+    ],
+  },
+  {
+    label: "Brakes & Suspension",
+    options: [
+      ["brakes", "Brakes"],
+      ["suspension", "Suspension"],
+      ["wheel_alignment", "Wheel Alignment"],
+      ["wheel_balancing", "Wheel Balancing"],
+    ],
+  },
+  {
+    label: "Tyres & Exhaust",
+    options: [
+      ["tyres", "Tyres"],
+      ["exhaust", "Exhaust"],
+    ],
+  },
 ];
 
 // `record` (see #109) puts this in edit mode (PATCH) instead of create
@@ -80,7 +123,11 @@ export default function ServiceForm({ carId, record = null, onSaved, onCancel })
         <div>
           <label className="label">Type</label>
           <select className="input" value={form.service_type} onChange={update("service_type")}>
-            {SERVICE_TYPES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            {SERVICE_TYPE_GROUPS.map((group) => (
+              <optgroup key={group.label} label={group.label}>
+                {group.options.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </optgroup>
+            ))}
           </select>
         </div>
         <div>

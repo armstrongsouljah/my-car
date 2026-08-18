@@ -103,6 +103,31 @@ class TestServiceIntervals:
 
 
 @pytest.mark.django_db
+class TestExpandedServiceTypeChoices:
+    """See #148 -- a user's feedback that the original 7-item service_type
+    list was too limited (e.g. no air filter, spark plugs, wheel alignment).
+    Not exhaustive over every new choice -- just proves the field actually
+    accepts one end-to-end via the real API, and that get_service_type_display
+    (used by __str__, the assistant tools, and anywhere else that renders
+    this field) resolves the new values to real labels, not raw slugs."""
+
+    def test_api_accepts_a_newly_added_service_type(self, car, client):
+        client.force_authenticate(car.owner)
+
+        response = client.post(reverse("service-list-create"), {
+            "car": str(car.pk), "service_type": Constants.SERVICE_TYPE_WHEEL_ALIGNMENT,
+            "odometer_km": 40000, "interval_km": 10000,
+        }, format="json")
+
+        assert response.status_code == 201
+        assert response.data["service_type"] == Constants.SERVICE_TYPE_WHEEL_ALIGNMENT
+
+    def test_new_choices_have_real_display_labels(self):
+        record = ServiceRecord(service_type=Constants.SERVICE_TYPE_WHEEL_ALIGNMENT)
+        assert record.get_service_type_display() == "Wheel Alignment"
+
+
+@pytest.mark.django_db
 class TestServiceExpenseSync:
 
     def test_costed_service_creates_linked_expense(self, car):
