@@ -398,7 +398,7 @@ function CarDetail() {
                   <p className="mt-1 text-[13px] text-gray-400 dark:text-gray-500">Next inspection: {inspection.next_inspection_date}</p>
                 )}
                 {inspection.report_url && (
-                  <a href={inspection.report_url} target="_blank" rel="noreferrer" className="mt-2 inline-block text-[13px] font-medium underline">
+                  <a href={mediaUrl(inspection.report_url)} target="_blank" rel="noreferrer" className="mt-2 inline-block text-[13px] font-medium underline">
                     View report
                   </a>
                 )}

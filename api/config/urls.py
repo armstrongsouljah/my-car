@@ -1,8 +1,8 @@
 from django.conf import settings
-from django.conf.urls.static import static
 from django.contrib import admin
 from django.http import JsonResponse
-from django.urls import path, include
+from django.urls import path, include, re_path
+from django.views.static import serve as serve_static
 
 API_PREFIX = "api/v1/"
 
@@ -24,6 +24,17 @@ urlpatterns = [
     path(f"{API_PREFIX}support/", include("support.urls")),
 ]
 
-# Serve media files in development
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+# Django's own `django.conf.urls.static.static()` helper silently no-ops
+# unless DEBUG=True -- fine for most apps (a real deployment normally has a
+# CDN/reverse proxy serve media directly), but this one doesn't: Caddy just
+# reverse-proxies every request on api(-dev).glavbox.com straight through to
+# this container (see repo-root Caddyfile) with no separate static-file
+# layer for MEDIA_ROOT. Without Django serving /media/ itself, an uploaded
+# Inspection.report (the only local-disk upload in this app -- see #33/#145)
+# was completely unreachable in every deployed environment, 404 regardless
+# of host. Wired directly via django.views.static.serve instead of the
+# DEBUG-gated helper, so it works the same in dev/prod as it already does
+# locally.
+urlpatterns += [
+    re_path(r"^media/(?P<path>.*)$", serve_static, {"document_root": settings.MEDIA_ROOT}),
+]
