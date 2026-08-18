@@ -18,21 +18,62 @@ USER_ROLES = [
 # ---------------------------------------------------------------------------
 # Service types
 # ---------------------------------------------------------------------------
+# See #148 -- a user's in-app feedback (with a real garage service-menu
+# attached for reference) found the original 7-item list too limited to
+# describe what was actually done at a visit. Expanded to specific
+# parts/fluids/systems, matching the same "one specific thing serviced"
+# granularity the original items (Oil Change, Brakes, Tyres, Battery)
+# already used -- not the full reference checklist verbatim, since most of
+# its rows (e.g. "Check body condition", "Vehicle road test") are
+# inspection procedure steps, not loggable service categories (the
+# separate Inspection model already covers that side). Grouped into
+# categories only in the frontend's <optgroup> (ServiceForm.jsx) -- this
+# stays a flat list here since the grouping is presentation, not data.
 SERVICE_TYPE_MINOR = "minor_service"
 SERVICE_TYPE_MAJOR = "major_service"
 SERVICE_TYPE_OIL_CHANGE = "oil_change"
-SERVICE_TYPE_BRAKES = "brakes"
-SERVICE_TYPE_TYRES = "tyres"
+SERVICE_TYPE_OIL_FILTER = "oil_filter"
+SERVICE_TYPE_AIR_FILTER = "air_filter"
+SERVICE_TYPE_CABIN_FILTER = "cabin_filter"
+SERVICE_TYPE_FUEL_FILTER = "fuel_filter"
+SERVICE_TYPE_SPARK_PLUGS = "spark_plugs"
+SERVICE_TYPE_TIMING_BELT = "timing_belt"
+SERVICE_TYPE_DRIVE_BELT = "drive_belt"
+SERVICE_TYPE_COOLANT = "coolant"
+SERVICE_TYPE_BRAKE_FLUID = "brake_fluid"
+SERVICE_TYPE_POWER_STEERING_FLUID = "power_steering_fluid"
+SERVICE_TYPE_WASHER_FLUID = "washer_fluid"
 SERVICE_TYPE_BATTERY = "battery"
+SERVICE_TYPE_BRAKES = "brakes"
+SERVICE_TYPE_SUSPENSION = "suspension"
+SERVICE_TYPE_WHEEL_ALIGNMENT = "wheel_alignment"
+SERVICE_TYPE_WHEEL_BALANCING = "wheel_balancing"
+SERVICE_TYPE_TYRES = "tyres"
+SERVICE_TYPE_EXHAUST = "exhaust"
 SERVICE_TYPE_OTHER = "other"
 
 SERVICE_TYPES = [
     (SERVICE_TYPE_MINOR, "Minor Service"),
     (SERVICE_TYPE_MAJOR, "Major Service"),
     (SERVICE_TYPE_OIL_CHANGE, "Oil Change"),
-    (SERVICE_TYPE_BRAKES, "Brakes"),
-    (SERVICE_TYPE_TYRES, "Tyres"),
+    (SERVICE_TYPE_OIL_FILTER, "Oil Filter"),
+    (SERVICE_TYPE_AIR_FILTER, "Engine Air Filter"),
+    (SERVICE_TYPE_CABIN_FILTER, "Cabin/Pollen Filter"),
+    (SERVICE_TYPE_FUEL_FILTER, "Fuel Filter"),
+    (SERVICE_TYPE_SPARK_PLUGS, "Spark Plugs"),
+    (SERVICE_TYPE_TIMING_BELT, "Timing Belt/Chain"),
+    (SERVICE_TYPE_DRIVE_BELT, "Drive/Serpentine Belt"),
+    (SERVICE_TYPE_COOLANT, "Coolant/Antifreeze"),
+    (SERVICE_TYPE_BRAKE_FLUID, "Brake Fluid"),
+    (SERVICE_TYPE_POWER_STEERING_FLUID, "Power Steering Fluid"),
+    (SERVICE_TYPE_WASHER_FLUID, "Washer Fluid"),
     (SERVICE_TYPE_BATTERY, "Battery"),
+    (SERVICE_TYPE_BRAKES, "Brakes"),
+    (SERVICE_TYPE_SUSPENSION, "Suspension"),
+    (SERVICE_TYPE_WHEEL_ALIGNMENT, "Wheel Alignment"),
+    (SERVICE_TYPE_WHEEL_BALANCING, "Wheel Balancing"),
+    (SERVICE_TYPE_TYRES, "Tyres"),
+    (SERVICE_TYPE_EXHAUST, "Exhaust"),
     (SERVICE_TYPE_OTHER, "Other"),
 ]
 
