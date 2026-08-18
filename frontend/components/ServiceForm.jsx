@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { api } from "@/lib/api";
+import SearchableSelect from "@/components/SearchableSelect";
 
 // Mirrors api/utils/Constants.py's SERVICE_TYPES exactly (see #148) --
 // grouped here only for the <optgroup> presentation below; the backend
@@ -122,13 +123,11 @@ export default function ServiceForm({ carId, record = null, onSaved, onCancel })
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="label">Type</label>
-          <select className="input" value={form.service_type} onChange={update("service_type")}>
-            {SERVICE_TYPE_GROUPS.map((group) => (
-              <optgroup key={group.label} label={group.label}>
-                {group.options.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-              </optgroup>
-            ))}
-          </select>
+          <SearchableSelect
+            groups={SERVICE_TYPE_GROUPS}
+            value={form.service_type}
+            onChange={(value) => setForm({ ...form, service_type: value })}
+          />
         </div>
         <div>
           <label className="label">Date</label>
