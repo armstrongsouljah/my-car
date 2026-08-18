@@ -247,6 +247,10 @@ ALLOWED_UPLOAD_CONTENT_TYPES = (
     "image/heif",
     "application/pdf",
 )
+# Inspection reports had no size cap at all (unlike support attachments,
+# see SUPPORT_MAX_ATTACHMENT_SIZE_MB above) -- same 10MB ceiling for
+# consistency.
+INSPECTION_REPORT_MAX_SIZE_MB = 10
 
 # ---------------------------------------------------------------------------
 # Email verification OTP

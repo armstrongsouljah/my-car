@@ -1,10 +1,11 @@
+import functools
 import uuid
 
 from django.db import models
 from django.utils import timezone
 
 from utils import Constants
-from utils.Uploads import validate_upload_type
+from utils.Uploads import validate_upload_size, validate_upload_type
 
 from cars.models import Car
 
@@ -27,7 +28,13 @@ class Inspection(models.Model):
     inspector_name = models.CharField(max_length=150, blank=True)
     notes = models.TextField(blank=True)
     report = models.FileField(
-        upload_to=inspection_report_path, null=True, blank=True, validators=[validate_upload_type]
+        upload_to=inspection_report_path,
+        null=True,
+        blank=True,
+        validators=[
+            validate_upload_type,
+            functools.partial(validate_upload_size, max_size_mb=Constants.INSPECTION_REPORT_MAX_SIZE_MB),
+        ],
     )
 
     # When the next inspection should happen; defaults to

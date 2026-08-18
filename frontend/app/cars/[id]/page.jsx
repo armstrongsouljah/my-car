@@ -3,11 +3,12 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { api, downloadFile, mediaUrl } from "@/lib/api";
+import { api, downloadFile, mediaUrl, uploadWithProgress } from "@/lib/api";
 import { formatAmount } from "@/lib/currency";
 import AuthGuard from "@/components/AuthGuard";
 import BottomNav from "@/components/BottomNav";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import ProgressBar from "@/components/ProgressBar";
 import ServiceForm from "@/components/ServiceForm";
 import Spinner from "@/components/Spinner";
 import StatusChip from "@/components/StatusChip";
@@ -17,6 +18,11 @@ const INSPECTION_STATUSES = [
   ["advisories", "Passed with Advisories"],
   ["failed", "Failed"],
 ];
+
+// Mirrors api/utils/Constants.py's INSPECTION_REPORT_MAX_SIZE_MB -- catches
+// an oversized file before spending an upload's worth of time/data on a
+// request the server will reject anyway (see #145).
+const MAX_REPORT_SIZE_MB = 10;
 
 function mask(value) {
   return "•".repeat(Math.max(value.length, 4));
@@ -47,7 +53,22 @@ function InspectionForm({ carId, onSaved, onCancel }) {
   // See #143's review -- without this, Save then Cancel while the write is
   // still in flight could close the panel before the record actually saved.
   const [saving, setSaving] = useState(false);
+  // Only meaningful while a file's attached -- null the rest of the time,
+  // so the progress bar below only ever shows for an actual upload, not the
+  // near-instant metadata-only case (see #145).
+  const [uploadProgress, setUploadProgress] = useState(null);
   const update = (key) => (event) => setForm({ ...form, [key]: event.target.value });
+
+  function pickFile(event) {
+    const picked = event.target.files?.[0] || null;
+    event.target.value = ""; // lets picking the same file again re-fire onChange
+    if (picked && picked.size > MAX_REPORT_SIZE_MB * 1024 * 1024) {
+      setError(`"${picked.name}" is larger than ${MAX_REPORT_SIZE_MB}MB.`);
+      return;
+    }
+    setError("");
+    setFile(picked);
+  }
 
   async function submit(event) {
     event.preventDefault();
@@ -64,11 +85,22 @@ function InspectionForm({ carId, onSaved, onCancel }) {
       if (form.next_inspection_date) body.append("next_inspection_date", form.next_inspection_date);
       if (file) body.append("report", file);
 
-      await api("/inspections/", { method: "POST", body, isForm: true });
+      // Only the file-attached path needs real progress feedback -- fetch()
+      // (what api() uses) has no way to observe upload progress at all, so
+      // this specific request goes through uploadWithProgress's XHR-based
+      // path instead (see #145); the plain metadata-only case stays on the
+      // normal, simpler api() call.
+      if (file) {
+        setUploadProgress(0);
+        await uploadWithProgress("/inspections/", body, setUploadProgress);
+      } else {
+        await api("/inspections/", { method: "POST", body, isForm: true });
+      }
       onSaved();
     } catch (err) {
       setError(err.message);
       setSaving(false);
+      setUploadProgress(null);
     }
   }
 
@@ -104,13 +136,22 @@ function InspectionForm({ carId, onSaved, onCancel }) {
       </div>
       <div>
         <label className="label">Inspection report (optional)</label>
-        <input className="input" type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+        <input className="input" type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={pickFile} disabled={saving} />
+        {file && <p className="mt-1 text-[12px] text-gray-400 dark:text-gray-500">{file.name}</p>}
+        {uploadProgress !== null && (
+          <div className="mt-2">
+            <ProgressBar percent={uploadProgress} status="ok" />
+            <p className="mt-1 text-[12px] text-gray-400 dark:text-gray-500">Uploading… {uploadProgress}%</p>
+          </div>
+        )}
       </div>
       <div>
         <label className="label">Notes</label>
         <textarea className="input" rows={2} value={form.notes} onChange={update("notes")} />
       </div>
-      <button className="btn-primary" disabled={saving}>Save inspection</button>
+      <button className="btn-primary" disabled={saving}>
+        {uploadProgress !== null ? `Uploading… ${uploadProgress}%` : "Save inspection"}
+      </button>
       {onCancel && (
         <button type="button" onClick={onCancel} className="btn-secondary" disabled={saving}>
           Cancel

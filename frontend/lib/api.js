@@ -135,6 +135,77 @@ export async function api(path, { method = "GET", body, isForm = false } = {}) {
   return data;
 }
 
+// For uploads worth showing progress on (e.g. an inspection report --
+// see #145). fetch() has no way to observe upload progress, so this is the
+// one call in this file built on XMLHttpRequest instead -- but it mirrors
+// api()'s exact behavior otherwise: same auth-retry-once-on-401 as
+// fetchWithAuthRetry, same error-message extraction, same redirect-to-login
+// if the retry itself fails, so callers see an identical shape either way.
+export function uploadWithProgress(path, formData, onProgress) {
+  return new Promise((resolve, reject) => {
+    function attempt(accessToken, isRetry) {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", `${API_URL}${path}`);
+      if (accessToken) xhr.setRequestHeader("Authorization", `Bearer ${accessToken}`);
+
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) onProgress?.(Math.round((event.loaded / event.total) * 100));
+      };
+
+      xhr.onload = async () => {
+        if (xhr.status === 401 && !isRetry) {
+          const newAccess = await refreshAccessToken();
+          if (!newAccess) {
+            if (typeof window !== "undefined") {
+              const next = window.location.pathname + window.location.search;
+              window.location.href = `/login?next=${encodeURIComponent(next)}`;
+            }
+            reject(new Error("Session expired"));
+            return;
+          }
+          attempt(newAccess, true);
+          return;
+        }
+
+        if (xhr.status === 204) {
+          resolve(null);
+          return;
+        }
+
+        let data = null;
+        try {
+          data = JSON.parse(xhr.responseText);
+        } catch {
+          // No/non-JSON body -- data stays null, same as api()'s .catch(() => null).
+        }
+
+        if (xhr.status < 200 || xhr.status >= 300) {
+          const message =
+            (typeof data?.detail === "string" && data.detail) ||
+            extractErrorMessages(data).join(" ") ||
+            "Something went wrong";
+          const error = new Error(message);
+          error.status = xhr.status;
+          error.data = data;
+          reject(error);
+          return;
+        }
+
+        resolve(data);
+      };
+
+      // The XHR analog of a failed fetch() (offline, connection reset
+      // mid-upload, etc.) -- see #145, same friendlier message intended
+      // for api() there too.
+      xhr.onerror = () => reject(new Error("Network error — check your connection and try again."));
+
+      xhr.send(formData);
+    }
+
+    attempt(getTokens()?.access, false);
+  });
+}
+
 // Binary downloads (PDFs, etc.) skip api()'s JSON parsing but reuse its
 // token-refresh flow, then trigger a save via a throwaway object URL.
 export async function downloadFile(path, filename) {

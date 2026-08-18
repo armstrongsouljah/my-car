@@ -2,10 +2,13 @@ from datetime import datetime, timezone as dt_timezone
 from decimal import Decimal
 
 import pytest
+from django.core.exceptions import ValidationError
+from django.core.files.uploadedfile import SimpleUploadedFile
 
 from utils import Cache
 from utils.Cloudinary import _credentials_from_settings, delete_photos, public_id_from_url
 from utils.Currency import convert_amount, format_amount, load_latest_rates
+from utils.Uploads import validate_upload_size
 
 
 class TestFormatAmount:
@@ -217,3 +220,20 @@ class TestDeletePhotos:
         monkeypatch.setattr("utils.Cloudinary.requests.post", raise_error)
 
         delete_photos(["https://res.cloudinary.com/soultech/image/upload/v1/abc.jpg"])
+
+
+class TestValidateUploadSize:
+    """See #145 -- inspection reports had no size cap at all until this."""
+
+    def test_within_limit_is_accepted(self):
+        upload = SimpleUploadedFile("report.pdf", b"x" * 1024, content_type="application/pdf")
+        validate_upload_size(upload, max_size_mb=1)  # no exception raised
+
+    def test_exactly_at_limit_is_accepted(self):
+        upload = SimpleUploadedFile("report.pdf", b"x" * (1024 * 1024), content_type="application/pdf")
+        validate_upload_size(upload, max_size_mb=1)  # no exception raised
+
+    def test_over_limit_is_rejected(self):
+        upload = SimpleUploadedFile("report.pdf", b"x" * (2 * 1024 * 1024), content_type="application/pdf")
+        with pytest.raises(ValidationError, match="larger than 1MB"):
+            validate_upload_size(upload, max_size_mb=1)
