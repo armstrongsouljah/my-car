@@ -40,3 +40,43 @@ class TestHealth:
         )
 
         assert result.stdout.strip() == "dev"
+
+
+@pytest.mark.django_db
+class TestMediaServing:
+    """See #33/#145 -- Django's own static.static() helper (what urls.py
+    used before) silently no-ops unless DEBUG=True, which every deployed
+    environment correctly sets False. Caddy has no separate static-file
+    layer for MEDIA_ROOT (see repo-root Caddyfile) -- it just reverse-
+    proxies straight through to this container -- so without Django
+    serving /media/ itself, every uploaded Inspection.report was a 404
+    in every deployed environment, regardless of host.
+
+    Writes into the *real* settings.MEDIA_ROOT rather than
+    override_settings(MEDIA_ROOT=...) -- urls.py's document_root kwarg is
+    bound to settings.MEDIA_ROOT once at urlconf import time, not
+    re-read per request, so overriding the setting in a test wouldn't
+    actually retarget the already-registered view (a test-only quirk;
+    MEDIA_ROOT never changes at runtime in a real deployment)."""
+
+    def test_serves_an_existing_file_even_with_debug_false(self, settings):
+        media_dir = settings.MEDIA_ROOT / "inspection_reports"
+        media_dir.mkdir(parents=True, exist_ok=True)
+        report_path = media_dir / "test_report.txt"
+        report_path.write_text("hello")
+        settings.DEBUG = False
+
+        try:
+            response = APIClient().get("/media/inspection_reports/test_report.txt")
+        finally:
+            report_path.unlink()
+
+        assert response.status_code == 200
+        assert b"".join(response.streaming_content) == b"hello"
+
+    def test_404s_for_a_path_that_does_not_exist(self, settings):
+        settings.DEBUG = False
+
+        response = APIClient().get("/media/inspection_reports/does-not-exist.txt")
+
+        assert response.status_code == 404
